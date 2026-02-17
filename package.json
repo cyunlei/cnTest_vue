@@ -1,0 +1,22 @@
+{
+  "name": "vue3_cli_default",
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "vite preview"
+  },
+  "devDependencies": {
+    "@vue/compiler-sfc": "^3.2.6",
+    "sass": "^1.97.3"
+  },
+  "dependencies": {
+    "@vitejs/plugin-vue": "^5.0.4",
+    "axios": "^1.13.5",
+    "element-plus": "^2.13.2",
+    "pinia": "^3.0.4",
+    "vite": "^5.2.11",
+    "vue": "^3.4.21",
+    "vue-router": "^4.6.4"
+  }
+}
