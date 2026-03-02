@@ -1,16 +1,22 @@
-// src/main.js
+/**
+ * 应用入口文件
+ * 遵循手册: 二.文件组织 - app 层
+ */
 import { createApp } from 'vue'
-import App from './App.vue'
-// 1. 导入 Element Plus 核心库和样式
+import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
-import { createPinia } from 'pinia'
-import router from './router' // 导入路由
 
-// 2. 创建应用并注册 Element Plus
+import App from './App.vue'
+import router from './app/router'
+
+// 创建应用实例
 const app = createApp(App)
-const pinia = createPinia()
+
+// 注册插件
+app.use(createPinia())
 app.use(router)
-app.use(pinia)
-app.use(ElementPlus) // 全局注册所有 Element Plus 组件
+app.use(ElementPlus)
+
+// 挂载应用
 app.mount('#app')
