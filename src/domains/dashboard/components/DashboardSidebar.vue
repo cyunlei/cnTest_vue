@@ -49,13 +49,13 @@ function handlePlatformClick(platform) {
         <div class="stat-title">{{ stat.title }}</div>
         <div class="stat-value">{{ stat.value }}</div>
         <div class="stat-icon">
-          <svg v-if="stat.icon === 'case'" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <svg v-if="stat.icon === 'case'" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
             <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
           </svg>
-          <svg v-else-if="stat.icon === 'task'" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <svg v-else-if="stat.icon === 'task'" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
             <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/>
           </svg>
-          <svg v-else viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <svg v-else viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
             <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 9h10.5v3.5H4V9zm0 5.5h10.5V18H4v-3.5zM20 18h-3.5V9H20v9z"/>
           </svg>
         </div>
@@ -77,9 +77,7 @@ function handlePlatformClick(platform) {
     <div class="section">
       <div class="section-header">
         <h4 class="section-title">常见问题</h4>
-        <a href="javascript:;" class="help-link">
-          不知道如何开始？去帮助中心
-        </a>
+        <a href="javascript:;" class="help-link">帮助中心</a>
       </div>
       <ul class="faq-list">
         <li v-for="faq in faqs" :key="faq" class="faq-item">
@@ -112,41 +110,43 @@ function handlePlatformClick(platform) {
 .dashboard-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 /* 统计卡片 */
 .stats-section {
   display: flex;
-  gap: 12px;
+  gap: 8px;
 }
 
 .stat-card {
   flex: 1;
-  padding: 16px;
+  padding: 12px;
   background: #fff;
   border-radius: 8px;
   border: 1px solid #e8e8e8;
   position: relative;
+  min-width: 0;
 
   .stat-title {
-    font-size: 12px;
+    font-size: 11px;
     color: #666;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
+    white-space: nowrap;
   }
 
   .stat-value {
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 600;
     color: #1a1a1a;
   }
 
   .stat-icon {
     position: absolute;
-    top: 12px;
-    right: 12px;
-    width: 32px;
-    height: 32px;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -159,21 +159,21 @@ function handlePlatformClick(platform) {
   background: #fff;
   border-radius: 8px;
   border: 1px solid #e8e8e8;
-  padding: 16px;
+  padding: 12px;
 }
 
 .section-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: #1a1a1a;
-  margin: 0 0 12px 0;
+  margin: 0 0 10px 0;
 }
 
 .section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 
   .section-title {
     margin: 0;
@@ -191,7 +191,7 @@ function handlePlatformClick(platform) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 0;
+  padding: 6px 0;
   border-bottom: 1px solid #f0f0f0;
 
   &:last-child {
@@ -201,7 +201,7 @@ function handlePlatformClick(platform) {
 
 .notice-title {
   flex: 1;
-  font-size: 13px;
+  font-size: 12px;
   color: #666;
   text-decoration: none;
   overflow: hidden;
@@ -215,14 +215,14 @@ function handlePlatformClick(platform) {
 }
 
 .notice-date {
-  font-size: 12px;
+  font-size: 11px;
   color: #999;
   white-space: nowrap;
 }
 
 /* 帮助链接 */
 .help-link {
-  font-size: 12px;
+  font-size: 11px;
   color: #1890ff;
   text-decoration: none;
   white-space: nowrap;
@@ -236,14 +236,14 @@ function handlePlatformClick(platform) {
 .faq-list {
   list-style: none;
   margin: 0;
-  padding: 12px;
+  padding: 10px;
   background: #f6ffed;
   border-radius: 6px;
 }
 
 .faq-item {
-  padding: 6px 0;
-  font-size: 13px;
+  padding: 4px 0;
+  font-size: 12px;
 
   a {
     color: #666;
@@ -267,15 +267,15 @@ function handlePlatformClick(platform) {
 .platform-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  gap: 8px;
 }
 
 .platform-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 12px 8px;
+  gap: 4px;
+  padding: 8px 4px;
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.2s;
@@ -286,9 +286,9 @@ function handlePlatformClick(platform) {
 }
 
 .platform-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
   overflow: hidden;
 
   img {
@@ -299,8 +299,56 @@ function handlePlatformClick(platform) {
 }
 
 .platform-name {
-  font-size: 12px;
+  font-size: 11px;
   color: #666;
   text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* 响应式 */
+@media (max-width: 1100px) {
+  .stats-section {
+    flex-wrap: wrap;
+  }
+
+  .stat-card {
+    min-width: calc(50% - 4px);
+  }
+
+  .platform-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .stats-section {
+    flex-direction: row;
+  }
+
+  .stat-card {
+    min-width: 0;
+  }
+
+  .platform-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* 高DPI缩放适配 */
+@media (-webkit-min-device-pixel-ratio: 1.25), (min-resolution: 120dpi) {
+  .stat-card {
+    padding: 10px;
+  }
+
+  .stat-value {
+    font-size: 18px;
+  }
+
+  .section {
+    padding: 10px;
+  }
 }
 </style>

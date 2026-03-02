@@ -70,19 +70,19 @@ function handleNav(path) {
       <main class="main-content">
         <!-- Tabs -->
         <div class="content-tabs">
-          <button 
+          <button
             :class="['tab-btn', { active: activeTab === 'group' }]"
             @click="activeTab = 'group'"
           >
             接口分组
           </button>
-          <button 
+          <button
             :class="['tab-btn', { active: activeTab === 'my' }]"
             @click="activeTab = 'my'"
           >
             我的接口
           </button>
-          <button 
+          <button
             :class="['tab-btn', { active: activeTab === 'all' }]"
             @click="activeTab = 'all'"
           >
@@ -137,22 +137,25 @@ function handleNav(path) {
 .page-container {
   display: flex;
   height: calc(100vh - 56px);
+  overflow: hidden;
 }
 
 /* 左侧边栏 */
 .sidebar {
-  width: 240px;
+  width: 220px;
   background: #fff;
   border-right: 1px solid #e8e8e8;
-  padding: 16px;
+  padding: 12px;
+  flex-shrink: 0;
+  overflow-y: auto;
 }
 
 .module-select {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 
   select {
     width: 100%;
-    padding: 8px 12px;
+    padding: 6px 10px;
     border: 1px solid #d9d9d9;
     border-radius: 4px;
     font-size: 13px;
@@ -162,15 +165,15 @@ function handleNav(path) {
 
 .search-box {
   display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 6px;
+  margin-bottom: 12px;
 
   input {
     flex: 1;
-    padding: 6px 10px;
+    padding: 6px 8px;
     border: 1px solid #d9d9d9;
     border-radius: 4px;
-    font-size: 13px;
+    font-size: 12px;
 
     &::placeholder {
       color: #999;
@@ -178,7 +181,7 @@ function handleNav(path) {
   }
 
   .search-btn, .add-btn {
-    padding: 6px 10px;
+    padding: 6px 8px;
     border: 1px solid #d9d9d9;
     background: #fff;
     border-radius: 4px;
@@ -196,11 +199,11 @@ function handleNav(path) {
   .group-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
+    gap: 6px;
+    padding: 6px 8px;
     border-radius: 4px;
     cursor: pointer;
-    font-size: 13px;
+    font-size: 12px;
     color: #333;
 
     &:hover {
@@ -209,6 +212,7 @@ function handleNav(path) {
 
     svg {
       color: #999;
+      flex-shrink: 0;
     }
   }
 }
@@ -216,33 +220,34 @@ function handleNav(path) {
 /* 主内容区 */
 .main-content {
   flex: 1;
-  padding: 20px;
+  padding: 16px;
   overflow-y: auto;
+  min-width: 0;
 }
 
 .content-tabs {
   display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-  border-bottom: 1px solid #e8e8e8;
-  padding-bottom: 12px;
+  gap: 4px;
+  margin-bottom: 12px;
 }
 
 .tab-btn {
   padding: 8px 16px;
   border: none;
   background: transparent;
-  font-size: 14px;
+  font-size: 13px;
   color: #666;
   cursor: pointer;
   border-radius: 4px;
   transition: all 0.2s;
+  white-space: nowrap;
 
   &:hover {
     color: #1890ff;
   }
 
   &.active {
+    background: #e6f7ff;
     color: #1890ff;
     font-weight: 500;
   }
@@ -252,23 +257,24 @@ function handleNav(path) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
 .new-btn {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
-  background: #1890ff;
-  color: #fff;
-  border: none;
+  padding: 6px 14px;
+  background: #fff;
+  color: #333;
+  border: 1px solid #d9d9d9;
   border-radius: 4px;
   font-size: 13px;
   cursor: pointer;
 
   &:hover {
-    background: #40a9ff;
+    border-color: #1890ff;
+    color: #1890ff;
   }
 }
 
@@ -276,17 +282,21 @@ function handleNav(path) {
   padding: 6px 12px;
   border: none;
   background: transparent;
-  color: #1890ff;
+  color: #666;
   font-size: 13px;
   cursor: pointer;
+
+  &:hover {
+    color: #1890ff;
+  }
 }
 
 /* API类型网格 */
 .api-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
-  max-width: 800px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  max-width: 700px;
   margin: 0 auto;
 }
 
@@ -295,7 +305,7 @@ function handleNav(path) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 20px;
+  padding: 32px 16px;
   background: #fff;
   border-radius: 8px;
   border: 1px solid #e8e8e8;
@@ -308,12 +318,58 @@ function handleNav(path) {
   }
 
   .type-icon {
-    margin-bottom: 12px;
+    margin-bottom: 10px;
   }
 
   .type-name {
-    font-size: 14px;
+    font-size: 13px;
     color: #333;
+  }
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 180px;
+    padding: 8px;
+  }
+
+  .main-content {
+    padding: 12px;
+  }
+
+  .api-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .api-type-card {
+    padding: 24px 12px;
+  }
+}
+
+@media (max-width: 600px) {
+  .sidebar {
+    display: none;
+  }
+
+  .api-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* 高DPI缩放适配 */
+@media (-webkit-min-device-pixel-ratio: 1.25), (min-resolution: 120dpi) {
+  .sidebar {
+    width: 200px;
+  }
+
+  .api-grid {
+    gap: 12px;
+  }
+
+  .api-type-card {
+    padding: 28px 14px;
   }
 }
 </style>

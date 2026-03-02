@@ -150,4 +150,26 @@ th { background: #fafafa; font-weight: 500; color: #666; }
 .page-btn { min-width: 28px; height: 28px; padding: 0 8px; border: 1px solid #d9d9d9; background: #fff; border-radius: 4px; font-size: 13px; cursor: pointer; }
 .page-btn.active { background: #1890ff; color: #fff; border-color: #1890ff; }
 .page-size { padding: 4px 8px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 13px; }
+
+/* 响应式 */
+@media (max-width: 1100px) {
+  .sidebar { width: 180px; padding: 12px; }
+  .filter-row { gap: 12px; }
+}
+
+@media (max-width: 900px) {
+  .sidebar { display: none; }
+  .main-content { padding: 16px; }
+}
+
+@media (max-width: 768px) {
+  .toolbar { flex-wrap: wrap; }
+  .pagination { flex-wrap: wrap; justify-content: center; }
+}
+
+/* 高DPI缩放适配 */
+@media (-webkit-min-device-pixel-ratio: 1.25), (min-resolution: 120dpi) {
+  .sidebar { width: 190px; padding: 12px; }
+  .main-content { padding: 16px; }
+}
 </style>

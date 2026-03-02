@@ -551,4 +551,60 @@ th {
   border-radius: 4px;
   font-size: 13px;
 }
+
+/* 响应式 - 1100px以下 */
+@media (max-width: 1100px) {
+  .sidebar {
+    width: 200px;
+    padding: 12px;
+  }
+
+  .search-filter {
+    flex-wrap: wrap;
+    padding: 12px;
+  }
+
+  .filter-item input {
+    width: 120px;
+  }
+}
+
+/* 响应式 - 900px以下 */
+@media (max-width: 900px) {
+  .sidebar {
+    display: none;
+  }
+
+  .main-content {
+    padding: 16px;
+  }
+}
+
+/* 响应式 - 768px以下 */
+@media (max-width: 768px) {
+  .toolbar {
+    flex-wrap: wrap;
+  }
+
+  .pagination {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+/* 高DPI缩放适配 */
+@media (-webkit-min-device-pixel-ratio: 1.25), (min-resolution: 120dpi) {
+  .sidebar {
+    width: 220px;
+    padding: 12px;
+  }
+
+  .main-content {
+    padding: 16px;
+  }
+
+  th, td {
+    padding: 8px 6px;
+  }
+}
 </style>

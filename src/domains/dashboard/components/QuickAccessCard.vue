@@ -10,7 +10,15 @@ const props = defineProps({
   },
   icon: {
     type: String,
-    required: true
+    default: ''
+  },
+  iconType: {
+    type: String,
+    default: 'img' // 'img' | 'svg'
+  },
+  svgPath: {
+    type: String,
+    default: ''
   },
   color: {
     type: String,
@@ -37,7 +45,12 @@ function handleClick() {
       </div>
     </div>
     <div class="card-icon">
-      <img :src="icon" :alt="title" />
+      <!-- SVG图标 -->
+      <svg v-if="iconType === 'svg'" viewBox="0 0 1024 1024" width="48" height="48" :fill="color">
+        <path :d="svgPath" />
+      </svg>
+      <!-- 图片图标 -->
+      <img v-else :src="icon" :alt="title" />
     </div>
   </div>
 </template>
@@ -47,12 +60,13 @@ function handleClick() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: 12px 16px;
   background: #fff;
   border-radius: 8px;
   border: 1px solid #e8e8e8;
   cursor: pointer;
   transition: all 0.2s;
+  min-width: 0;
 
   &:hover {
     border-color: var(--card-color, #1890ff);
@@ -63,24 +77,29 @@ function handleClick() {
 
 .card-content {
   flex: 1;
+  min-width: 0;
 }
 
 .card-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: #1a1a1a;
   margin-bottom: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .card-action {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--card-color, #1890ff);
 
   .arrow {
     transition: transform 0.2s;
+    flex-shrink: 0;
   }
 }
 
@@ -94,11 +113,56 @@ function handleClick() {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  margin-left: 8px;
 
   img {
     width: 100%;
     height: 100%;
     object-fit: contain;
+  }
+
+  svg {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .quick-card {
+    padding: 10px 12px;
+  }
+
+  .card-title {
+    font-size: 13px;
+  }
+
+  .card-icon {
+    width: 36px;
+    height: 36px;
+
+    svg {
+      width: 32px;
+      height: 32px;
+    }
+  }
+}
+
+/* 高DPI缩放适配 */
+@media (-webkit-min-device-pixel-ratio: 1.25), (min-resolution: 120dpi) {
+  .quick-card {
+    padding: 10px 14px;
+  }
+
+  .card-icon {
+    width: 40px;
+    height: 40px;
+
+    svg {
+      width: 36px;
+      height: 36px;
+    }
   }
 }
 </style>

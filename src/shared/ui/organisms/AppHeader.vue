@@ -234,4 +234,25 @@ function handleLogout() {
     object-fit: cover;
   }
 }
+
+/* 响应式 */
+@media (max-width: 1100px) {
+  .header-left { gap: 20px; }
+  .main-nav { gap: 4px; }
+  .nav-item { padding: 6px 12px; font-size: 13px; }
+  .header-right { gap: 10px; }
+}
+
+@media (max-width: 900px) {
+  .app-header { padding: 0 16px; }
+  .brand-text { display: none; }
+  .main-nav { display: none; }
+}
+
+/* 高DPI缩放适配 */
+@media (-webkit-min-device-pixel-ratio: 1.25), (min-resolution: 120dpi) {
+  .app-header { padding: 0 20px; height: 52px; }
+  .nav-item { padding: 6px 14px; font-size: 13px; }
+  .header-right { gap: 12px; }
+}
 </style>

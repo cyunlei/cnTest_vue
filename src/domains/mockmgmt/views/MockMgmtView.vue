@@ -26,7 +26,7 @@ function handleNav(path) {
     <AppHeader @navigate="handleNav" />
     <div class="page-content">
       <div class="content-tabs">
-        <button :class="['tab-btn', { active: activeTab === 'jsf' }]" @click="activeTab = 'jsf'">JSF Mock</button>
+        <button :class="['tab-btn', { active: activeTab === 'jsf' }]" @click="activeTab = 'jsf'">Mock</button>
         <button :class="['tab-btn', { active: activeTab === 'http' }]" @click="activeTab = 'http'">HTTP Mock</button>
         <button :class="['tab-btn', { active: activeTab === 'color' }]" @click="activeTab = 'color'">Color接口</button>
         <button :class="['tab-btn', { active: activeTab === 'user' }]" @click="activeTab = 'user'">用户组</button>
@@ -162,4 +162,24 @@ th { background: #fafafa; font-weight: 500; color: #666; white-space: nowrap; }
 .page-btn.active { background: #1890ff; color: #fff; border-color: #1890ff; }
 .page-size { padding: 4px 8px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 13px; }
 .page-input { width: 40px; padding: 4px; border: 1px solid #d9d9d9; border-radius: 4px; text-align: center; }
+
+/* 响应式 */
+@media (max-width: 1100px) {
+  .search-filter { padding: 16px; }
+  .filter-row { gap: 12px; }
+  .filter-item input, .filter-item select { width: auto; min-width: 140px; }
+}
+
+@media (max-width: 768px) {
+  .content-tabs { flex-wrap: wrap; }
+  .toolbar { flex-wrap: wrap; }
+  .pagination { flex-wrap: wrap; justify-content: center; }
+  .col-url { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+/* 高DPI缩放适配 */
+@media (-webkit-min-device-pixel-ratio: 1.25), (min-resolution: 120dpi) {
+  .page-content { padding: 16px; }
+  th, td { padding: 10px 6px; }
+}
 </style>
