@@ -1,5 +1,138 @@
 # Kimi Code CLI 执行日志
 
+## 2026-03-03: 用例管理页面UI优化（第四次迭代）
+
+### 任务
+1. 恢复布局：只看自己在左，三条杠按钮在右
+2. 修复三条杠下拉框被右侧容器遮挡的bug（提高z-index）
+3. 开发新增用例弹窗
+
+### 执行内容
+
+#### 修改 CaseMgmtView 布局和弹窗开发
+**修改文件:** `src/domains/casemgmt/views/CaseMgmtView.vue`
+
+- **布局恢复**:
+  - "只看自己"复选框放回左侧
+  - 三条杠菜单按钮放回右侧
+  - `.filter-bar` 添加 `justify-content: space-between`
+
+- **修复遮挡问题**:
+  - `.action-dropdown` 的 z-index 从 1000 提高到 **10000**
+  - 确保下拉框在最上层显示
+
+- **新增用例弹窗开发**:
+  - 添加 `showAddCaseModal` 控制弹窗显示
+  - 表单数据：`addCaseForm`（名称、编排方式、类型、用例集、优先级、前置条件、描述、标签）
+  - 编排方式单选：列表编排 / 图形编排 / 代码编排
+  - 下拉选项：用例类型、所属用例集、优先级
+  - 表单验证标记：必填项带红色星号
+  - 底部按钮：取消、保存、保存并前往
+  - 弹窗样式：600px宽度，圆角8px，阴影效果
+
+- **新增方法**:
+  - `openAddCaseModal()`: 打开弹窗
+  - `closeAddCaseModal()`: 关闭弹窗
+  - `resetAddCaseForm()`: 重置表单
+  - `saveCase()`: 保存用例
+  - `saveAndGo()`: 保存并前往
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 布局恢复正确（只看自己在左，三条杠在右）
+✅ 下拉框不再被遮挡
+✅ 新增用例弹窗功能完整
+
+---
+
+## 2026-03-03: 用例管理页面UI优化（第五次迭代 - 完整版）
+
+### 任务
+1. 修复三条杠下拉框被遮挡问题（使用更高z-index + sidebar定位）
+2. 开发所有工具栏功能：
+   - 同步用例弹窗
+   - 批量执行弹窗
+   - 执行结果抽屉
+   - 批量操作下拉框（选中高亮/未选置灰）
+   - 自定义表头弹窗
+
+### 执行内容
+
+#### 修改 CaseMgmtView 完整功能开发
+**修改文件:** `src/domains/casemgmt/views/CaseMgmtView.vue`
+
+- **修复遮挡问题**:
+  - `.sidebar` 添加 `position: relative; z-index: 100`
+  - `.action-dropdown` 的 z-index 设为 **99999**
+
+- **工具栏更新**: 所有按钮带图标，批量操作根据选中状态置灰
+
+- **表格选中功能**: `selectedCases` 存储选中项，联动批量操作按钮状态
+
+- **新增弹窗/抽屉**:
+  - 同步用例Modal: 平台选择
+  - 批量执行Modal: 通知、策略、环境等配置
+  - 执行结果Drawer: 右侧滑出，搜索+表格
+  - 批量操作Dropdown: 删除/移动/编辑/复制
+  - 自定义表头Modal: 分组勾选，已选字段展示
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 所有工具栏弹窗功能完整
+✅ 表格选中联动批量操作按钮状态
+
+---
+
+## 2026-03-03: 用例管理页面UI优化（第二次迭代）
+
+### 任务1
+1. 鼠标悬停和点击都能展示下拉框
+2. 三个横杠菜单按钮移到"只看自己"后面，和它保持一排
+
+### 任务2
+1. 模块选择下拉框（商家开放）也实现鼠标悬浮展示下拉框
+
+### 执行内容
+
+#### 修改 CaseMgmtView 下拉菜单交互和布局
+**修改文件:** `src/domains/casemgmt/views/CaseMgmtView.vue`
+
+- **菜单按钮位置调整**:
+  - 从主内容区标题栏移到左侧边栏
+  - 放在"只看自己"复选框右侧，同一行显示
+  - 使用 `justify-content: space-between` 左右对齐
+
+- **模块选择下拉框悬停展示**:
+  - 在 `module-select-wrapper` 添加 `@mouseenter="openModuleDropdown"` 和 `@mouseleave="closeModuleDropdown"`
+  - 下拉菜单本身也绑定鼠标事件，确保移入菜单区域不会关闭
+  - 使用延迟关闭（setTimeout 100ms）避免闪烁
+  - 保持点击切换功能 `@click="toggleModuleDropdown"`
+
+- **新增方法**:
+  - `toggleModuleDropdown()`: 切换模块下拉框显示/隐藏
+  - `openModuleDropdown()`: 打开模块下拉框
+  - `closeModuleDropdown()`: 延迟关闭模块下拉框
+  - `toggleActionMenu()`: 切换菜单显示/隐藏
+  - `openActionMenu()`: 打开菜单
+  - `closeActionMenu()`: 延迟关闭菜单
+  - `openAddStepSubmenu()`: 打开添加步骤子菜单
+  - `closeAddStepSubmenu()`: 关闭添加步骤子菜单
+  - `openNodeTypeSubmenu()`: 打开节点类型子菜单
+  - `closeNodeTypeSubmenu()`: 关闭节点类型子菜单
+
+- **样式调整**:
+  - `.filter-bar` 改为 flex 布局，左右对齐
+  - `.action-dropdown` 定位在按钮下方
+  - 保持 12px 圆角和阴影效果
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 菜单按钮位置正确（"只看自己"右侧）
+✅ 鼠标悬停和点击都能展示下拉框（模块选择 + 三横杠菜单）
+✅ 子菜单悬停展示正常
+
+---
+
 ## 2026-03-02: 页面响应式布局修复
 
 ### 任务

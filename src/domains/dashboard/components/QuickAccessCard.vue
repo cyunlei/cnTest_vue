@@ -108,8 +108,8 @@ function handleClick() {
 }
 
 .card-icon {
-  width: 48px;
-  height: 48px;
+  width: 12.5px;
+  height: 10.4px;
   display: flex;
   align-items: center;
   justify-content: center;

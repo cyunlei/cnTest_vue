@@ -257,6 +257,4 @@
 十四.需要的依赖，自行下载安装
 十五.你的执行记录和我的提问记录，请记录在kimicode_executor_log.md文件中
 十六.每次问答时，请先查看一下kimicode_executor_log.md文件，再作答
-
-
-
+十七.需要的icon，自行查找相似的icon，然后下载，网站推荐：Iconify (https://iconify.design/)，Icones (https://icones.js.org/)，Heroicons (https://heroicons.com/)，Lucide (https://lucide.dev/)，SVGPorn (https://svgporn.com/)，Phosphor Icons (https://phosphoricons.com/)，Remix Icon (https://remixicon.com/)，Tabler Icons (https://tabler-icons.io/)

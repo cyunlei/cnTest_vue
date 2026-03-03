@@ -39,7 +39,7 @@ function handleLogout() {
     <div class="header-left">
       <div class="brand">
         <img src="@/assets/icons/DeepTest.png" alt="DeepTest" class="brand-logo" />
-        <span class="brand-text">DeepTest</span>
+        <span class="brand-text">cnTest</span>
       </div>
       <nav class="main-nav">
         <a
@@ -63,19 +63,19 @@ function handleLogout() {
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
           <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM9 11H7V9h2v2zm4 0h-2V9h2v2zm4 0h-2V9h2v2z"/>
         </svg>
-        <span class="badge">测试站</span>
+        <span class="badge">测试环境</span>
       </div>
       <div class="user-badge">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
         </svg>
-        <span>JoyCode</span>
+        <span>cnTest</span>
       </div>
       <button class="icon-btn help-btn">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
           <path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/>
         </svg>
-        <span>帮助与反馈</span>
+        <span>帮助</span>
       </button>
       <div class="avatar" @click="handleLogout">
         <img src="@/assets/icons/coding.png" alt="avatar" />
