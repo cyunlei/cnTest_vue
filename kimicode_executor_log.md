@@ -1,4 +1,144 @@
-# Kimi Code CLI 执行日志
+﻿# Kimi Code CLI 执行日志
+
+## 2026-03-05: 后端API对接与前端领域层开发
+
+### 任务
+1. 分析D:\project\cnTest后端API模块（accounts, verification, project, environment, testcase）
+2. 根据AiExecytionManual.md规范，完善前端API层、类型定义和状态管理
+3. 修正HTTP层配置，匹配后端实际API路径
+
+### 执行内容
+
+#### 1. 分析后端API结构
+**查看目录:** `D:\project\cnTest\apps\`
+
+发现5个核心模块：
+- **accounts**: 用户注册、登录、密码修改
+- **verification**: 邮箱/短信验证码、图片验证码
+- **project**: 项目CRUD（软删除）
+- **environment**: 环境管理（HTTP/HTTPS协议，测试/预发/生产环境标识）
+- **testcase**: 测试用例、用例集、测试步骤、执行记录
+
+#### 2. 更新HTTP核心层配置
+**修改文件:** `src/@core/http/index.js`
+
+- 更新免认证URL列表，匹配后端实际路径：
+  ```javascript
+  export const NO_AUTH_URLS = [
+    '/accounts/login',
+    '/accounts/check_account_exist',
+    '/accounts/register',
+    '/accounts/email_code_login',
+    '/verification/email/send',
+    '/verification/captcha',
+    '/verification/captcha/verify'
+  ]
+  ```
+
+#### 3. 创建Auth领域完整类型定义
+**新建文件:** `src/domains/auth/types/index.js`
+
+- 定义LoginByPasswordDTO、LoginByEmailCodeDTO、RegisterDTO等类型
+- 定义UserEntity、LoginResponseData实体类型
+- 定义ApiResponse<T>泛型响应类型
+
+#### 4. 更新Auth领域API层
+**修改文件:** `src/domains/auth/api/index.js`
+
+- 修正API路径：`/api/v1/auth/*` → `/accounts/*`
+- 添加sendEmailCode重新导出（保持向后兼容）
+- 导出：loginByPassword、loginByEmailCode、createUser等
+
+#### 5. 创建Project领域完整模块
+**新建文件:**
+- `src/domains/project/types/index.js` - 项目类型定义
+- `src/domains/project/api/index.js` - 项目API层
+- `src/domains/project/stores/useProjectStore.js` - Pinia状态管理
+
+**功能:**
+- 项目CRUD操作
+- 支持本地存储当前选中项目
+- 分页列表查询
+
+#### 6. 创建Environment领域完整模块
+**新建文件:**
+- `src/domains/environment/types/index.js` - 环境类型定义
+- `src/domains/environment/api/index.js` - 环境API层
+- `src/domains/environment/stores/useEnvironmentStore.js` - Pinia状态管理
+
+**类型定义:**
+- PROTOCOL_TYPE: HTTP=0, HTTPS=1
+- ENVIRONMENT_CODE: TEST=0, STAGING=1, PRODUCTION=2
+
+**功能:**
+- 环境CRUD操作
+- 按项目分组的环境列表
+- 环境显示名称格式化
+
+#### 7. 创建CaseMgmt领域完整模块
+**新建文件:**
+- `src/domains/casemgmt/types/index.js` - 测试用例类型定义
+- `src/domains/casemgmt/api/index.js` - 测试用例API层
+- `src/domains/casemgmt/stores/useCaseMgmtStore.js` - Pinia状态管理
+
+**类型定义:**
+- CASE_TYPE: SMOKE=0, FUNCTIONAL=1, REGRESSION=2, PERFORMANCE=3, SECURITY=4, COMPATIBILITY=5, OTHER=6
+- PRIORITY: P0=0, P1=1, P2=2, P3=3, P4=4, P5=5
+- 优先级颜色映射
+
+**API覆盖:**
+- 测试用例: create/list/detail/update/delete
+- 用例集: suite/*
+- 测试步骤: step/*
+- 执行: execute, step/execute
+- 执行记录: execution/*
+
+**Store功能:**
+- 测试用例、用例集、步骤的CRUD
+- 树形用例集结构
+- 执行操作支持
+
+#### 8. 创建Verification领域模块
+**新建文件:**
+- `src/domains/verification/types/index.js` - 验证码类型定义
+- `src/domains/verification/api/index.js` - 验证码API层
+
+**功能:**
+- 邮箱验证码: send/verify
+- 短信验证码: send/verify（预留）
+- 图片验证码: get/verify/refresh/validate-token
+
+### 文件变更汇总
+
+```
+修改: src/@core/http/index.js
+修改: src/domains/auth/api/index.js
+新建: src/domains/auth/types/index.js
+
+新建: src/domains/project/types/index.js
+新建: src/domains/project/api/index.js
+新建: src/domains/project/stores/useProjectStore.js
+
+新建: src/domains/environment/types/index.js
+新建: src/domains/environment/api/index.js
+新建: src/domains/environment/stores/useEnvironmentStore.js
+
+新建: src/domains/casemgmt/types/index.js
+新建: src/domains/casemgmt/api/index.js
+新建: src/domains/casemgmt/stores/useCaseMgmtStore.js
+
+新建: src/domains/verification/types/index.js
+新建: src/domains/verification/api/index.js
+```
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 所有领域类型定义完整
+✅ API路径与后端匹配
+✅ Pinia Store状态管理可用
+✅ 向后兼容（auth/api重新导出verification函数）
+
+---
 
 ## 2026-03-03: 用例管理页面UI优化（第四次迭代）
 
@@ -239,3 +379,28 @@
 ✅ 所有页面响应式布局修复完成
 ✅ 图标更新为SVG格式
 ✅ 75%缩放时页面显示正常
+
+---
+
+## 2026-03-05: 修复文件编码问题
+
+### 问题
+之前创建的文件出现乱码，原因是PowerShell here-string编码问题。
+
+### 解决方案
+使用 [System.IO.File]::WriteAllText() 方法并指定 [System.Text.Encoding]::UTF8 编码重新创建文件。
+
+### 执行内容
+1. 删除乱码文件
+2. 使用UTF-8编码重新创建 CaseConfigView.vue
+3. 使用UTF-8编码重新创建 HttpStepDrawer.vue
+4. 验证中文字符显示正常
+5. 运行构建验证通过
+
+### 文件变更
+- src/domains/casemgmt/views/CaseConfigView.vue (重新创建，UTF-8编码)
+- src/domains/casemgmt/components/HttpStepDrawer.vue (重新创建，UTF-8编码)
+
+### 验证结果
+✅ 中文字符显示正常
+✅ npm run build 构建成功

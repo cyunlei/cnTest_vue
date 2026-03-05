@@ -15,11 +15,13 @@ export const API_TIMEOUT = 30000
 
 /** 不需要认证的 URL 列表 */
 export const NO_AUTH_URLS = [
-  '/accounts/api/login',
-  '/accounts/api/check_account_exist',
-  '/accounts/api/register',
-  '/accounts/api/send_email_code',
-  '/accounts/api/email_code_login'
+  '/accounts/login',
+  '/accounts/check_account_exist',
+  '/accounts/register',
+  '/accounts/email_code_login',
+  '/verification/email/send',
+  '/verification/captcha',
+  '/verification/captcha/verify'
 ]
 
 // ======== axios 实例 ========

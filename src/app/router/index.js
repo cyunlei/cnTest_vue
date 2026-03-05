@@ -68,6 +68,15 @@ const routes = [
     }
   },
   {
+    path: '/case-config/:id',
+    name: 'CaseConfig',
+    component: () => import('@/domains/casemgmt/views/CaseConfigView.vue'),
+    meta: { 
+      requiresAuth: true,
+      title: '用例配置'
+    }
+  },
+  {
     path: '/task-mgmt',
     name: 'TaskMgmt',
     component: () => import('@/domains/taskmgmt/views/TaskMgmtView.vue'),

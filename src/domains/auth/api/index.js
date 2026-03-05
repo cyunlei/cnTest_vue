@@ -6,15 +6,27 @@
  *   - 创建资源: createXxx
  *   - 更新资源: updateXxx
  *   - 删除资源: deleteXxx
+ * 
+ * 后端API路径:
+ * - POST /accounts/register - 用户注册
+ * - POST /accounts/login - 账号密码登录
+ * - POST /accounts/email_code_login - 邮箱验证码登录
+ * - POST /accounts/change_password - 修改密码
+ * - POST /accounts/email_code_password - 邮箱验证码修改密码
+ * - POST /accounts/check_account_exist - 检查账号是否存在
  */
-import { create } from '@/@core/http'
+import { create, fetch } from '@/@core/http'
 
-const BASE_URL = '/accounts/api'
+// 从 verification 领域重新导出发送邮箱验证码，保持向后兼容
+export { sendEmailCode } from '@/domains/verification/api'
+
+const BASE_URL = '/accounts'
 
 /**
  * 账号密码登录
- * POST /accounts/api/login
- * @param {import('../types').LoginDTO} params
+ * POST /accounts/login
+ * @param {import('../types').LoginByPasswordDTO} params
+ * @returns {Promise<import('../types').LoginResponse>}
  */
 export function loginByPassword(params) {
   return create(`${BASE_URL}/login`, params)
@@ -22,8 +34,9 @@ export function loginByPassword(params) {
 
 /**
  * 邮箱验证码登录（自动注册新用户）
- * POST /accounts/api/email_code_login
- * @param {import('../types').EmailCodeLoginDTO} params
+ * POST /accounts/email_code_login
+ * @param {import('../types').LoginByEmailCodeDTO} params
+ * @returns {Promise<import('../types').LoginResponse>}
  */
 export function loginByEmailCode(params) {
   return create(`${BASE_URL}/email_code_login`, params)
@@ -31,26 +44,19 @@ export function loginByEmailCode(params) {
 
 /**
  * 用户注册
- * POST /accounts/api/register
+ * POST /accounts/register
  * @param {import('../types').RegisterDTO} params
+ * @returns {Promise<import('../types').ApiResponse<void>>}
  */
 export function createUser(params) {
   return create(`${BASE_URL}/register`, params)
 }
 
 /**
- * 发送邮箱验证码
- * POST /accounts/api/send_email_code
- * @param {import('../types').SendEmailCodeDTO} params
- */
-export function sendEmailCode(params) {
-  return create(`${BASE_URL}/send_email_code`, params)
-}
-
-/**
  * 检查账号是否存在
- * POST /accounts/api/check_account_exist
+ * POST /accounts/check_account_exist
  * @param {import('../types').CheckAccountExistDTO} params
+ * @returns {Promise<import('../types').ApiResponse<void>>}
  */
 export function checkAccountExist(params) {
   return create(`${BASE_URL}/check_account_exist`, params)
@@ -58,8 +64,9 @@ export function checkAccountExist(params) {
 
 /**
  * 修改密码（原密码方式）
- * POST /accounts/api/change_password
+ * POST /accounts/change_password
  * @param {import('../types').ChangePasswordDTO} params
+ * @returns {Promise<import('../types').ApiResponse<void>>}
  */
 export function updatePassword(params) {
   return create(`${BASE_URL}/change_password`, params)
@@ -67,8 +74,9 @@ export function updatePassword(params) {
 
 /**
  * 邮箱验证码修改密码
- * POST /accounts/api/email_code_password
+ * POST /accounts/email_code_password
  * @param {import('../types').EmailCodeChangePasswordDTO} params
+ * @returns {Promise<import('../types').ApiResponse<void>>}
  */
 export function updatePasswordByEmailCode(params) {
   return create(`${BASE_URL}/email_code_password`, params)

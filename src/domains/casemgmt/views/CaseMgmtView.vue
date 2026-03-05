@@ -4,7 +4,10 @@
  * 位置: domains/casemgmt/views/
  */
 import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import AppHeader from '@/shared/ui/organisms/AppHeader.vue'
+
+const router = useRouter()
 
 const activeTab = ref('scenario')
 const selectedModule = ref('商家开放')
@@ -390,6 +393,11 @@ function toggleSelectAll(event) {
   } else {
     selectedCases.value = []
   }
+}
+
+// 跳转到用例配置页面
+function goToCaseConfig(id) {
+  router.push(`/case-config/${id}`)
 }
 </script>
 
@@ -796,7 +804,7 @@ function toggleSelectAll(event) {
                 </td>
                 <td v-if="isHeaderVisible('id')" class="col-id">{{ row.id }}</td>
                 <td v-if="isHeaderVisible('name')" class="col-name">
-                  <a href="javascript:;" class="link">{{ row.name }}</a>
+                  <a href="javascript:;" class="link" @click="goToCaseConfig(row.id)">{{ row.name }}</a>
                 </td>
                 <td v-if="isHeaderVisible('type')" class="col-type">{{ row.type }}</td>
                 <td v-if="isHeaderVisible('caseSet')" class="col-set">{{ row.caseSet }}</td>
