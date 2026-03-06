@@ -1,11 +1,11 @@
 <script setup>
 /**
- * 顶部导航栏组件
+ * 顶部导航栏组件 - Element Plus 重构版
  * 位置: shared/ui/organisms/ (全局有机体组件层)
- * 用途: 应用顶部导航，包含Logo、菜单、用户信息
  */
 import { useAuthStore } from '@/domains/auth/stores/useAuthStore'
 import { useRoute, useRouter } from 'vue-router'
+import { Bell, ChatDotSquare, QuestionFilled, ArrowDown } from '@element-plus/icons-vue'
 
 const authStore = useAuthStore()
 const route = useRoute()
@@ -32,59 +32,82 @@ function handleLogout() {
   authStore.logout()
   window.location.href = '/login'
 }
+
+function handleCommand(command) {
+  if (command === 'logout') {
+    handleLogout()
+  } else if (command === 'profile') {
+    // 处理个人中心
+  } else if (command === 'settings') {
+    // 处理设置
+  }
+}
 </script>
 
 <template>
-  <header class="app-header">
+  <el-header class="app-header">
     <div class="header-left">
-      <div class="brand">
+      <!-- Logo -->
+      <div class="brand" @click="router.push('/dashboard')">
         <img src="@/assets/icons/DeepTest.png" alt="DeepTest" class="brand-logo" />
         <span class="brand-text">cnTest</span>
       </div>
-      <nav class="main-nav">
-        <a
+      
+      <!-- 导航菜单 -->
+      <el-menu
+        :default-active="route.path"
+        mode="horizontal"
+        class="nav-menu"
+        :ellipsis="false"
+      >
+        <el-menu-item
           v-for="item in navItems"
-          :key="item.name"
-          :class="['nav-item', { active: isActive(item.path) }]"
-          href="javascript:;"
+          :key="item.path"
+          :index="item.path"
           @click="handleNav(item)"
         >
           {{ item.name }}
-        </a>
-      </nav>
+        </el-menu-item>
+      </el-menu>
     </div>
+
     <div class="header-right">
-      <button class="icon-btn">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-          <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
-        </svg>
-      </button>
-      <div class="badge-btn">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-          <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM9 11H7V9h2v2zm4 0h-2V9h2v2zm4 0h-2V9h2v2z"/>
-        </svg>
-        <span class="badge">测试环境</span>
-      </div>
-      <div class="user-badge">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
-        </svg>
-        <span>cnTest</span>
-      </div>
-      <button class="icon-btn help-btn">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-          <path d="M11 18h2v-2h-2v2zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4z"/>
-        </svg>
+      <!-- 通知图标 -->
+      <el-badge :value="3" class="header-icon">
+        <el-icon :size="20"><Bell /></el-icon>
+      </el-badge>
+
+      <!-- 消息图标 -->
+      <el-badge value="测试环境" type="primary" class="header-icon">
+        <el-icon :size="20"><ChatDotSquare /></el-icon>
+      </el-badge>
+
+      <!-- 帮助 -->
+      <div class="header-icon help-btn">
+        <el-icon :size="20"><QuestionFilled /></el-icon>
         <span>帮助</span>
-      </button>
-      <div class="avatar" @click="handleLogout">
-        <img src="@/assets/icons/coding.png" alt="avatar" />
       </div>
+
+      <!-- 用户下拉菜单 -->
+      <el-dropdown @command="handleCommand" trigger="click">
+        <div class="user-dropdown">
+          <el-avatar :size="32" src="@/assets/icons/coding.png" />
+          <span class="username">cnTest</span>
+          <el-icon><ArrowDown /></el-icon>
+        </div>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+            <el-dropdown-item command="settings">系统设置</el-dropdown-item>
+            <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
     </div>
-  </header>
+  </el-header>
 </template>
 
-<style lang="scss" scoped>
+<style scoped>
 .app-header {
   display: flex;
   align-items: center;
@@ -106,153 +129,81 @@ function handleLogout() {
   display: flex;
   align-items: center;
   gap: 8px;
-
-  .brand-logo {
-    width: 28px;
-    height: 28px;
-    object-fit: contain;
-  }
-
-  .brand-text {
-    font-size: 18px;
-    font-weight: 600;
-    color: #1a1a1a;
-  }
+  cursor: pointer;
 }
 
-.main-nav {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.brand-logo {
+  width: 32px;
+  height: 32px;
 }
 
-.nav-item {
-  padding: 8px 16px;
+.brand-text {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1890ff;
+}
+
+.nav-menu {
+  border-bottom: none;
+  background: transparent;
+}
+
+.nav-menu :deep(.el-menu-item) {
   font-size: 14px;
   color: #666;
-  text-decoration: none;
-  border-radius: 6px;
-  transition: all 0.2s;
+  border-bottom: 2px solid transparent;
+}
 
-  &:hover {
-    color: #1890ff;
-    background: #f5f5f5;
-  }
+.nav-menu :deep(.el-menu-item:hover) {
+  color: #1890ff;
+  background: transparent;
+}
 
-  &.active {
-    color: #1890ff;
-    font-weight: 500;
-    background: #e6f7ff;
-  }
+.nav-menu :deep(.el-menu-item.is-active) {
+  color: #1890ff;
+  border-bottom-color: #1890ff;
+  font-weight: 500;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 20px;
 }
 
-.icon-btn {
+.header-icon {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: transparent;
+  cursor: pointer;
   color: #666;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: all 0.2s;
-
-  &:hover {
-    background: #f5f5f5;
-    color: #1890ff;
-  }
+  transition: color 0.2s;
 }
 
-.badge-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  background: #f0f5ff;
-  border-radius: 12px;
+.header-icon:hover {
   color: #1890ff;
-  font-size: 12px;
-  cursor: pointer;
-
-  .badge {
-    font-weight: 500;
-  }
-}
-
-.user-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  background: #722ed1;
-  border-radius: 12px;
-  color: #fff;
-  font-size: 12px;
-
-  span {
-    font-weight: 500;
-  }
 }
 
 .help-btn {
+  gap: 4px;
+  font-size: 14px;
+}
+
+.user-dropdown {
   display: flex;
   align-items: center;
-  gap: 4px;
-  width: auto;
-  padding: 4px 8px;
-  font-size: 13px;
-
-  span {
-    display: inline;
-  }
-}
-
-.avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  overflow: hidden;
+  gap: 8px;
   cursor: pointer;
-  border: 2px solid #e8e8e8;
-  transition: border-color 0.2s;
-
-  &:hover {
-    border-color: #1890ff;
-  }
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s;
 }
 
-/* 响应式 */
-@media (max-width: 1100px) {
-  .header-left { gap: 20px; }
-  .main-nav { gap: 4px; }
-  .nav-item { padding: 6px 12px; font-size: 13px; }
-  .header-right { gap: 10px; }
+.user-dropdown:hover {
+  background: #f5f5f5;
 }
 
-@media (max-width: 900px) {
-  .app-header { padding: 0 16px; }
-  .brand-text { display: none; }
-  .main-nav { display: none; }
-}
-
-/* 高DPI缩放适配 */
-@media (-webkit-min-device-pixel-ratio: 1.25), (min-resolution: 120dpi) {
-  .app-header { padding: 0 20px; height: 52px; }
-  .nav-item { padding: 6px 14px; font-size: 13px; }
-  .header-right { gap: 12px; }
+.username {
+  font-size: 14px;
+  color: #333;
 }
 </style>

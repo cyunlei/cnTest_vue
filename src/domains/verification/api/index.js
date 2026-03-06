@@ -18,13 +18,13 @@
  */
 import { create, fetch } from '@/@core/http'
 
-const BASE_URL = '/verification'
+const BASE_URL = '/api/v1/verification'
 
 // ========== 邮箱验证码 API ==========
 
 /**
  * 发送邮箱验证码
- * POST /verification/email/send
+ * POST /api/v1/verification/email/send
  * @param {import('../types').SendEmailCodeDTO} data
  * @returns {Promise<import('../types').SendCodeResponse>}
  */
@@ -34,7 +34,7 @@ export function sendEmailCode(data) {
 
 /**
  * 验证邮箱验证码
- * POST /verification/email/verify
+ * POST /api/v1/verification/email/verify
  * @param {import('../types').VerifyEmailCodeDTO} data
  * @returns {Promise<import('../types').VerifyCodeResponse>}
  */
@@ -46,7 +46,7 @@ export function verifyEmailCode(data) {
 
 /**
  * 发送短信验证码
- * POST /verification/sms/send
+ * POST /api/v1/verification/sms/send
  * @param {import('../types').SendSmsCodeDTO} data
  * @returns {Promise<import('../types').SendCodeResponse>}
  */
@@ -56,7 +56,7 @@ export function sendSmsCode(data) {
 
 /**
  * 验证短信验证码
- * POST /verification/sms/verify
+ * POST /api/v1/verification/sms/verify
  * @param {import('../types').VerifySmsCodeDTO} data
  * @returns {Promise<import('../types').VerifyCodeResponse>}
  */
@@ -68,16 +68,22 @@ export function verifySmsCode(data) {
 
 /**
  * 获取图片验证码
- * GET /verification/captcha
+ * GET /api/v1/verification/captcha
+ * @param {Object} params - 查询参数
+ * @param {string} [params.type='image'] - 验证码类型 (text/image)
+ * @param {string} [params.difficulty='hard'] - 难度 (easy/medium/hard)
  * @returns {Promise<import('../types').GetCaptchaResponse>}
  */
-export function getCaptcha() {
-  return fetch(`${BASE_URL}/captcha`)
+export function getCaptcha(params = {}) {
+  const queryParams = new URLSearchParams()
+  queryParams.append('type', params.type || 'image')
+  queryParams.append('difficulty', params.difficulty || 'hard')
+  return fetch(`${BASE_URL}/captcha?${queryParams.toString()}`)
 }
 
 /**
  * 验证图片验证码
- * POST /verification/captcha/verify
+ * POST /api/v1/verification/captcha/verify
  * @param {import('../types').VerifyCaptchaDTO} data
  * @returns {Promise<import('../types').VerifyCaptchaResponseType>}
  */
@@ -87,8 +93,8 @@ export function verifyCaptcha(data) {
 
 /**
  * 刷新图片验证码
- * POST /verification/captcha/refresh
- * @param {{captcha_id: string}} data
+ * POST /api/v1/verification/captcha/refresh
+ * @param {{old_captcha_key: string}} data
  * @returns {Promise<import('../types').GetCaptchaResponse>}
  */
 export function refreshCaptcha(data) {
@@ -97,7 +103,7 @@ export function refreshCaptcha(data) {
 
 /**
  * 验证临时令牌
- * POST /verification/captcha/validate-token
+ * POST /api/v1/verification/captcha/validate-token
  * @param {{temp_token: string}} data
  * @returns {Promise<import('../types').ApiResponse<{valid: boolean}>>}
  */

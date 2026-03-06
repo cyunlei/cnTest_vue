@@ -259,3 +259,5 @@
 十六.每次问答时，请先查看一下kimicode_executor_log.md文件，再作答
 十七.需要的icon，自行查找相似的icon，然后下载，网站推荐：Iconify (https://iconify.design/)，Icones (https://icones.js.org/)，Heroicons (https://heroicons.com/)，Lucide (https://lucide.dev/)，SVGPorn (https://svgporn.com/)，Phosphor Icons (https://phosphoricons.com/)，Remix Icon (https://remixicon.com/)，Tabler Icons (https://tabler-icons.io/)
 十八.项目强制使用中文编码（utf-8），请勿使用其他编码）
+十九.优先使用第三方组件库如:Element Plus、Ant Design Vue、Vuetify、Tailwind CSS、Bootstrap Vue、Bootstrap 5、Chakra UI、Mantine、Quasar、Vue Material、Vuetify、Vue Ant Design、VueJS Admin、Vue Admin Template、Vue Dashboard Template、Vue Admin UI、Vue Admin Layout、Vue Admin Boilerplate、Vue Admin Template、Vue Admin Dashboard、Vue Admin Panel、Vue Admin Theme、Vue Admin T
+二十.再使用第三方组件库时，请自行判断是否满足你的需求，如果满足你的需求，请自行选择，使用时，请自行封装组件，不要直接使用第三方组件库的组件，请自行安装

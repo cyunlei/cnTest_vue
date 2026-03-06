@@ -20,11 +20,11 @@ import { create, fetch } from '@/@core/http'
 // 从 verification 领域重新导出发送邮箱验证码，保持向后兼容
 export { sendEmailCode } from '@/domains/verification/api'
 
-const BASE_URL = '/accounts'
+const BASE_URL = '/api/v1/auth'
 
 /**
  * 账号密码登录
- * POST /accounts/login
+ * POST /api/v1/auth/login
  * @param {import('../types').LoginByPasswordDTO} params
  * @returns {Promise<import('../types').LoginResponse>}
  */
@@ -34,7 +34,7 @@ export function loginByPassword(params) {
 
 /**
  * 邮箱验证码登录（自动注册新用户）
- * POST /accounts/email_code_login
+ * POST /api/v1/auth/email_code_login
  * @param {import('../types').LoginByEmailCodeDTO} params
  * @returns {Promise<import('../types').LoginResponse>}
  */
@@ -44,7 +44,7 @@ export function loginByEmailCode(params) {
 
 /**
  * 用户注册
- * POST /accounts/register
+ * POST /api/v1/auth/register
  * @param {import('../types').RegisterDTO} params
  * @returns {Promise<import('../types').ApiResponse<void>>}
  */
@@ -54,7 +54,7 @@ export function createUser(params) {
 
 /**
  * 检查账号是否存在
- * POST /accounts/check_account_exist
+ * POST /api/v1/auth/check_account_exist
  * @param {import('../types').CheckAccountExistDTO} params
  * @returns {Promise<import('../types').ApiResponse<void>>}
  */
@@ -64,7 +64,7 @@ export function checkAccountExist(params) {
 
 /**
  * 修改密码（原密码方式）
- * POST /accounts/change_password
+ * POST /api/v1/auth/change_password
  * @param {import('../types').ChangePasswordDTO} params
  * @returns {Promise<import('../types').ApiResponse<void>>}
  */
@@ -74,7 +74,7 @@ export function updatePassword(params) {
 
 /**
  * 邮箱验证码修改密码
- * POST /accounts/email_code_password
+ * POST /api/v1/auth/email_code_password
  * @param {import('../types').EmailCodeChangePasswordDTO} params
  * @returns {Promise<import('../types').ApiResponse<void>>}
  */

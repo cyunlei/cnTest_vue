@@ -1,240 +1,694 @@
-﻿<script setup>
-import { ref, watch } from 'vue'
+<script setup>
+/**
+ * HTTP 测试步骤抽屉 - 布局重构版
+ */
+import { ref, computed } from 'vue'
+import { Close, Plus, Delete, ArrowRight, More, ArrowDown, ArrowUp, QuestionFilled, Link } from '@element-plus/icons-vue'
 
 const props = defineProps({
-  visible: {
-    type: Boolean,
-    default: false
-  }
+  visible: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['close', 'save'])
 
-const isVisible = ref(false)
-const isAnimating = ref(false)
+// 折叠面板状态
+const basicExpanded = ref(true)
+const detailExpanded = ref(true)
 
-const stepForm = ref({
+// 响应区域显示状态
+const showResponse = ref(false)
+
+// 详细信息Tab
+const activeDetailTab = ref('input')
+
+// 入参/断言子Tab
+const activeInputTab = ref('params')
+
+// 响应Tab
+const activeResponseTab = ref('body')
+
+// 基础信息表单数据
+const basicForm = ref({
   name: '',
   module: '商家开放',
-  url: '',
   method: 'GET',
+  url: '',
   env: '',
-  expectedResult: ''
+  stepDesc: '',
+  expectedResult: '',
+  jdosApp: '',
+  pfinderEnabled: false,
+  forcebotEnabled: false
 })
 
-const methodOptions = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
+// 模块选项
+const moduleOptions = [
+  { label: '商家开放', value: '商家开放' },
+  { label: '开放平台', value: '开放平台' },
+  { label: '内部平台', value: '内部平台' }
+]
 
-watch(() => props.visible, (newVal) => {
-  if (newVal) {
-    isVisible.value = true
-    setTimeout(() => {
-      isAnimating.value = true
-    }, 10)
-  } else {
-    isAnimating.value = false
-    setTimeout(() => {
-      isVisible.value = false
-    }, 300)
-  }
-})
+// HTTP方法选项
+const methodOptions = [
+  { label: 'GET', value: 'GET' },
+  { label: 'POST', value: 'POST' },
+  { label: 'PUT', value: 'PUT' },
+  { label: 'DELETE', value: 'DELETE' },
+  { label: 'PATCH', value: 'PATCH' }
+]
 
+// 关闭抽屉
 function handleClose() {
   emit('close')
 }
 
+// 保存
 function handleSave() {
-  emit('save', { ...stepForm.value })
-  resetForm()
+  emit('save')
 }
 
-function resetForm() {
-  stepForm.value = {
-    name: '',
-    module: '商家开放',
-    url: '',
-    method: 'GET',
-    env: '',
-    expectedResult: ''
-  }
+// 切换基础信息展开/收起
+function toggleBasic() {
+  basicExpanded.value = !basicExpanded.value
+}
+
+// 切换详细信息展开/收起
+function toggleDetail() {
+  detailExpanded.value = !detailExpanded.value
+}
+
+// 测试一下
+function handleTest() {
+  showResponse.value = true
 }
 </script>
+
 <template>
-  <div v-if="isVisible" class="drawer-wrapper">
-    <div class="drawer-mask" :class="{ show: isAnimating }" @click="handleClose"></div>
-    <div class="drawer-content" :class="{ show: isAnimating }">
+  <el-drawer
+    v-model="props.visible"
+    size="95%"
+    :close-on-click-modal="false"
+    :destroy-on-close="true"
+    @close="handleClose"
+  >
+    <!-- 头部 -->
+    <template #header>
       <div class="drawer-header">
-        <h3 class="drawer-title">接口用例配置</h3>
-        <button class="drawer-close" @click="handleClose">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-          </svg>
-        </button>
+        <el-button link :icon="Close" @click="handleClose" class="close-btn" />
+        <span class="drawer-title">接口用例配置</span>
+        <el-button size="small">分享</el-button>
+        <el-button size="small">另存为</el-button>
       </div>
-      <div class="drawer-body">
-        <div class="section">
-          <div class="section-title"><span class="arrow expanded">▼</span><span>基础信息</span></div>
-          <div class="section-content">
-            <div class="form-row">
-              <div class="form-item required">
-                <label class="form-label"><span class="star">*</span>名称</label>
-                <input v-model="stepForm.name" type="text" class="form-input" placeholder="请输入名称" />
-              </div>
-              <div class="form-item required">
-                <label class="form-label"><span class="star">*</span>接口所属模块</label>
-                <select v-model="stepForm.module" class="form-select">
-                  <option value="商家开放">商家开放</option>
-                  <option value="开放平台">开放平台</option>
-                  <option value="内部平台">内部平台</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-row">
+    </template>
+
+    <!-- 主内容区 -->
+    <div class="main-container">
+      <!-- 第一个容器：请求信息 -->
+      <div class="request-container">
+        <!-- 基础信息 -->
+        <div class="basic-section section-box">
+          <div class="section-header clickable" @click="toggleBasic">
+            <el-icon class="expand-icon">
+              <ArrowRight v-if="!basicExpanded" />
+              <ArrowDown v-else />
+            </el-icon>
+            <span class="section-title">基础信息</span>
+          </div>
+          <div v-show="basicExpanded" class="section-content">
+            <!-- 第一排：名称、接口所属模块、接口地址 -->
+            <div class="form-row row-3-cols">
               <div class="form-item">
-                <label class="form-label">接口地址</label>
-                <div class="input-group">
-                  <select v-model="stepForm.method" class="method-select">
-                    <option v-for="m in methodOptions" :key="m" :value="m">{{ m }}</option>
-                  </select>
-                  <input v-model="stepForm.url" type="text" class="form-input flex-1" placeholder="请选择接口地址，支持输入，支持CURL命令" />
-                  <button class="input-addon">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                      <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/>
-                    </svg>
-                  </button>
+                <label class="form-label">名称 <span class="required">*</span></label>
+                <el-input v-model="basicForm.name" placeholder="请输入名称" />
+              </div>
+              <div class="form-item">
+                <label class="form-label">接口所属模块 <span class="required">*</span></label>
+                <el-select v-model="basicForm.module" class="w-100">
+                  <el-option
+                    v-for="opt in moduleOptions"
+                    :key="opt.value"
+                    :label="opt.label"
+                    :value="opt.value"
+                  />
+                </el-select>
+              </div>
+              <div class="form-item url-item">
+                <label class="form-label">接口地址 <el-icon class="help-icon"><QuestionFilled /></el-icon></label>
+                <div class="url-input-group">
+                  <el-select v-model="basicForm.method" class="method-select">
+                    <el-option
+                      v-for="opt in methodOptions"
+                      :key="opt.value"
+                      :label="opt.label"
+                      :value="opt.value"
+                    />
+                  </el-select>
+                  <el-input v-model="basicForm.url" placeholder="请选择接口地址，支持输入，支持CURL命令" class="url-input" />
+                  <el-button class="btn-enter">
+                    <el-icon><ArrowRight /></el-icon>
+                  </el-button>
                 </div>
               </div>
             </div>
-            <div class="form-row">
+            
+            <!-- 第二排：特性环境、步骤描述、预期结果描述、Jdos应用 -->
+            <div class="form-row row-4-cols">
               <div class="form-item">
-                <label class="form-label">特性环境<svg class="help-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></label>
-                <input v-model="stepForm.env" type="text" class="form-input" placeholder="请选择环境，可输入" />
+                <label class="form-label">特性环境 <el-icon class="help-icon"><QuestionFilled /></el-icon></label>
+                <el-input v-model="basicForm.env" placeholder="请选择环境，可输入" />
               </div>
               <div class="form-item">
-                <label class="form-label">预期结果描述<svg class="help-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg></label>
-                <input v-model="stepForm.expectedResult" type="text" class="form-input" placeholder="步骤预期结果描述" />
+                <label class="form-label">步骤描述</label>
+                <el-input v-model="basicForm.stepDesc" placeholder="步骤描述信息，步骤内容的补充说明" />
+              </div>
+              <div class="form-item">
+                <label class="form-label">预期结果描述 <el-icon class="help-icon"><QuestionFilled /></el-icon></label>
+                <el-input v-model="basicForm.expectedResult" placeholder="步骤预期结果描述" />
+              </div>
+              <div class="form-item">
+                <label class="form-label">Jdos应用 <el-icon class="help-icon"><QuestionFilled /></el-icon> <el-icon class="link-icon"><Link /></el-icon></label>
+                <el-input v-model="basicForm.jdosApp" placeholder="请输入Jdos应用名称" />
               </div>
             </div>
-            <div class="form-row"><a class="more-link">更多信息</a></div>
+            
+            <!-- 第三排：链路追踪、压测标识 -->
+            <div class="form-row switches-row">
+              <div class="form-item switch-item">
+                <label class="form-label">链路追踪(PFinder)</label>
+                <el-switch v-model="basicForm.pfinderEnabled" />
+              </div>
+              <div class="form-item switch-item">
+                <label class="form-label">压测标识(ForceBot)</label>
+                <el-switch v-model="basicForm.forcebotEnabled" />
+              </div>
+            </div>
+            
+            <!-- 更多信息/隐藏信息链接 -->
+            <div class="more-link">
+              <el-link type="primary" @click="basicExpanded = false">隐藏信息</el-link>
+            </div>
           </div>
         </div>
-        <div class="section">
-          <div class="section-title"><span class="arrow expanded">▼</span><span>详细信息</span></div>
-          <div class="section-content">
-            <div class="tabs">
-              <button class="tab-item active">入参/断言</button>
-              <button class="tab-item">预设变量</button>
-              <button class="tab-item">前置操作</button>
-              <button class="tab-item">后置操作</button>
-              <button class="tab-item">设置</button>
-              <button class="tab-item">网关/登陆</button>
-            </div>
-            <div class="tab-content">
-              <div class="sub-toolbar">
-                <button class="sub-btn">添加</button>
-                <div class="group-tabs"><button class="group-tab active">第1组</button><button class="group-tab add">+</button></div>
-              </div>
-              <div class="param-tabs">
-                <button class="param-tab active">Params</button>
-                <button class="param-tab">Headers</button>
-                <button class="param-tab">Body</button>
-                <button class="param-tab">IPPort</button>
-                <button class="param-tab">加密</button>
-              </div>
-              <div class="param-table">
-                <table>
-                  <thead><tr><th class="col-key">KEY</th><th class="col-json">JSON添加</th><th class="col-value">VALUE</th><th class="col-action"><a class="batch-link">批量编辑</a></th></tr></thead>
-                  <tbody><tr><td colspan="4" class="empty-row"></td></tr></tbody>
-                </table>
-              </div>
-              <div class="compare-section">
-                <div class="compare-row"><span class="compare-label">比对方式:</span><label class="radio-item"><input type="radio" name="compareType" value="normal" checked /><span>普通</span></label><label class="radio-item"><input type="radio" name="compareType" value="ab" /><span>A/B</span></label></div>
-                <div class="compare-row"><span class="compare-label">对比规则:</span><label class="radio-item"><input type="radio" name="compareRule" value="whole" /><span>整体</span></label><label class="radio-item"><input type="radio" name="compareRule" value="key" checked /><span>键值</span></label><label class="radio-item"><input type="radio" name="compareRule" value="script" /><span>自定义脚本</span></label></div>
-                <div class="compare-row"><span class="compare-label">规则形式:</span><label class="radio-item"><input type="radio" name="ruleFormat" value="text" /><span>文本</span></label><label class="radio-item"><input type="radio" name="ruleFormat" value="jsonpath" checked /><span>JSONPath</span></label></div>
-                <div class="compare-row"><span class="compare-label">排除空值:</span><label class="radio-item"><input type="radio" name="excludeNull" value="yes" /><span>需要</span></label><label class="radio-item"><input type="radio" name="excludeNull" value="no" checked /><span>不需要</span></label><span class="compare-label ml-32">忽略顺序:</span><label class="radio-item"><input type="radio" name="ignoreOrder" value="yes" /><span>需要</span></label><label class="radio-item"><input type="radio" name="ignoreOrder" value="no" checked /><span>不需要</span></label></div>
-              </div>
-              <div class="assert-table">
-                <table>
-                  <thead><tr><th class="col-check"><input type="checkbox" /></th><th class="col-type">类型</th><th class="col-field">字段</th><th class="col-rule">规则</th><th class="col-expect">期望值</th><th class="col-remark">备注</th><th class="col-extract">提取变量</th><th class="col-action"><button class="add-btn">+ JSON添加</button><a class="batch-delete">批量删除</a></th></tr></thead>
-                  <tbody><tr><td colspan="8" class="empty-row"></td></tr></tbody>
-                </table>
-              </div>
-            </div>
+
+        <!-- 详细信息 -->
+        <div class="detail-section section-box">
+          <div class="section-header clickable" @click="toggleDetail">
+            <el-icon class="expand-icon">
+              <ArrowRight v-if="!detailExpanded" />
+              <ArrowDown v-else />
+            </el-icon>
+            <span class="section-title">详细信息</span>
+          </div>
+          <div v-show="detailExpanded" class="detail-tabs">
+            <el-tabs v-model="activeDetailTab">
+              <el-tab-pane label="入参/断言" name="input">
+                <div class="input-assert-container">
+                  <!-- 请求入参 -->
+                  <div class="request-params-box sub-box">
+                    <div class="sub-header">
+                      <span class="sub-title">请求入参</span>
+                    </div>
+                    <div class="sub-tabs">
+                      <el-tabs v-model="activeInputTab" type="border-card">
+                        <el-tab-pane label="Params" name="params">
+                          <div class="placeholder-content">
+                            <span>Params 区域</span>
+                          </div>
+                        </el-tab-pane>
+                        <el-tab-pane label="Headers" name="headers">
+                          <div class="placeholder-content">
+                            <span>Headers 区域</span>
+                          </div>
+                        </el-tab-pane>
+                        <el-tab-pane label="Body" name="body">
+                          <div class="placeholder-content">
+                            <span>Body 区域</span>
+                          </div>
+                        </el-tab-pane>
+                        <el-tab-pane label="IPPort" name="ipport">
+                          <div class="placeholder-content">
+                            <span>IPPort 区域</span>
+                          </div>
+                        </el-tab-pane>
+                        <el-tab-pane label="加密" name="encrypt">
+                          <div class="placeholder-content">
+                            <span>加密 区域</span>
+                          </div>
+                        </el-tab-pane>
+                      </el-tabs>
+                    </div>
+                  </div>
+                  <!-- 断言模块 -->
+                  <div class="assert-box sub-box">
+                    <div class="sub-header">
+                      <span class="sub-title">断言模块</span>
+                    </div>
+                    <div class="placeholder-content">
+                      <span>比对方式、对比规则、规则形式、排除空值、忽略顺序等</span>
+                    </div>
+                  </div>
+                </div>
+              </el-tab-pane>
+              <el-tab-pane label="预设变量" name="preset">
+                <div class="placeholder-content">
+                  <span>预设变量配置区域</span>
+                </div>
+              </el-tab-pane>
+              <el-tab-pane label="前置操作" name="pre">
+                <div class="placeholder-content">
+                  <span>前置操作配置区域</span>
+                </div>
+              </el-tab-pane>
+              <el-tab-pane label="后置操作" name="post">
+                <div class="placeholder-content">
+                  <span>后置操作配置区域</span>
+                </div>
+              </el-tab-pane>
+              <el-tab-pane label="设置" name="settings">
+                <div class="placeholder-content">
+                  <span>设置配置区域</span>
+                </div>
+              </el-tab-pane>
+              <el-tab-pane label="网关/登陆" name="gateway">
+                <div class="placeholder-content">
+                  <span>网关/登陆配置区域</span>
+                </div>
+              </el-tab-pane>
+            </el-tabs>
           </div>
         </div>
       </div>
-      <div class="drawer-footer">
-        <button class="btn-save" @click="handleSave">保存</button>
-        <button class="btn-test">测试一下</button>
-        <span class="tip">(多个IP默认直连调用第一个)</span>
-        <button class="btn-env-test">分环境测试</button>
+
+      <!-- 第二个容器：响应信息（测试后才显示） -->
+      <div v-if="showResponse" class="response-container section-box">
+        <div class="section-header">
+          <span class="section-title">响应信息区域</span>
+        </div>
+        <div class="response-tabs">
+          <el-tabs v-model="activeResponseTab">
+            <el-tab-pane label="响应体" name="body">
+              <div class="response-body-container">
+                <!-- 响应值 -->
+                <div class="response-item sub-box">
+                  <div class="sub-header">
+                    <span class="sub-title">响应值</span>
+                  </div>
+                  <div class="placeholder-content code-placeholder">
+                    <span>实际响应结果展示区域</span>
+                  </div>
+                </div>
+                <!-- 期望值 -->
+                <div class="response-item sub-box">
+                  <div class="sub-header">
+                    <span class="sub-title">期望值</span>
+                  </div>
+                  <div class="placeholder-content code-placeholder">
+                    <span>期望响应结果展示区域</span>
+                  </div>
+                </div>
+                <!-- 实际入参 -->
+                <div class="response-item sub-box">
+                  <div class="sub-header">
+                    <span class="sub-title">实际入参</span>
+                  </div>
+                  <div class="placeholder-content code-placeholder">
+                    <span>实际请求参数展示区域</span>
+                  </div>
+                </div>
+              </div>
+            </el-tab-pane>
+            <el-tab-pane label="响应头" name="headers">
+              <div class="placeholder-content">
+                <span>响应头信息展示区域</span>
+              </div>
+            </el-tab-pane>
+          </el-tabs>
+        </div>
+        <!-- 响应元信息 -->
+        <div class="response-meta">
+          <span class="meta-item">测试站</span>
+          <span class="meta-item">键值</span>
+          <span class="meta-item">状态码: 200</span>
+          <span class="meta-item">响应时间: 435ms</span>
+        </div>
       </div>
     </div>
-  </div>
+
+    <!-- 底部操作栏 -->
+    <template #footer>
+      <div class="drawer-footer">
+        <el-button type="primary" @click="handleSave">保存</el-button>
+        <el-button type="primary">保存并继续</el-button>
+        <el-button type="danger" @click="handleTest">测试一下</el-button>
+        <span class="tip">(多个IP默认直连调用第一个)</span>
+        <el-button>分环境测试</el-button>
+      </div>
+    </template>
+  </el-drawer>
 </template>
+
 <style scoped>
-.drawer-wrapper { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 20000; }
-.drawer-mask { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0); transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-.drawer-mask.show { background: rgba(0, 0, 0, 0.5); }
-.drawer-content { position: absolute; top: 0; right: 0; width: 90%; max-width: 1200px; height: 100%; background: #fff; box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15); display: flex; flex-direction: column; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-.drawer-content.show { transform: translateX(0); }
-.drawer-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid #e8e8e8; background: #fafafa; }
-.drawer-title { font-size: 16px; font-weight: 600; color: #333; margin: 0; }
-.drawer-close { background: none; border: none; cursor: pointer; color: #999; padding: 4px; display: flex; align-items: center; justify-content: center; transition: color 0.2s, transform 0.2s; }
-.drawer-close:hover { color: #666; transform: rotate(90deg); }
-.drawer-body { flex: 1; overflow-y: auto; padding: 24px; }
-.drawer-footer { display: flex; align-items: center; gap: 12px; padding: 16px 24px; border-top: 1px solid #e8e8e8; background: #fafafa; }
-.section { margin-bottom: 24px; border: 1px solid #e8e8e8; border-radius: 8px; overflow: hidden; }
-.section-title { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: #fafafa; font-size: 14px; font-weight: 500; color: #333; cursor: pointer; }
-.section-title .arrow { font-size: 10px; color: #999; transition: transform 0.2s; }
-.section-title .arrow.expanded { transform: rotate(0); }
-.section-content { padding: 16px; }
-.form-row { display: flex; gap: 24px; margin-bottom: 16px; }
-.form-item { flex: 1; display: flex; flex-direction: column; gap: 8px; }
-.form-item.required .form-label { color: #333; }
-.form-label { font-size: 14px; color: #666; display: flex; align-items: center; gap: 4px; }
-.form-label .star { color: #f5222d; }
-.help-icon { color: #1890ff; cursor: help; }
-.form-input, .form-select { height: 36px; padding: 0 12px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 14px; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
-.form-input:focus, .form-select:focus { border-color: #1890ff; box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2); }
-.form-input::placeholder { color: #999; }
-.flex-1 { flex: 1; }
-.input-group { display: flex; gap: 0; }
-.method-select { width: 80px; height: 36px; padding: 0 8px; border: 1px solid #d9d9d9; border-right: none; border-radius: 4px 0 0 4px; font-size: 14px; color: #52c41a; background: #fff; outline: none; }
-.input-group .form-input { border-radius: 0; }
-.input-addon { width: 36px; height: 36px; border: 1px solid #d9d9d9; border-left: none; border-radius: 0 4px 4px 0; background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #666; }
-.more-link { color: #1890ff; font-size: 14px; cursor: pointer; }
-.tabs { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid #e8e8e8; padding-bottom: 8px; }
-.tab-item { padding: 8px 16px; border: none; background: transparent; font-size: 14px; color: #666; cursor: pointer; position: relative; transition: color 0.2s; }
-.tab-item:hover { color: #1890ff; }
-.tab-item.active { color: #1890ff; }
-.tab-item.active::after { content: ""; position: absolute; bottom: -9px; left: 0; right: 0; height: 2px; background: #1890ff; }
-.sub-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-.sub-btn { padding: 6px 16px; border: 1px solid #1890ff; background: #fff; color: #1890ff; border-radius: 4px; font-size: 14px; cursor: pointer; transition: all 0.2s; }
-.sub-btn:hover { background: #e6f7ff; }
-.group-tabs { display: flex; align-items: center; gap: 4px; }
-.group-tab { padding: 6px 12px; border: 1px solid #d9d9d9; background: #fff; border-radius: 4px; font-size: 13px; cursor: pointer; }
-.group-tab.active { background: #1890ff; color: #fff; border-color: #1890ff; }
-.group-tab.add { padding: 6px 10px; color: #1890ff; }
-.param-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
-.param-tab { padding: 8px 16px; border: none; border-bottom: 2px solid transparent; background: transparent; font-size: 14px; color: #666; cursor: pointer; transition: all 0.2s; }
-.param-tab:hover { color: #1890ff; }
-.param-tab.active { color: #1890ff; border-bottom-color: #1890ff; }
-.param-table, .assert-table { margin-bottom: 16px; }
-.param-table table, .assert-table table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.param-table th, .param-table td, .assert-table th, .assert-table td { padding: 12px; text-align: left; border-bottom: 1px solid #f0f0f0; }
-.param-table th, .assert-table th { background: #fafafa; font-weight: 500; color: #666; }
-.batch-link, .batch-delete { color: #1890ff; font-size: 13px; cursor: pointer; }
-.empty-row { height: 60px; }
-.compare-section { background: #fafafa; padding: 16px; border-radius: 4px; margin-bottom: 16px; }
-.compare-row { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
-.compare-row:last-child { margin-bottom: 0; }
-.compare-label { font-size: 14px; color: #666; min-width: 70px; }
-.ml-32 { margin-left: 32px; }
-.radio-item { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 14px; color: #333; }
-.add-btn { padding: 4px 12px; border: 1px solid #1890ff; background: #fff; color: #1890ff; border-radius: 4px; font-size: 13px; cursor: pointer; margin-right: 8px; }
-.btn-save { padding: 8px 20px; border: none; background: #1890ff; color: #fff; border-radius: 4px; font-size: 14px; cursor: pointer; transition: background 0.2s; }
-.btn-save:hover { background: #40a9ff; }
-.btn-test { padding: 8px 20px; border: 1px solid #1890ff; background: #fff; color: #1890ff; border-radius: 4px; font-size: 14px; cursor: pointer; }
-.btn-env-test { padding: 8px 20px; border: 1px solid #d9d9d9; background: #fff; color: #666; border-radius: 4px; font-size: 14px; cursor: pointer; margin-left: auto; }
-.tip { font-size: 13px; color: #999; }
+/* 头部样式 */
+.drawer-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.close-btn {
+  font-size: 18px;
+  color: #606266;
+}
+
+.close-btn:hover {
+  color: #409eff;
+}
+
+.drawer-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+  margin-right: auto;
+}
+
+/* 主容器 */
+.main-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 16px;
+  padding: 0 20px 20px;
+}
+
+/* 区域盒子通用样式 */
+.section-box {
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.section-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e4e7ed;
+  background: #f5f7fa;
+  border-radius: 8px 8px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-header.clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.section-header.clickable:hover {
+  background: #ebeef5;
+}
+
+.expand-icon {
+  font-size: 14px;
+  color: #606266;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.sub-box {
+  border: 1px dashed #dcdfe6;
+  border-radius: 6px;
+  margin: 8px;
+}
+
+.sub-header {
+  padding: 8px 12px;
+  border-bottom: 1px dashed #dcdfe6;
+  background: #fafafa;
+  border-radius: 6px 6px 0 0;
+}
+
+.sub-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #606266;
+}
+
+/* 占位符内容居中 */
+.placeholder-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  color: #909399;
+  font-size: 14px;
+  padding: 20px;
+}
+
+.code-placeholder {
+  min-height: 200px;
+  background: #f8f9fa;
+  font-family: monospace;
+}
+
+/* 请求信息容器 */
+.request-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 基础信息 */
+.basic-section {
+  flex: 0 0 auto;
+}
+
+.basic-section .section-content {
+  padding: 16px;
+}
+
+/* 表单布局 - 相对布局 */
+.form-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.form-row:last-child {
+  margin-bottom: 0;
+}
+
+/* 三列布局：名称(1fr) + 模块(1fr) + 地址(2fr) */
+.row-3-cols .form-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.row-3-cols .url-item {
+  flex: 2;
+  min-width: 0;
+}
+
+/* 四列布局：特性环境 + 步骤描述 + 预期结果 + Jdos应用 */
+.row-4-cols .form-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.form-label {
+  display: block;
+  font-size: 13px;
+  color: #606266;
+  margin-bottom: 8px;
+}
+
+.form-label .required {
+  color: #f56c6c;
+}
+
+.form-label .help-icon,
+.form-label .link-icon {
+  font-size: 12px;
+  color: #909399;
+  margin-left: 4px;
+  cursor: pointer;
+}
+
+/* 输入框高度统一为32px */
+:deep(.el-input__wrapper),
+:deep(.el-select__wrapper) {
+  height: 32px !important;
+}
+
+:deep(.el-input__inner) {
+  height: 32px !important;
+}
+
+/* 下拉选择框宽度100% */
+.w-100 {
+  width: 100% !important;
+}
+
+/* URL输入组 - 相对布局 */
+.url-input-group {
+  display: flex;
+  width: 100%;
+}
+
+/* 方法选择框 - 固定宽度100px */
+.method-select {
+  width: 100px !important;
+  flex-shrink: 0;
+}
+
+.method-select :deep(.el-input__wrapper) {
+  height: 32px !important;
+  border-radius: 4px 0 0 4px !important;
+}
+
+/* 地址输入框 - 自适应剩余空间 */
+.url-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.url-input :deep(.el-input__wrapper) {
+  height: 32px !important;
+  border-radius: 0 !important;
+  border-left: none !important;
+}
+
+/* 回车按钮 - 固定宽度46px */
+.btn-enter {
+  width: 46px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  border-radius: 0 4px 4px 0 !important;
+  flex-shrink: 0;
+}
+
+/* 开关行 */
+.switches-row {
+  justify-content: flex-start;
+}
+
+.switch-item {
+  flex: 0 0 auto;
+  width: 200px;
+}
+
+/* 更多信息链接 */
+.more-link {
+  margin-top: 12px;
+}
+
+/* 详细信息 */
+.detail-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-tabs {
+  flex: 1;
+  padding: 16px;
+}
+
+.detail-tabs :deep(.el-tabs__content) {
+  height: calc(100% - 40px);
+}
+
+/* 入参断言容器 */
+.input-assert-container {
+  display: flex;
+  gap: 16px;
+  height: 100%;
+}
+
+.request-params-box {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.request-params-box .sub-tabs {
+  flex: 1;
+  padding: 8px;
+}
+
+.assert-box {
+  flex: 1;
+}
+
+/* 响应信息容器 */
+.response-container {
+  flex: 0 0 auto;
+  position: relative;
+}
+
+.response-tabs {
+  padding: 16px;
+}
+
+.response-body-container {
+  display: flex;
+  gap: 16px;
+}
+
+.response-item {
+  flex: 1;
+}
+
+.response-item .sub-header {
+  text-align: center;
+}
+
+/* 响应元信息 */
+.response-meta {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.response-meta .meta-item {
+  font-size: 12px;
+  color: #606266;
+  padding: 2px 8px;
+  background: #f0f2f5;
+  border-radius: 4px;
+}
+
+/* 底部操作栏 */
+.drawer-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tip {
+  font-size: 13px;
+  color: #999;
+}
+
+:deep(.el-drawer__body) {
+  padding: 0;
+  overflow-y: auto;
+}
+
+:deep(.el-drawer__header) {
+  margin-bottom: 0;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+:deep(.el-drawer__footer) {
+  padding: 16px 20px;
+  border-top: 1px solid #e4e7ed;
+}
 </style>

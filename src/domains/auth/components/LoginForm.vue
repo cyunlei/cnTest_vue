@@ -10,6 +10,7 @@ import { ElMessage } from 'element-plus'
 import { useAuthStore } from '../stores/useAuthStore'
 import { loginByPassword, loginByEmailCode, sendEmailCode } from '../api'
 import { useCountdown, useFormValidator, ValidationRules } from '@/shared/composables'
+// [验证码已临时禁用] import CaptchaModal from './CaptchaModal.vue'
 
 // ======== Emits ========
 const emit = defineEmits(['switchPanel'])
@@ -39,6 +40,8 @@ const loading = ref(false)
 const codeSending = ref(false)
 const rememberAccount = ref(false)
 const slideDirection = ref('left')
+// [验证码已临时禁用] const captchaVisible = ref(false)
+// [验证码已临时禁用] const tempToken = ref('')
 
 // ======== Computed ========
 const isEmailValid = computed(() => {
@@ -98,17 +101,40 @@ async function handleLogin() {
       code: codeValidator.value.value.trim()
     })
   } else {
-    // 账号密码登录
+    // 账号密码登录 - 先校验表单
     if (!accountValidator.validate() || !passwordValidator.validate()) {
       ElMessage.warning(accountValidator.error.value || passwordValidator.error.value)
       return
     }
+    // [验证码已临时禁用] 弹出验证码校验
+    // [验证码已临时禁用] captchaVisible.value = true
+    // [验证码已临时禁用] 临时直接执行密码登录
     await doPasswordLogin({
       username: accountValidator.value.value.trim(),
       password: passwordValidator.value.value
     })
   }
 }
+
+/**
+ * [验证码已临时禁用] 验证码验证成功后的回调
+ * @param {string} token - 临时令牌
+ */
+// [验证码已临时禁用] async function onCaptchaVerified(token) {
+// [验证码已临时禁用]   tempToken.value = token
+// [验证码已临时禁用]   await doPasswordLogin({
+// [验证码已临时禁用]     username: accountValidator.value.value.trim(),
+// [验证码已临时禁用]     password: passwordValidator.value.value,
+// [验证码已临时禁用]     temp_token: token
+// [验证码已临时禁用]   })
+// [验证码已临时禁用] }
+
+/**
+ * [验证码已临时禁用] 验证码弹窗取消
+ */
+// [验证码已临时禁用] function onCaptchaCancel() {
+// [验证码已临时禁用]   tempToken.value = ''
+// [验证码已临时禁用] }
 
 /**
  * 执行邮箱验证码登录
@@ -291,6 +317,14 @@ async function doPasswordLogin(params) {
     <p class="agreement">
       点击「登录」表示已阅读并同意<a href="#" class="link">服务条款</a>
     </p>
+
+    <!-- [验证码已临时禁用] 图片验证码弹窗
+    <CaptchaModal
+      v-model:visible="captchaVisible"
+      @verified="onCaptchaVerified"
+      @cancel="onCaptchaCancel"
+    />
+    -->
   </div>
 </template>
 

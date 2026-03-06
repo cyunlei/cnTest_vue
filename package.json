@@ -8,12 +8,15 @@
   },
   "devDependencies": {
     "@vue/compiler-sfc": "^3.2.6",
-    "sass": "^1.97.3"
+    "element-plus": "^2.13.3",
+    "sass": "^1.97.3",
+    "unplugin-auto-import": "^21.0.0",
+    "unplugin-vue-components": "^31.0.0"
   },
   "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
     "@vitejs/plugin-vue": "^5.0.4",
     "axios": "^1.13.5",
-    "element-plus": "^2.13.2",
     "pinia": "^3.0.4",
     "vite": "^5.2.11",
     "vue": "^3.4.21",
