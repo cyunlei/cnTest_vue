@@ -1,9 +1,10 @@
 <script setup>
 /**
- * HTTP 测试步骤抽屉 - 布局重构版
+ * HTTP 测试步骤抽屉 - 参考界面重构版
  */
 import { ref, computed } from 'vue'
-import { Close, Plus, Delete, ArrowRight, More, ArrowDown, ArrowUp, QuestionFilled, Link } from '@element-plus/icons-vue'
+import { Close, Plus, Delete, ArrowRight, More, ArrowDown, ArrowUp, QuestionFilled, Link, EditPen, Right, CopyDocument } from '@element-plus/icons-vue'
+import JsonAddDialog from './JsonAddDialog.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false }
@@ -12,7 +13,8 @@ const props = defineProps({
 const emit = defineEmits(['close', 'save'])
 
 // 折叠面板状态
-const basicExpanded = ref(true)
+const basicExpanded = ref(true) // 基础信息整体展开/收起
+const showMoreInfo = ref(false) // 更多信息展开/收起（控制第二排后两个和第三排）
 const detailExpanded = ref(true)
 
 // 响应区域显示状态
@@ -57,6 +59,107 @@ const methodOptions = [
   { label: 'PATCH', value: 'PATCH' }
 ]
 
+// 断言表单数据
+const assertForm = ref({
+  compareType: '1', // 比对方式：1-普通，2-A/B
+  compareRule: '0', // 对比规则：0-键值，1-整体
+  ruleFormat: 'jsonpath', // 规则形式：text-文本，jsonpath-JSONPath
+  isCustomScript: false, // 是否自定义脚本
+  ignoreNull: '0', // 排除空值：0-不需要，1-需要
+  ignoreOrder: '0' // 忽略顺序：0-不需要，1-需要
+})
+
+// 多组参数
+const paramGroups = ref([
+  { id: 1, name: '第1组', checked: true, params: [], headers: [], body: '', ipport: '', encrypt: '' }
+])
+const currentGroupId = ref(1)
+
+// 计算当前组
+const currentGroup = computed(() => {
+  return paramGroups.value.find(g => g.id === currentGroupId.value) || paramGroups.value[0]
+})
+
+// 重命名弹窗状态
+const renameDialogVisible = ref(false)
+const renameForm = ref({ id: null, name: '' })
+
+// JSON 添加弹窗状态
+const jsonDialogVisible = ref(false)
+const jsonDialogType = ref('params')
+
+// 打开 JSON 添加弹窗
+function openJsonDialog(type = 'params') {
+  jsonDialogType.value = type
+  jsonDialogVisible.value = true
+}
+
+// 处理 JSON 保存
+function handleJsonSave(selectedItems) {
+  const group = currentGroup.value
+  if (!group) return
+  
+  if (jsonDialogType.value === 'params') {
+    selectedItems.forEach(item => {
+      group.params.push(item)
+    })
+  } else if (jsonDialogType.value === 'headers') {
+    selectedItems.forEach(item => {
+      group.headers.push(item)
+    })
+  }
+}
+
+// 打开重命名弹窗
+function openRenameDialog(group) {
+  renameForm.value.id = group.id
+  renameForm.value.name = group.name
+  renameDialogVisible.value = true
+}
+
+// 关闭重命名弹窗
+function closeRenameDialog() {
+  renameDialogVisible.value = false
+  renameForm.value = { id: null, name: '' }
+}
+
+// 确认重命名
+function confirmRename() {
+  const group = paramGroups.value.find(g => g.id === renameForm.value.id)
+  if (group && renameForm.value.name.trim()) {
+    group.name = renameForm.value.name.trim()
+  }
+  closeRenameDialog()
+}
+
+// 复制参数组
+function copyGroup(group) {
+  const newId = paramGroups.value.length + 1
+  const newName = `${group.name}-copy`
+  paramGroups.value.push({
+    id: newId,
+    name: newName,
+    checked: group.checked,
+    params: JSON.parse(JSON.stringify(group.params || [])),
+    headers: JSON.parse(JSON.stringify(group.headers || [])),
+    body: group.body || '',
+    ipport: group.ipport || '',
+    encrypt: group.encrypt || ''
+  })
+}
+
+// 删除参数组
+function deleteGroup(groupId) {
+  const index = paramGroups.value.findIndex(g => g.id === groupId)
+  if (index > -1 && paramGroups.value.length > 1) {
+    paramGroups.value.splice(index, 1)
+    // 如果删除的是当前选中的组，切换到第一个组
+    if (currentGroupId.value === groupId) {
+      currentGroupId.value = paramGroups.value[0]?.id || 1
+    }
+  }
+}
+
 // 关闭抽屉
 function handleClose() {
   emit('close')
@@ -72,6 +175,11 @@ function toggleBasic() {
   basicExpanded.value = !basicExpanded.value
 }
 
+// 切换更多信息展开/收起
+function toggleMoreInfo() {
+  showMoreInfo.value = !showMoreInfo.value
+}
+
 // 切换详细信息展开/收起
 function toggleDetail() {
   detailExpanded.value = !detailExpanded.value
@@ -80,6 +188,23 @@ function toggleDetail() {
 // 测试一下
 function handleTest() {
   showResponse.value = true
+}
+
+// 添加参数组
+function addGroup() {
+  const newId = paramGroups.value.length + 1
+  paramGroups.value.push({
+    id: newId,
+    name: `第${newId}组`,
+    checked: false,  // 新添加的组默认不勾选
+    params: [],
+    headers: [],
+    body: '',
+    ipport: '',
+    encrypt: ''
+  })
+  // 切换到新添加的组
+  currentGroupId.value = newId
 }
 </script>
 
@@ -90,14 +215,19 @@ function handleTest() {
     :close-on-click-modal="false"
     :destroy-on-close="true"
     @close="handleClose"
+    class="http-step-drawer"
   >
     <!-- 头部 -->
     <template #header>
       <div class="drawer-header">
-        <el-button link :icon="Close" @click="handleClose" class="close-btn" />
+        <el-button link class="close-btn" @click="handleClose">
+          <el-icon><Close /></el-icon>
+        </el-button>
         <span class="drawer-title">接口用例配置</span>
-        <el-button size="small">分享</el-button>
-        <el-button size="small">另存为</el-button>
+        <div class="header-actions">
+          <el-button size="small">分享</el-button>
+          <el-button size="small">另存为</el-button>
+        </div>
       </div>
     </template>
 
@@ -106,148 +236,391 @@ function handleTest() {
       <!-- 第一个容器：请求信息 -->
       <div class="request-container">
         <!-- 基础信息 -->
-        <div class="basic-section section-box">
-          <div class="section-header clickable" @click="toggleBasic">
-            <el-icon class="expand-icon">
-              <ArrowRight v-if="!basicExpanded" />
-              <ArrowDown v-else />
+        <div class="collapse-section">
+          <div class="collapse-header" @click="toggleBasic">
+            <el-icon class="collapse-arrow" :class="{ 'is-active': basicExpanded }">
+              <ArrowRight />
             </el-icon>
-            <span class="section-title">基础信息</span>
+            <span class="collapse-title">基础信息</span>
           </div>
-          <div v-show="basicExpanded" class="section-content">
-            <!-- 第一排：名称、接口所属模块、接口地址 -->
-            <div class="form-row row-3-cols">
-              <div class="form-item">
-                <label class="form-label">名称 <span class="required">*</span></label>
-                <el-input v-model="basicForm.name" placeholder="请输入名称" />
-              </div>
-              <div class="form-item">
-                <label class="form-label">接口所属模块 <span class="required">*</span></label>
-                <el-select v-model="basicForm.module" class="w-100">
-                  <el-option
-                    v-for="opt in moduleOptions"
-                    :key="opt.value"
-                    :label="opt.label"
-                    :value="opt.value"
-                  />
-                </el-select>
-              </div>
-              <div class="form-item url-item">
-                <label class="form-label">接口地址 <el-icon class="help-icon"><QuestionFilled /></el-icon></label>
-                <div class="url-input-group">
-                  <el-select v-model="basicForm.method" class="method-select">
-                    <el-option
-                      v-for="opt in methodOptions"
-                      :key="opt.value"
-                      :label="opt.label"
-                      :value="opt.value"
+          <div v-show="basicExpanded" class="collapse-content">
+            <el-form class="basic-form" label-position="top">
+              <!-- 第一排：名称、接口所属模块、接口地址 -->
+              <el-row :gutter="16" >
+                <el-col :span="6">
+                  <el-form-item label="名称" required>
+                    <el-input v-model="basicForm.name" placeholder="请输入名称" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="6">
+                  <el-form-item label="接口所属模块" required>
+                    <el-select v-model="basicForm.module" class="w-100">
+                      <el-option
+                        v-for="opt in moduleOptions"
+                        :key="opt.value"
+                        :label="opt.label"
+                        :value="opt.value"
+                      />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="接口地址">
+                    <template #label>
+                      <span>接口地址</span>
+                      <el-icon class="label-icon"><Link /></el-icon>
+                    </template>
+                    <div class="url-input-wrapper">
+                      <el-select 
+                        v-model="basicForm.method" 
+                        class="method-select"
+                        :class="`color-${basicForm.method}`"
+                      >
+                        <el-option
+                          v-for="opt in methodOptions"
+                          :key="opt.value"
+                          :label="opt.label"
+                          :value="opt.value"
+                          :class="`method-option color-${opt.value}`"
+                        />
+                      </el-select>
+                      <el-input 
+                        v-model="basicForm.url" 
+                        placeholder="请选择接口地址，支持输入，支持CURL命令" 
+                        class="url-input"
+                      />
+                      <el-button class="url-enter-btn" title="入参转换">
+                        <el-icon><Right /></el-icon>
+                      </el-button>
+                    </div>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              
+              <!-- 第二排：始终显示特性环境、预期结果描述；展开时显示步骤描述、Jdos应用 -->
+              <el-row :gutter="16">
+                <!-- 特性环境 - 始终显示 -->
+                <el-col :span="6">
+                  <el-form-item>
+                    <template #label>
+                      <span>特性环境</span>
+                      <el-icon class="label-icon"><QuestionFilled /></el-icon>
+                    </template>
+                    <el-input v-model="basicForm.env" placeholder="请选择环境，可输入" />
+                  </el-form-item>
+                </el-col>
+                <!-- 步骤描述 - 仅展开时显示 -->
+                <el-col v-if="showMoreInfo" :span="6">
+                  <el-form-item label="步骤描述">
+                    <el-input 
+                      v-model="basicForm.stepDesc" 
+                      placeholder="步骤描述信息，步骤内容的补充说明"
+                      type="textarea"
+                      :rows="1"
                     />
-                  </el-select>
-                  <el-input v-model="basicForm.url" placeholder="请选择接口地址，支持输入，支持CURL命令" class="url-input" />
-                  <el-button class="btn-enter">
-                    <el-icon><ArrowRight /></el-icon>
-                  </el-button>
-                </div>
+                  </el-form-item>
+                </el-col>
+                <!-- 预期结果描述 - 始终显示 -->
+                <el-col :span="6">
+                  <el-form-item>
+                    <template #label>
+                      <span>预期结果描述</span>
+                      <el-icon class="label-icon"><QuestionFilled /></el-icon>
+                    </template>
+                    <el-input 
+                      v-model="basicForm.expectedResult" 
+                      placeholder="步骤预期结果描述"
+                      type="textarea"
+                      :rows="1"
+                    />
+                  </el-form-item>
+                </el-col>
+                <!-- Jdos应用 - 仅展开时显示 -->
+                <el-col v-if="showMoreInfo" :span="6">
+                  <el-form-item>
+                    <template #label>
+                      <span>Jdos应用</span>
+                      <el-icon class="label-icon"><QuestionFilled /></el-icon>
+                      <el-icon class="label-icon link"><EditPen /></el-icon>
+                    </template>
+                    <el-input v-model="basicForm.jdosApp" placeholder="请输入Jdos应用名称" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              
+              <!-- 第三排：链路追踪、压测标识 - 仅展开时显示 -->
+              <el-row v-if="showMoreInfo" :gutter="16">
+                <el-col :span="6">
+                  <el-form-item label="链路追踪(PFinder)">
+                    <el-switch v-model="basicForm.pfinderEnabled" />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="6">
+                  <el-form-item label="压测标识(ForceBot)">
+                    <el-switch v-model="basicForm.forcebotEnabled" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              
+              <!-- 更多信息/隐藏信息链接 -->
+              <div class="more-link">
+                <el-link v-if="!showMoreInfo" type="primary" @click="toggleMoreInfo">更多信息</el-link>
+                <el-link v-else type="primary" @click="toggleMoreInfo">隐藏信息</el-link>
               </div>
-            </div>
-            
-            <!-- 第二排：特性环境、步骤描述、预期结果描述、Jdos应用 -->
-            <div class="form-row row-4-cols">
-              <div class="form-item">
-                <label class="form-label">特性环境 <el-icon class="help-icon"><QuestionFilled /></el-icon></label>
-                <el-input v-model="basicForm.env" placeholder="请选择环境，可输入" />
-              </div>
-              <div class="form-item">
-                <label class="form-label">步骤描述</label>
-                <el-input v-model="basicForm.stepDesc" placeholder="步骤描述信息，步骤内容的补充说明" />
-              </div>
-              <div class="form-item">
-                <label class="form-label">预期结果描述 <el-icon class="help-icon"><QuestionFilled /></el-icon></label>
-                <el-input v-model="basicForm.expectedResult" placeholder="步骤预期结果描述" />
-              </div>
-              <div class="form-item">
-                <label class="form-label">Jdos应用 <el-icon class="help-icon"><QuestionFilled /></el-icon> <el-icon class="link-icon"><Link /></el-icon></label>
-                <el-input v-model="basicForm.jdosApp" placeholder="请输入Jdos应用名称" />
-              </div>
-            </div>
-            
-            <!-- 第三排：链路追踪、压测标识 -->
-            <div class="form-row switches-row">
-              <div class="form-item switch-item">
-                <label class="form-label">链路追踪(PFinder)</label>
-                <el-switch v-model="basicForm.pfinderEnabled" />
-              </div>
-              <div class="form-item switch-item">
-                <label class="form-label">压测标识(ForceBot)</label>
-                <el-switch v-model="basicForm.forcebotEnabled" />
-              </div>
-            </div>
-            
-            <!-- 更多信息/隐藏信息链接 -->
-            <div class="more-link">
-              <el-link type="primary" @click="basicExpanded = false">隐藏信息</el-link>
-            </div>
+            </el-form>
           </div>
         </div>
 
         <!-- 详细信息 -->
-        <div class="detail-section section-box">
-          <div class="section-header clickable" @click="toggleDetail">
-            <el-icon class="expand-icon">
-              <ArrowRight v-if="!detailExpanded" />
-              <ArrowDown v-else />
+        <div class="collapse-section">
+          <div class="collapse-header" @click="toggleDetail">
+            <el-icon class="collapse-arrow" :class="{ 'is-active': detailExpanded }">
+              <ArrowRight />
             </el-icon>
-            <span class="section-title">详细信息</span>
+            <span class="collapse-title">详细信息</span>
           </div>
-          <div v-show="detailExpanded" class="detail-tabs">
-            <el-tabs v-model="activeDetailTab">
+          <div v-show="detailExpanded" class="collapse-content detail-content">
+            <el-tabs v-model="activeDetailTab" class="detail-tabs">
               <el-tab-pane label="入参/断言" name="input">
-                <div class="input-assert-container">
-                  <!-- 请求入参 -->
-                  <div class="request-params-box sub-box">
-                    <div class="sub-header">
-                      <span class="sub-title">请求入参</span>
+                <div class="input-assert-wrapper">
+                  <!-- 组选择器 -->
+                  <div class="group-selector">
+                    <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                    <el-button link type="primary" @click="addGroup">添加</el-button>
+                    <div class="group-list">
+                      <div 
+                        v-for="group in paramGroups" 
+                        :key="group.id"
+                        class="group-item-wrapper"
+                        :class="{ active: currentGroupId === group.id }"
+                      >
+                        <el-button-group class="group-button-group">
+                          <!-- 组名按钮（带复选框） -->
+                          <el-button 
+                            class="group-name-btn"
+                            @click="currentGroupId = group.id"
+                          >
+                            <el-checkbox 
+                              v-model="group.checked" 
+                              :label="group.id"
+                              @click.stop
+                            >
+                              {{ group.name }}
+                            </el-checkbox>
+                          </el-button>
+                          <!-- 更多操作按钮（三个竖着的点） -->
+                          <el-dropdown trigger="hover" placement="bottom">
+                            <el-button class="group-more-btn">
+                              <svg viewBox="64 64 896 896" width="1em" height="1em" fill="currentColor" aria-hidden="true">
+                                <path d="M456 231a56 56 0 10112 0 56 56 0 10-112 0zm0 280a56 56 0 10112 0 56 56 0 10-112 0zm0 280a56 56 0 10112 0 56 56 0 10-112 0z"></path>
+                              </svg>
+                            </el-button>
+                            <template #dropdown>
+                              <el-dropdown-menu>
+                                <el-dropdown-item @click="openRenameDialog(group)">
+                                  <el-icon><EditPen /></el-icon> 重命名
+                                </el-dropdown-item>
+                                <el-dropdown-item @click="copyGroup(group)">
+                                  <el-icon><CopyDocument /></el-icon> 复制
+                                </el-dropdown-item>
+                                <el-dropdown-item 
+                                  divided 
+                                  @click="deleteGroup(group.id)"
+                                  :disabled="paramGroups.length <= 1"
+                                >
+                                  <el-icon><Delete /></el-icon> 删除
+                                </el-dropdown-item>
+                              </el-dropdown-menu>
+                            </template>
+                          </el-dropdown>
+                        </el-button-group>
+                      </div>
                     </div>
-                    <div class="sub-tabs">
-                      <el-tabs v-model="activeInputTab" type="border-card">
+                  </div> 
+                               
+                  <el-row :gutter="16" class="input-assert-row">
+                    <!-- 左侧：请求入参 -->
+                    <el-col :span="11" class="request-params-col">
+                      <el-tabs v-model="activeInputTab" type="border-card" class="params-tabs">
                         <el-tab-pane label="Params" name="params">
-                          <div class="placeholder-content">
-                            <span>Params 区域</span>
+                          <div class="key-value-table">
+                            <el-table :data="currentGroup.params" size="small" border>
+                              <el-table-column label="KEY" min-width="120">
+                                <template #header>
+                                  <span>KEY</span>
+                                  <el-button size="small" class="ml-8" @click="openJsonDialog('params')">JSON添加</el-button>
+                                </template>
+                                <template #default="{ row }">
+                                  <el-input v-model="row.key" size="small" placeholder="请输入Key" />
+                                </template>
+                              </el-table-column>
+                              <el-table-column label="VALUE" min-width="180">
+                                <template #default="{ row }">
+                                  <el-input v-model="row.value" size="small" placeholder="请输入Value" />
+                                </template>
+                              </el-table-column>
+                              <el-table-column label="操作" width="80" align="center">
+                                <template #header>
+                                  <el-link type="primary">批量编辑</el-link>
+                                </template>
+                                <template #default="{ $index }">
+                                  <el-button link type="danger" size="small" @click="currentGroup.params.splice($index, 1)">
+                                    <el-icon><Delete /></el-icon>
+                                  </el-button>
+                                </template>
+                              </el-table-column>
+                            </el-table>
                           </div>
                         </el-tab-pane>
                         <el-tab-pane label="Headers" name="headers">
-                          <div class="placeholder-content">
-                            <span>Headers 区域</span>
+                          <div class="key-value-table">
+                            <el-table :data="currentGroup.headers" size="small" border>
+                              <el-table-column label="KEY" min-width="120">
+                                <template #header>
+                                  <span>KEY</span>
+                                  <el-button size="small" class="ml-8" @click="openJsonDialog('headers')">JSON添加</el-button>
+                                </template>
+                                <template #default="{ row }">
+                                  <el-input v-model="row.key" size="small" placeholder="请输入Key" />
+                                </template>
+                              </el-table-column>
+                              <el-table-column label="VALUE" min-width="180">
+                                <template #default="{ row }">
+                                  <el-input v-model="row.value" size="small" placeholder="请输入Value" />
+                                </template>
+                              </el-table-column>
+                              <el-table-column label="操作" width="80" align="center">
+                                <template #header>
+                                  <el-link type="primary">批量编辑</el-link>
+                                </template>
+                                <template #default="{ $index }">
+                                  <el-button link type="danger" size="small" @click="currentGroup.headers.splice($index, 1)">
+                                    <el-icon><Delete /></el-icon>
+                                  </el-button>
+                                </template>
+                              </el-table-column>
+                            </el-table>
                           </div>
                         </el-tab-pane>
                         <el-tab-pane label="Body" name="body">
-                          <div class="placeholder-content">
-                            <span>Body 区域</span>
+                          <div class="empty-body">
+                            <el-empty description="GET请求不支持body传参" :image-size="64" />
                           </div>
                         </el-tab-pane>
                         <el-tab-pane label="IPPort" name="ipport">
-                          <div class="placeholder-content">
-                            <span>IPPort 区域</span>
-                          </div>
+                          <el-form-item label="IP:PORT">
+                            <el-input 
+                              type="textarea" 
+                              :rows="3"
+                              placeholder="多个IP:Port请以','分隔"
+                            />
+                          </el-form-item>
                         </el-tab-pane>
                         <el-tab-pane label="加密" name="encrypt">
                           <div class="placeholder-content">
-                            <span>加密 区域</span>
+                            <span>加密配置区域</span>
                           </div>
                         </el-tab-pane>
                       </el-tabs>
-                    </div>
-                  </div>
-                  <!-- 断言模块 -->
-                  <div class="assert-box sub-box">
-                    <div class="sub-header">
-                      <span class="sub-title">断言模块</span>
-                    </div>
-                    <div class="placeholder-content">
-                      <span>比对方式、对比规则、规则形式、排除空值、忽略顺序等</span>
-                    </div>
-                  </div>
-                </div>
+                    </el-col>
+                    
+                    <!-- 右侧：断言模块 -->
+                    <el-col :span="13" class="assert-col">
+                      <div class="assert-wrapper">
+                        <!-- 比对方式 -->
+                        <el-form-item label="比对方式：">
+                          <el-radio-group v-model="assertForm.compareType">
+                            <el-radio label="1">普通</el-radio>
+                            <el-radio label="2">A/B</el-radio>
+                          </el-radio-group>
+                        </el-form-item>
+                        
+                        <!-- 对比规则 -->
+                        <el-form-item>
+                          <template #label>
+                            <span>对比规则</span>
+                            <el-icon class="label-icon"><QuestionFilled /></el-icon>
+                            <span>：</span>
+                          </template>
+                          <el-radio-group v-model="assertForm.compareRule">
+                            <el-radio label="1">整体</el-radio>
+                            <el-radio label="0">键值</el-radio>
+                          </el-radio-group>
+                          <el-checkbox v-model="assertForm.isCustomScript" class="ml-16">自定义脚本</el-checkbox>
+                        </el-form-item>
+                        
+                        <!-- 规则形式 -->
+                        <el-form-item label="规则形式：">
+                          <el-radio-group v-model="assertForm.ruleFormat">
+                            <el-radio-button label="text">文本</el-radio-button>
+                            <el-radio-button label="jsonpath">JSONPath</el-radio-button>
+                          </el-radio-group>
+                        </el-form-item>
+                        
+                        <!-- 排除空值 & 忽略顺序 -->
+                        <el-row :gutter="16">
+                          <el-col :span="12">
+                            <el-form-item label="排除空值：">
+                              <el-radio-group v-model="assertForm.ignoreNull">
+                                <el-radio label="1">需要</el-radio>
+                                <el-radio label="0">不需要</el-radio>
+                              </el-radio-group>
+                            </el-form-item>
+                          </el-col>
+                          <el-col :span="12">
+                            <el-form-item label="忽略顺序：">
+                              <el-radio-group v-model="assertForm.ignoreOrder">
+                                <el-radio label="1">需要</el-radio>
+                                <el-radio label="0">不需要</el-radio>
+                              </el-radio-group>
+                            </el-form-item>
+                          </el-col>
+                        </el-row>
+                        
+                        <!-- 断言表格 -->
+                        <div class="assert-table">
+                          <el-table :data="[]" size="small" border>
+                            <el-table-column type="selection" width="40" />
+                            <el-table-column label="类型" width="100">
+                              <template #header>
+                                <span>类型</span>
+                                <el-icon class="label-icon"><QuestionFilled /></el-icon>
+                              </template>
+                            </el-table-column>
+                            <el-table-column label="字段">
+                              <template #header>
+                                <span>字段</span>
+                                <el-icon class="label-icon"><QuestionFilled /></el-icon>
+                              </template>
+                            </el-table-column>
+                            <el-table-column label="规则" width="120">
+                              <template #header>
+                                <span>规则</span>
+                                <el-icon class="label-icon"><QuestionFilled /></el-icon>
+                              </template>
+                            </el-table-column>
+                            <el-table-column label="期望值" min-width="100" show-overflow-tooltip>
+                              <template #header>
+                                <span>期望值</span>
+                                <el-icon class="label-icon"><QuestionFilled /></el-icon>
+                              </template>
+                            </el-table-column>
+                            <el-table-column label="备注" width="80" />
+                            <el-table-column label="提取变量" width="90" />
+                            <el-table-column label="操作" width="120" align="center">
+                              <template #header>
+                                <el-icon class="add-icon"><Plus /></el-icon>
+                                <el-button size="small" class="ml-4">JSON添加</el-button>
+                                <el-button size="small" disabled>批量删除</el-button>
+                              </template>
+                            </el-table-column>
+                          </el-table>
+                          <el-empty v-if="true" description="暂无数据" :image-size="64" />
+                        </div>
+                      </div>
+                    </el-col>
+                  </el-row>
+                </div>  
               </el-tab-pane>
               <el-tab-pane label="预设变量" name="preset">
                 <div class="placeholder-content">
@@ -280,7 +653,7 @@ function handleTest() {
       </div>
 
       <!-- 第二个容器：响应信息（测试后才显示） -->
-      <div v-if="showResponse" class="response-container section-box">
+      <div v-if="showResponse" class="response-container">
         <div class="section-header">
           <span class="section-title">响应信息区域</span>
         </div>
@@ -289,7 +662,7 @@ function handleTest() {
             <el-tab-pane label="响应体" name="body">
               <div class="response-body-container">
                 <!-- 响应值 -->
-                <div class="response-item sub-box">
+                <div class="response-item">
                   <div class="sub-header">
                     <span class="sub-title">响应值</span>
                   </div>
@@ -298,7 +671,7 @@ function handleTest() {
                   </div>
                 </div>
                 <!-- 期望值 -->
-                <div class="response-item sub-box">
+                <div class="response-item">
                   <div class="sub-header">
                     <span class="sub-title">期望值</span>
                   </div>
@@ -307,7 +680,7 @@ function handleTest() {
                   </div>
                 </div>
                 <!-- 实际入参 -->
-                <div class="response-item sub-box">
+                <div class="response-item">
                   <div class="sub-header">
                     <span class="sub-title">实际入参</span>
                   </div>
@@ -340,10 +713,39 @@ function handleTest() {
         <el-button type="primary" @click="handleSave">保存</el-button>
         <el-button type="primary">保存并继续</el-button>
         <el-button type="danger" @click="handleTest">测试一下</el-button>
-        <span class="tip">(多个IP默认直连调用第一个)</span>
+        <span class="footer-tip">(多个IP默认直连调用第一个)</span>
         <el-button>分环境测试</el-button>
       </div>
     </template>
+    
+    <!-- 重命名弹窗 -->
+    <el-dialog
+      v-model="renameDialogVisible"
+      title="分组名称"
+      width="400px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <el-input 
+        v-model="renameForm.name" 
+        placeholder="请输入分组名称"
+        maxlength="50"
+        show-word-limit
+      />
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="closeRenameDialog">取消</el-button>
+          <el-button type="primary" @click="confirmRename">确定</el-button>
+        </div>
+      </template>
+    </el-dialog>
+    
+    <!-- JSON 添加弹窗 -->
+    <json-add-dialog
+      v-model="jsonDialogVisible"
+      type="params"
+      @save="handleJsonSave"
+    />
   </el-drawer>
 </template>
 
@@ -371,6 +773,11 @@ function handleTest() {
   margin-right: auto;
 }
 
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* 主容器 */
 .main-container {
   display: flex;
@@ -380,63 +787,331 @@ function handleTest() {
   padding: 0 20px 20px;
 }
 
-/* 区域盒子通用样式 */
-.section-box {
+/* 折叠面板样式 - 参考 ant-collapse */
+.collapse-section {
   border: 1px solid #e4e7ed;
   border-radius: 8px;
   background: #fff;
 }
 
-.section-header {
+.collapse-header {
   padding: 12px 16px;
-  border-bottom: 1px solid #e4e7ed;
   background: #f5f7fa;
   border-radius: 8px 8px 0 0;
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.section-header.clickable {
   cursor: pointer;
   user-select: none;
 }
 
-.section-header.clickable:hover {
+.collapse-header:hover {
   background: #ebeef5;
 }
 
-.expand-icon {
+.collapse-arrow {
   font-size: 14px;
   color: #606266;
+  transition: transform 0.3s;
 }
 
-.section-title {
+.collapse-arrow.is-active {
+  transform: rotate(90deg);
+}
+
+.collapse-title {
   font-size: 14px;
   font-weight: 600;
   color: #303133;
 }
 
-.sub-box {
-  border: 1px dashed #dcdfe6;
-  border-radius: 6px;
-  margin: 8px;
+.collapse-content {
+  padding: 16px;
 }
 
-.sub-header {
-  padding: 8px 12px;
-  border-bottom: 1px dashed #dcdfe6;
-  background: #fafafa;
-  border-radius: 6px 6px 0 0;
-}
-
-.sub-title {
+/* 基础信息表单 */
+.basic-form :deep(.el-form-item__label) {
+  padding-bottom: 4px;
   font-size: 13px;
-  font-weight: 500;
   color: #606266;
 }
 
-/* 占位符内容居中 */
+.basic-form :deep(.el-form-item) {
+  margin-bottom: 16px;
+}
+
+.basic-form :deep(.el-form-item.is-required .el-form-item__label:before) {
+  content: '*';
+  color: #f56c6c;
+  margin-right: 4px;
+}
+
+.label-icon {
+  font-size: 12px;
+  color: #2695F1;
+  margin-left: 4px;
+  cursor: help;
+  vertical-align: middle;
+}
+
+.label-icon.link {
+  cursor: pointer;
+}
+
+/* URL输入组 */
+.url-input-wrapper {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.method-select {
+  width: 90px !important;
+  flex-shrink: 0;
+}
+
+.method-select :deep(.el-input__wrapper) {
+  border-radius: 4px 0 0 4px !important;
+}
+
+/* HTTP方法颜色 - 选择框中选中的值 */
+.method-select.color-GET :deep(.el-input__inner),
+.method-select.color-GET :deep(.el-select__selected-item) {
+  color: #007F31 !important;
+}
+
+.method-select.color-POST :deep(.el-input__inner),
+.method-select.color-POST :deep(.el-select__selected-item) {
+  color: #AD7A03 !important;
+}
+
+.method-select.color-PUT :deep(.el-input__inner),
+.method-select.color-PUT :deep(.el-select__selected-item) {
+  color: #0053B8 !important;
+}
+
+.method-select.color-PATCH :deep(.el-input__inner),
+.method-select.color-PATCH :deep(.el-select__selected-item) {
+  color: #623497 !important;
+}
+
+.method-select.color-DELETE :deep(.el-input__inner),
+.method-select.color-DELETE :deep(.el-select__selected-item) {
+  color: #8E1A10 !important;
+}
+
+/* HTTP方法下拉选项颜色 */
+.method-option.color-GET {
+  color: #007F31;
+}
+
+.method-option.color-POST {
+  color: #AD7A03;
+}
+
+.method-option.color-PUT {
+  color: #0053B8;
+}
+
+.method-option.color-PATCH {
+  color: #623497;
+}
+
+.method-option.color-DELETE {
+  color: #8E1A10;
+}
+
+.url-input {
+  flex: 1; /* 填满剩余空间 */
+  min-width: 0;
+}
+
+.url-input :deep(.el-input__wrapper) {
+  border-radius: 0 !important;
+  border-left: none !important;
+
+}
+
+.url-enter-btn {
+  width: 46px;
+  flex-shrink: 0;
+}
+
+/* 更多链接 */
+.more-link {
+  margin-top: 8px;
+}
+
+/* 详细信息区域 */
+.detail-content {
+  padding: 0;
+}
+
+.detail-tabs :deep(.el-tabs__header) {
+  margin: 0;
+  padding: 0 16px;
+}
+
+.detail-tabs :deep(.el-tabs__content) {
+  padding: 16px;
+}
+
+/* 入参/断言布局 */
+.input-assert-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 组选择器 */
+.group-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.help-icon {
+  font-size: 14px;
+  color: #2695F1;
+  cursor: help;
+}
+
+.group-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  white-space: nowrap;
+  border-radius: 5px;
+}
+
+.group-item-wrapper {
+  display: inline-flex;
+}
+
+/* 按钮组样式 */
+.group-button-group {
+  display: flex;
+}
+
+.group-button-group :deep(.el-button) {
+  margin: 0;
+}
+
+/* 组名按钮 */
+.group-name-btn {
+  padding: 5px 12px;
+  height: 32px;
+}
+
+.group-name-btn :deep(.el-checkbox__label) {
+  padding-left: 4px;
+}
+
+/* 更多按钮 */
+.group-more-btn {
+  padding: 5px 8px;
+  height: 32px;
+}
+
+/* 选中状态 - 覆盖按钮组边框 */
+.group-item-wrapper.active .group-name-btn {
+  border-color: #409eff;
+  background: #ecf5ff;
+  color: #409eff;
+}
+
+.group-item-wrapper.active .group-name-btn :deep(.el-checkbox__label) {
+  color: #409eff;
+}
+
+.group-item-wrapper.active .group-more-btn {
+  border-color: #409eff;
+  background: #ecf5ff;
+  color: #409eff;
+}
+
+/* 重命名弹窗 */
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* 入参/断言行 */
+.input-assert-row {
+  display: flex;
+}
+
+.request-params-col {
+  padding-right: 8px;
+}
+
+.params-tabs {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.params-tabs :deep(.el-tabs__header) {
+  padding: 0;
+}
+
+.params-tabs :deep(.el-tabs__content) {
+  padding: 0;
+}
+
+/* 键值表格 */
+.key-value-table {
+  width: 100%;
+}
+
+.key-value-table :deep(.el-table__header th) {
+  background: #fafafa;
+}
+
+.ml-8 {
+  margin-left: 8px;
+}
+
+.ml-4 {
+  margin-left: 4px;
+}
+
+.ml-16 {
+  margin-left: 16px;
+}
+
+/* 断言区域 */
+.assert-col {
+  border-left: 1px solid rgba(0, 0, 0, 0.06);
+  padding-left: 16px;
+}
+
+.assert-wrapper :deep(.el-form-item) {
+  margin-bottom: 8px;
+}
+
+.assert-wrapper :deep(.el-form-item__label) {
+  font-size: 13px;
+  color: #606266;
+}
+
+/* 断言表格 */
+.assert-table {
+  margin-top: 16px;
+}
+
+.add-icon {
+  color: #1890ff;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+/* 空状态 */
+.empty-body {
+  padding: 40px 0;
+}
+
+/* 占位符内容 */
 .placeholder-content {
   display: flex;
   align-items: center;
@@ -460,173 +1135,25 @@ function handleTest() {
   gap: 16px;
 }
 
-/* 基础信息 */
-.basic-section {
-  flex: 0 0 auto;
-}
-
-.basic-section .section-content {
-  padding: 16px;
-}
-
-/* 表单布局 - 相对布局 */
-.form-row {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.form-row:last-child {
-  margin-bottom: 0;
-}
-
-/* 三列布局：名称(1fr) + 模块(1fr) + 地址(2fr) */
-.row-3-cols .form-item {
-  flex: 1;
-  min-width: 0;
-}
-
-.row-3-cols .url-item {
-  flex: 2;
-  min-width: 0;
-}
-
-/* 四列布局：特性环境 + 步骤描述 + 预期结果 + Jdos应用 */
-.row-4-cols .form-item {
-  flex: 1;
-  min-width: 0;
-}
-
-.form-label {
-  display: block;
-  font-size: 13px;
-  color: #606266;
-  margin-bottom: 8px;
-}
-
-.form-label .required {
-  color: #f56c6c;
-}
-
-.form-label .help-icon,
-.form-label .link-icon {
-  font-size: 12px;
-  color: #909399;
-  margin-left: 4px;
-  cursor: pointer;
-}
-
-/* 输入框高度统一为32px */
-:deep(.el-input__wrapper),
-:deep(.el-select__wrapper) {
-  height: 32px !important;
-}
-
-:deep(.el-input__inner) {
-  height: 32px !important;
-}
-
-/* 下拉选择框宽度100% */
-.w-100 {
-  width: 100% !important;
-}
-
-/* URL输入组 - 相对布局 */
-.url-input-group {
-  display: flex;
-  width: 100%;
-}
-
-/* 方法选择框 - 固定宽度100px */
-.method-select {
-  width: 100px !important;
-  flex-shrink: 0;
-}
-
-.method-select :deep(.el-input__wrapper) {
-  height: 32px !important;
-  border-radius: 4px 0 0 4px !important;
-}
-
-/* 地址输入框 - 自适应剩余空间 */
-.url-input {
-  flex: 1;
-  min-width: 0;
-}
-
-.url-input :deep(.el-input__wrapper) {
-  height: 32px !important;
-  border-radius: 0 !important;
-  border-left: none !important;
-}
-
-/* 回车按钮 - 固定宽度46px */
-.btn-enter {
-  width: 46px !important;
-  height: 32px !important;
-  padding: 0 !important;
-  border-radius: 0 4px 4px 0 !important;
-  flex-shrink: 0;
-}
-
-/* 开关行 */
-.switches-row {
-  justify-content: flex-start;
-}
-
-.switch-item {
-  flex: 0 0 auto;
-  width: 200px;
-}
-
-/* 更多信息链接 */
-.more-link {
-  margin-top: 12px;
-}
-
-/* 详细信息 */
-.detail-section {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.detail-tabs {
-  flex: 1;
-  padding: 16px;
-}
-
-.detail-tabs :deep(.el-tabs__content) {
-  height: calc(100% - 40px);
-}
-
-/* 入参断言容器 */
-.input-assert-container {
-  display: flex;
-  gap: 16px;
-  height: 100%;
-}
-
-.request-params-box {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.request-params-box .sub-tabs {
-  flex: 1;
-  padding: 8px;
-}
-
-.assert-box {
-  flex: 1;
-}
-
 /* 响应信息容器 */
 .response-container {
-  flex: 0 0 auto;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  background: #fff;
   position: relative;
+}
+
+.section-header {
+  padding: 12px 16px;
+  background: #f5f7fa;
+  border-bottom: 1px solid #e4e7ed;
+  border-radius: 8px 8px 0 0;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
 }
 
 .response-tabs {
@@ -640,10 +1167,23 @@ function handleTest() {
 
 .response-item {
   flex: 1;
+  border: 1px dashed #dcdfe6;
+  border-radius: 6px;
+  
 }
 
-.response-item .sub-header {
+.sub-header {
+  padding: 8px 12px;
+  border-bottom: 1px dashed #dcdfe6;
+  background: #fafafa;
+  border-radius: 6px 6px 0 0;
   text-align: center;
+}
+
+.sub-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: #606266;
 }
 
 /* 响应元信息 */
@@ -671,11 +1211,17 @@ function handleTest() {
   gap: 12px;
 }
 
-.tip {
+.footer-tip {
   font-size: 13px;
   color: #999;
 }
 
+/* 工具类 */
+.w-100 {
+  width: 100% !important;
+}
+
+/* 覆盖 Element Plus 默认样式 */
 :deep(.el-drawer__body) {
   padding: 0;
   overflow-y: auto;
@@ -690,5 +1236,14 @@ function handleTest() {
 :deep(.el-drawer__footer) {
   padding: 16px 20px;
   border-top: 1px solid #e4e7ed;
+}
+
+:deep(.el-input__wrapper),
+:deep(.el-select__wrapper) {
+  height: 32px;
+}
+
+:deep(.el-textarea__inner) {
+  min-height: 32px !important;
 }
 </style>

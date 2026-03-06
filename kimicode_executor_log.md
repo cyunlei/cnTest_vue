@@ -1240,3 +1240,1133 @@ export function getCaptcha(params = {}) {
 ✅ 接口地址区域宽度为名称的两倍（flex: 2）
 ✅ 响应式布局，随容器宽度自适应
 
+
+---
+
+## 2026-03-06: HttpStepDrawer 参照参考界面重构
+
+### 任务
+根据用户提供的 element.txt、html.txt、styles.txt 三个文件中的参考界面，重构 HttpStepDrawer.vue 组件，使其更接近参考界面的样式和布局。
+
+### 分析参考界面结构
+
+#### 1. 基础信息区域（ant-collapse）
+- **第一行（3列）**：
+  - 名称（ant-col-6，占1/4）
+  - 接口所属模块（ant-col-6，占1/4）
+  - 接口地址（ant-col-12，占1/2，包含方法选择器 + URL输入框 + 回车按钮）
+
+- **第二行（4列）**：
+  - 特性环境（ant-col-6，1/4）
+  - 步骤描述（ant-col-6，1/4，textarea）
+  - 预期结果描述（ant-col-6，1/4，textarea）
+  - Jdos应用（ant-col-6，1/4）
+
+- **第三行**：
+  - 链路追踪(PFinder)：Switch开关
+  - 压测标识(ForceBot)：Switch开关
+
+- **隐藏信息链接**
+
+#### 2. 详细信息区域（入参/断言 Tab）
+- **组选择器**：添加按钮 + 复选框组（第1组、第2组...）
+- **左侧（ant-col-11）**：请求入参
+  - Params/Headers/Body/IPPort/加密 5个Tab
+  - 键值表格：KEY/VALUE/操作
+  - JSON添加按钮、批量编辑链接
+- **右侧（ant-col-13）**：断言模块
+  - 比对方式：普通/A/B（单选）
+  - 对比规则：整体/键值（单选）+ 自定义脚本复选框
+  - 规则形式：文本/JSONPath（单选按钮）
+  - 排除空值：需要/不需要
+  - 忽略顺序：需要/不需要
+  - 断言表格：类型/字段/规则/期望值/备注/提取变量/操作
+
+#### 3. 底部按钮
+- 保存、保存并继续、测试一下、分环境测试
+- "多个IP默认直连调用第一个" 提示
+
+### 修改内容
+**修改文件:** `src/domains/casemgmt/components/HttpStepDrawer.vue`
+
+#### 1. 布局重构
+- 使用 `el-row`/`el-col` 替代原来的 flex 布局，实现精确的栅格布局
+- 基础信息第一行：6:6:12 比例（名称:模块:地址 = 1:1:2）
+- 基础信息第二行：6:6:6:6 比例（4列等宽）
+- 入参/断言区域：11:13 比例（左侧请求入参 + 右侧断言）
+
+#### 2. 新增数据结构
+- `assertForm`：断言表单数据（比对方式、对比规则、规则形式等）
+- `paramGroups`：多组参数支持
+- `getMethodColor`：HTTP方法颜色函数
+
+#### 3. 组件样式优化
+- 折叠面板样式：参考 ant-collapse 设计
+- HTTP方法颜色：GET(绿)、POST(黄)、PUT(蓝)、PATCH(紫)、DELETE(红)
+- 表单标签样式：带帮助图标、链接图标
+- 组选择器：复选框 + 组名标签
+- 断言区域：单选组、表格
+
+#### 4. 图标替换
+- Copy → Link（@element-plus/icons-vue 中没有 Copy）
+- Edit → EditPen
+- Enter → Right
+
+### CSS设计令牌参考（styles.txt）
+```css
+--deeptest-primary-color: #1890ff
+--color--primary: #2695F1
+--height--form-input: 32px
+--color--base--border: #dcdfe6
+--color--base--background: #f0f2f5
+```
+
+### 布局对比
+| 区域 | 旧布局 | 新布局 |
+|-----|-------|-------|
+| 基础信息行1 | flex: 1:1:1.5 | el-col 6:6:12 |
+| 基础信息行2 | flex: 1:1:1:1 | el-col 6:6:6:6 |
+| 入参/断言 | 占位符 | 11:13 两列 |
+| 折叠面板 | 自定义 | 参考 ant-collapse |
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 基础信息区域布局与参考界面一致（3列+4列）
+✅ HTTP方法颜色区分（GET绿、POST黄等）
+✅ 入参/断言区域左右分栏（11:13）
+✅ 断言模块单选组、表格样式完成
+✅ 底部操作栏按钮布局完成
+
+
+---
+
+## 2026-03-06: HttpStepDrawer 基础信息区域展开/收起逻辑优化
+
+### 任务
+优化基础信息区域的展开/收起逻辑，实现以下交互：
+1. 始终显示：第一排（名称、接口所属模块、接口地址）+ 第二排（特性环境、预期结果描述）
+2. 收起时隐藏：第二排后两个（步骤描述、Jdos应用）+ 第三排（链路追踪、压测标识）
+3. 展开时显示：全部内容
+
+### 修改内容
+**修改文件:** `src/domains/casemgmt/components/HttpStepDrawer.vue`
+
+#### 1. 新增状态变量
+```javascript
+const showMoreInfo = ref(false) // 更多信息展开/收起（控制第二排后两个和第三排）
+```
+
+#### 2. 新增切换函数
+```javascript
+function toggleMoreInfo() {
+  showMoreInfo.value = !showMoreInfo.value
+}
+```
+
+#### 3. 第二行动态布局
+**收起时（showMoreInfo = false）：**
+- 特性环境：:span="12"（占1/2）
+- 预期结果描述：:span="12"（占1/2）
+- 步骤描述：v-if="showMoreInfo"（隐藏）
+- Jdos应用：v-if="showMoreInfo"（隐藏）
+
+**展开时（showMoreInfo = true）：**
+- 特性环境：:span="6"（占1/4）
+- 步骤描述：v-if="showMoreInfo" :span="6"（显示，占1/4）
+- 预期结果描述：:span="6"（占1/4）
+- Jdos应用：v-if="showMoreInfo" :span="6"（显示，占1/4）
+
+#### 4. 第三排条件显示
+```vue
+<el-row v-if="showMoreInfo" :gutter="16">
+  <!-- 链路追踪、压测标识 -->
+</el-row>
+```
+
+#### 5. 切换链接
+```vue
+<div class="more-link">
+  <el-link v-if="!showMoreInfo" type="primary" @click="toggleMoreInfo">更多信息</el-link>
+  <el-link v-else type="primary" @click="toggleMoreInfo">隐藏信息</el-link>
+</div>
+```
+
+### 布局对比
+| 状态 | 特性环境 | 步骤描述 | 预期结果描述 | Jdos应用 | 链路追踪 | 压测标识 |
+|-----|---------|---------|-------------|---------|---------|---------|
+| 收起 | 12 (1/2) | 隐藏 | 12 (1/2) | 隐藏 | 隐藏 | 隐藏 |
+| 展开 | 6 (1/4) | 6 (1/4) | 6 (1/4) | 6 (1/4) | 显示 | 显示 |
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 收起时第二排为2列布局（特性环境 + 预期结果描述）
+✅ 展开时第二排变为4列布局（特性环境 + 步骤描述 + 预期结果描述 + Jdos应用）
+✅ 第三排仅在展开时显示
+✅ "更多信息"/"隐藏信息" 链接切换正常
+
+
+---
+
+## 2026-03-06: HttpStepDrawer HTTP方法下拉选项添加颜色
+
+### 任务
+为HTTP方法下拉选择框的选项添加颜色，与截图所示一致：
+- GET: 绿色
+- POST: 黄色/金色  
+- PUT: 蓝色
+- PATCH: 紫色
+- DELETE: 红色
+
+### 修改内容
+**修改文件:** `src/domains/casemgmt/components/HttpStepDrawer.vue`
+
+#### 1. 为 el-option 添加颜色类
+```vue
+<el-option
+  v-for="opt in methodOptions"
+  :key="opt.value"
+  :label="opt.label"
+  :value="opt.value"
+  :class="`method-option color-${opt.value}`"
+/>
+```
+
+#### 2. 添加下拉选项颜色样式
+```css
+/* HTTP方法下拉选项颜色 */
+.method-option.color-GET {
+  color: #52c41a;
+}
+
+.method-option.color-POST {
+  color: #faad14;
+}
+
+.method-option.color-PUT {
+  color: #1890ff;
+}
+
+.method-option.color-PATCH {
+  color: #722ed1;
+}
+
+.method-option.color-DELETE {
+  color: #f5222d;
+}
+```
+
+### 颜色对照表
+| HTTP方法 | 颜色值 | 显示效果 |
+|---------|-------|---------|
+| GET | #52c41a | 绿色 |
+| POST | #faad14 | 黄色/金色 |
+| PUT | #1890ff | 蓝色 |
+| PATCH | #722ed1 | 紫色 |
+| DELETE | #f5222d | 红色 |
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ HTTP方法下拉选项已添加对应颜色
+✅ 选择框中已选中的方法也显示对应颜色
+
+
+---
+
+## 2026-03-06: HttpStepDrawer HTTP方法选中后颜色优化
+
+### 任务
+修复HTTP方法选择框中，选中的值没有显示颜色的问题。要求选中后输入框中显示的方法名也带颜色。
+
+### 修改内容
+**修改文件:** `src/domains/casemgmt/components/HttpStepDrawer.vue`
+
+#### 1. 添加更强的CSS选择器
+为每个HTTP方法添加两个选择器，确保选中的值在输入框中显示颜色：
+- `:deep(.el-input__inner)` - 输入框内部文本
+- `:deep(.el-select__selected-item)` - Element Plus Select 选中的项目
+
+#### 2. 统一颜色值
+将选中值的颜色与下拉选项颜色统一：
+```css
+/* GET - 绿色 */
+.method-select.color-GET :deep(.el-input__inner),
+.method-select.color-GET :deep(.el-select__selected-item) {
+  color: #52c41a !important;
+}
+
+/* POST - 黄色 */
+.method-select.color-POST :deep(.el-input__inner),
+.method-select.color-POST :deep(.el-select__selected-item) {
+  color: #faad14 !important;
+}
+
+/* PUT - 蓝色 */
+.method-select.color-PUT :deep(.el-input__inner),
+.method-select.color-PUT :deep(.el-select__selected-item) {
+  color: #1890ff !important;
+}
+
+/* PATCH - 紫色 */
+.method-select.color-PATCH :deep(.el-input__inner),
+.method-select.color-PATCH :deep(.el-select__selected-item) {
+  color: #722ed1 !important;
+}
+
+/* DELETE - 红色 */
+.method-select.color-DELETE :deep(.el-input__inner),
+.method-select.color-DELETE :deep(.el-select__selected-item) {
+  color: #f5222d !important;
+}
+```
+
+### 颜色对照表（选中后）
+| HTTP方法 | 颜色值 | 显示效果 |
+|---------|-------|---------|
+| GET | #52c41a | 🟢 绿色 |
+| POST | #faad14 | 🟡 黄色 |
+| PUT | #1890ff | 🔵 蓝色 |
+| PATCH | #722ed1 | 🟣 紫色 |
+| DELETE | #f5222d | 🔴 红色 |
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 选中的HTTP方法在选择框中显示对应颜色
+✅ 下拉选项也显示对应颜色
+
+
+---
+
+## 2026-03-06: HttpStepDrawer 参数组功能完善
+
+### 任务
+根据用户提供的截图和参考界面，实现参数组的完整功能：
+1. 点击添加后，默认文案"第1组""第2组"
+2. 鼠标悬浮后面的三个竖着的点按钮，展示重命名、复制、删除三个选项
+3. 重命名弹窗（分组名称）
+4. 复制功能，文案后面加"-copy"，支持复制所有已填写的内容
+5. 删除直接移除
+
+### 分析参考界面（element.txt）
+参考界面使用 `ant-btn-group ant-dropdown-button` 实现：
+- 左侧按钮：带复选框的组名按钮
+- 右侧按钮：更多操作按钮（三个点）
+- 悬浮下拉菜单：重命名、复制、删除
+
+### 修改内容
+**修改文件:** `src/domains/casemgmt/components/HttpStepDrawer.vue`
+
+#### 1. 数据结构更新
+```javascript
+// 参数组数据结构
+{ 
+  id: 1, 
+  name: '第1组', 
+  checked: true, 
+  params: [], 
+  headers: [], 
+  body: '', 
+  ipport: '', 
+  encrypt: '' 
+}
+```
+
+#### 2. 新增状态和方法
+```javascript
+// 重命名弹窗状态
+const renameDialogVisible = ref(false)
+const renameForm = ref({ id: null, name: '' })
+
+// 打开重命名弹窗
+function openRenameDialog(group)
+
+// 关闭重命名弹窗
+function closeRenameDialog()
+
+// 确认重命名
+function confirmRename()
+
+// 复制参数组（深拷贝所有数据）
+function copyGroup(group)
+
+// 删除参数组
+function deleteGroup(groupId)
+```
+
+#### 3. 模板重构
+- 使用 `el-button-group` 实现按钮组样式
+- 左侧：带复选框的组名按钮（点击切换当前组）
+- 右侧：`el-dropdown` 更多操作按钮（悬浮触发）
+- 下拉菜单项：重命名、复制、删除（带图标和分割线）
+
+#### 4. 重命名弹窗
+```vue
+<el-dialog title="分组名称" width="400px">
+  <el-input v-model="renameForm.name" />
+  <template #footer>
+    <el-button @click="closeRenameDialog">取消</el-button>
+    <el-button type="primary" @click="confirmRename">确定</el-button>
+  </template>
+</el-dialog>
+```
+
+#### 5. 图标导入
+新增 `CopyDocument` 图标用于复制功能
+
+### 功能说明
+| 功能 | 实现方式 | 说明 |
+|-----|---------|-----|
+| 添加组 | addGroup() | 自动生成"第N组"名称 |
+| 重命名 | 弹窗编辑 | 点击确定后更新组名 |
+| 复制 | copyGroup() | 深拷贝所有数据，名称加"-copy"后缀 |
+| 删除 | deleteGroup() | 直接移除，至少保留一个组 |
+| 切换组 | 点击组名按钮 | 切换当前编辑的组 |
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 添加参数组功能正常
+✅ 重命名弹窗正常打开/关闭
+✅ 复制功能生成"-copy"后缀组
+✅ 删除功能正常（至少保留一个组）
+✅ 下拉菜单悬浮展示
+
+
+---
+
+## 2026-03-06: HttpStepDrawer 三个竖着的点按钮图标替换
+
+### 任务
+将参数组更多操作按钮的图标，从 Element Plus 的 `More` 图标替换为用户提供的自定义 SVG 路径（三个竖着的点）。
+
+### 用户提供的 SVG 路径
+```
+M456 231a56 56 0 10112 0 56 56 0 10-112 0zm0 280a56 56 0 10112 0 56 56 0 10-112 0zm0 280a56 56 0 10112 0 56 56 0 10-112 0z
+```
+
+### 修改内容
+**修改文件:** `src/domains/casemgmt/components/HttpStepDrawer.vue`
+
+#### 替换图标代码
+```vue
+<!-- 原来 -->
+<el-icon><More /></el-icon>
+
+<!-- 替换为 -->
+<svg viewBox="64 64 896 896" width="1em" height="1em" fill="currentColor" aria-hidden="true">
+  <path d="M456 231a56 56 0 10112 0 56 56 0 10-112 0zm0 280a56 56 0 10112 0 56 56 0 10-112 0zm0 280a56 56 0 10112 0 56 56 0 10-112 0z"></path>
+</svg>
+```
+
+### SVG 属性说明
+| 属性 | 值 | 说明 |
+|-----|---|-----|
+| viewBox | 64 64 896 896 | 与参考界面保持一致 |
+| width | 1em | 与按钮文字同高 |
+| height | 1em | 与按钮文字同高 |
+| fill | currentColor | 继承按钮文字颜色 |
+| aria-hidden | true | 对屏幕阅读器隐藏 |
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 三个竖着的点图标显示正常
+
+
+---
+
+## 2026-03-06: HttpStepDrawer 参数组选中状态优化
+
+### 任务
+根据用户提供的截图，优化参数组的选中状态显示：
+1. 添加后第1组还是默认勾选，但选中状态（当前编辑组）默认是新增的组
+2. 选中状态要包围两个按钮（组名按钮 + 更多按钮）
+3. 两个按钮中间有一条竖线，颜色跟随按钮和选中状态
+
+### 修改内容
+**修改文件:** `src/domains/casemgmt/components/HttpStepDrawer.vue`
+
+#### 1. 修改添加参数组逻辑
+```javascript
+function addGroup() {
+  // ...
+  paramGroups.value.push({
+    // ...
+    checked: false,  // 新添加的组默认不勾选，保持第1组勾选
+  })
+  currentGroupId.value = newId  // 但选中状态切换到新组
+}
+```
+
+#### 2. 重构组选择器模板
+- 移除 `el-button-group` 包装
+- 使用 `div.group-item-wrapper` 作为容器，绑定 `active` 类
+- 添加 `.group-divider` 作为中间竖线
+- 选中状态应用到整个容器
+
+```vue
+<div 
+  class="group-item-wrapper"
+  :class="{ active: currentGroupId === group.id }"
+>
+  <el-button class="group-name-btn">...</el-button>
+  <div class="group-divider"></div>
+  <el-dropdown>...</el-dropdown>
+</div>
+```
+
+#### 3. 优化样式
+```css
+/* 容器边框和选中状态 */
+.group-item-wrapper {
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+}
+
+.group-item-wrapper.active {
+  border-color: #409eff;
+  background: #ecf5ff;
+}
+
+/* 中间竖线 */
+.group-divider {
+  width: 1px;
+  height: 16px;
+  background-color: #dcdfe6;
+}
+
+.group-item-wrapper.active .group-divider {
+  background-color: #a0cfff;
+}
+
+/* 按钮无边框和背景 */
+.group-name-btn,
+.group-more-btn {
+  border: none;
+  background: transparent;
+}
+```
+
+### 效果对比
+| 项目 | 修改前 | 修改后 |
+|-----|-------|-------|
+| 复选框勾选 | 新组默认勾选 | 第1组保持勾选，新组不勾选 |
+| 选中状态范围 | 仅左侧按钮 | 两个按钮都被包围 |
+| 中间竖线 | 无 | 有，颜色跟随选中状态 |
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 添加后第1组保持勾选
+✅ 选中状态（当前组）切换到新添加的组
+✅ 两个按钮都被选中样式包围
+✅ 中间竖线颜色跟随选中状态
+
+
+---
+
+## 2026-03-06: HttpStepDrawer 参数组按钮边框重合显示优化
+
+### 任务
+根据用户反馈，将参数组的两个按钮改为使用 el-button-group，让它们的边框重合在一起显示，而不是使用单独的竖线。
+
+### 修改内容
+**修改文件:** `src/domains/casemgmt/components/HttpStepDrawer.vue`
+
+#### 1. 恢复使用 el-button-group
+```vue
+<div 
+  class="group-item-wrapper"
+  :class="{ active: currentGroupId === group.id }"
+>
+  <el-button-group class="group-button-group">
+    <el-button class="group-name-btn">...</el-button>
+    <el-dropdown>...</el-dropdown>
+  </el-button-group>
+</div>
+```
+
+#### 2. 修改选中状态样式
+选中状态时，两个按钮的边框颜色都变为蓝色：
+```css
+.group-item-wrapper.active .group-name-btn {
+  border-color: #409eff;
+  background: #ecf5ff;
+  color: #409eff;
+}
+
+.group-item-wrapper.active .group-more-btn {
+  border-color: #409eff;
+  background: #ecf5ff;
+  color: #409eff;
+}
+```
+
+### 实现效果
+- 使用 `el-button-group` 使两个按钮的边框重合显示
+- 选中状态时，两个按钮都显示蓝色边框和背景
+- 中间的"竖线"实际上是两个按钮边框重合的效果
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 两个按钮边框重合显示
+✅ 选中状态两个按钮都变蓝色
+
+
+---
+
+## 2026-03-06: HttpStepDrawer 入参区域边框圆角优化
+
+### 任务
+给入参区域（Params/Headers/Body/IPPort/加密）的大边框加上 5px 圆角。
+
+### 修改内容
+**修改文件:** `src/domains/casemgmt/components/HttpStepDrawer.vue`
+
+#### 添加圆角样式
+```css
+.params-tabs {
+  border-radius: 5px;
+  overflow: hidden;
+}
+```
+
+### 说明
+- 给 `el-tabs[type="border-card"]` 添加 `border-radius: 5px`
+- 添加 `overflow: hidden` 确保圆角生效
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 入参区域边框圆角 5px 已生效
+
+
+---
+
+## 2026-03-06: HttpStepDrawer JSON 添加功能实现
+
+### 任务
+实现 JSON 添加功能：
+1. 点击 JSON 添加按钮，打开弹窗
+2. 弹窗可以输入并校验 JSON 格式
+3. 点击生成，解析 JSON 并显示可勾选项
+4. 勾选选项后点击保存，参数以 KV 形式添加到 params/headers
+5. 点击取消或 X 关闭弹窗
+6. 错误的 JSON 格式可以校验出来
+
+### 修改内容
+**修改文件:** `src/domains/casemgmt/components/HttpStepDrawer.vue`
+
+#### 1. 新增状态和函数
+```javascript
+// JSON 添加弹窗状态
+const jsonDialogVisible = ref(false)
+const jsonForm = ref({
+  content: '',
+  type: 'params', // params 或 headers
+  parsedKeys: [],
+  selectedKeys: []
+})
+const jsonError = ref('')
+
+// 打开/关闭/解析/保存 JSON 函数
+function openJsonDialog(type)
+function closeJsonDialog()
+function parseJson()
+function saveJsonParams()
+```
+
+#### 2. JSON 弹窗模板
+- 标题：Json添加Param
+- 错误提示：el-alert 显示 JSON 错误
+- 文本域：输入 JSON 数据
+- 生成按钮：解析 JSON
+- 勾选项列表：选择要添加的字段
+- 保存/取消按钮
+
+#### 3. JSON 校验逻辑
+```javascript
+function parseJson() {
+  // 1. 检查空内容
+  // 2. JSON.parse 解析
+  // 3. 检查是否为对象（非数组）
+  // 4. 提取所有 key-value
+}
+```
+
+#### 4. 按钮绑定
+- Params 标签页：@click="openJsonDialog('params')"
+- Headers 标签页：@click="openJsonDialog('headers')"
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ JSON 添加弹窗正常打开/关闭
+✅ JSON 格式校验功能正常
+✅ 生成按钮解析 JSON 并显示可勾选项
+✅ 保存按钮将选中项添加到对应组
+✅ 所有 JSON 添加按钮都支持此功能
+
+
+---
+
+## 2026-03-06: HttpStepDrawer JSON 添加弹窗优化
+
+### 任务
+按照参考界面的形式优化 JSON 添加功能：
+1. 点击 JSON 添加按钮，打开弹窗
+2. 输入 JSON 数据，点击生成
+3. 在同一个弹窗中显示格式化后的 JSON，每个参数前加复选框
+4. 选中后点击保存，关闭弹窗并将参数添加到下方表格
+
+### 修改内容
+**修改文件:** `src/domains/casemgmt/components/HttpStepDrawer.vue`
+
+#### 1. 修改数据结构
+```javascript
+const jsonForm = ref({
+  content: '',
+  type: 'params',
+  parsedData: null,  // 存储解析后的完整对象
+  selectedKeys: [],
+  showParsed: false  // 控制显示输入区还是格式化展示区
+})
+```
+
+#### 2. 弹窗模板修改
+- 输入阶段：显示 textarea 输入框
+- 生成后：隐藏输入框，显示格式化 JSON 树
+- 格式化 JSON 使用代码风格（不同颜色区分类型）
+- 每个字段前有 el-checkbox 复选框
+
+#### 3. 格式化 JSON 展示
+```vue
+<div class="json-tree">
+  <span class="json-bracket">{</span>
+  <div class="json-item" v-for="(value, key) in jsonForm.parsedData" :key="key">
+    <el-checkbox v-model="jsonForm.selectedKeys" :label="key">
+      <span class="json-key">"{{ key }}"</span>
+      <span class="json-colon">: </span>
+      <span :class="['json-value', getValueColorClass(value)]">
+        {{ formatJsonValue(value) }}
+      </span>
+    </el-checkbox>
+  </div>
+  <span class="json-bracket">}</span>
+</div>
+```
+
+#### 4. 颜色区分
+- key: 紫色 (#881391)
+- string: 蓝色 (#268bd2)
+- number: 青色 (#2aa198)
+- boolean: 黄色 (#b58900)
+
+#### 5. 按钮逻辑
+- 输入阶段：显示"生成"按钮
+- 展示阶段：显示"重新输入"按钮（返回输入界面）
+- 保存：将选中的参数添加到对应组
+- 取消/X：关闭弹窗
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 同一个弹窗中切换输入/展示视图
+✅ 格式化 JSON 带复选框
+✅ 不同值类型显示不同颜色
+✅ 保存后将参数添加到 params/headers
+
+
+---
+
+## 2026-03-06: HttpStepDrawer JSON 保存后数据未显示问题修复
+
+### 问题
+选中 JSON 参数后点击保存，数据没有以 KV 形式添加到 params 表格中。
+
+### 原因
+表格绑定的数据是空数组 `[]`，没有绑定到实际的数据源。
+
+### 修复内容
+**修改文件:** `src/domains/casemgmt/components/HttpStepDrawer.vue`
+
+#### 1. 添加计算属性获取当前组
+```javascript
+const currentGroup = computed(() => {
+  return paramGroups.value.find(g => g.id === currentGroupId.value) || paramGroups.value[0]
+})
+```
+
+#### 2. 修改表格数据绑定
+**Params 表格:**
+```vue
+<el-table :data="currentGroup.params" size="small" border>
+  <el-table-column label="KEY" min-width="120" prop="key" />
+  <el-table-column label="VALUE" min-width="180" prop="value" />
+  <el-table-column label="操作" width="80" align="center">
+    <template #default="{ $index }">
+      <el-button link type="danger" size="small" @click="currentGroup.params.splice($index, 1)">
+        <el-icon><Delete /></el-icon>
+      </el-button>
+    </template>
+  </el-table-column>
+</el-table>
+```
+
+**Headers 表格:**
+```vue
+<el-table :data="currentGroup.headers" size="small" border>
+  <el-table-column label="KEY" min-width="120" prop="key" />
+  <el-table-column label="VALUE" min-width="180" prop="value" />
+  <el-table-column label="操作" width="80" align="center">
+    <template #default="{ $index }">
+      <el-button link type="danger" size="small" @click="currentGroup.headers.splice($index, 1)">
+        <el-icon><Delete /></el-icon>
+      </el-button>
+    </template>
+  </el-table-column>
+</el-table>
+```
+
+#### 3. 修改 saveJsonParams 函数
+使用计算属性 `currentGroup` 替代查找逻辑。
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ JSON 保存后数据正确显示在表格中
+✅ 表格支持删除操作
+
+
+---
+
+## 2026-03-06: HttpStepDrawer JSON缓存和表格编辑优化
+
+### 任务
+1. JSON添加弹窗的内容保存在缓存中，下次打开还有，不用重复填写
+2. 表格中的key和value可以编辑，使用输入框形式
+
+### 修改内容
+**修改文件:** `src/domains/casemgmt/components/HttpStepDrawer.vue`
+
+#### 1. JSON内容缓存到localStorage
+```javascript
+// 打开弹窗时从缓存恢复
+function openJsonDialog(type = 'params') {
+  jsonForm.value.content = localStorage.getItem('jsonAddContent') || ''
+  // ...
+}
+
+// 关闭弹窗时保存到缓存
+function closeJsonDialog() {
+  localStorage.setItem('jsonAddContent', jsonForm.value.content)
+  // ...
+}
+```
+
+#### 2. 表格支持编辑
+将表格的KEY和VALUE列改为使用el-input输入框：
+```vue
+<el-table-column label="KEY" min-width="120">
+  <template #default="{ row }">
+    <el-input v-model="row.key" size="small" placeholder="请输入Key" />
+  </template>
+</el-table-column>
+<el-table-column label="VALUE" min-width="180">
+  <template #default="{ row }">
+    <el-input v-model="row.value" size="small" placeholder="请输入Value" />
+  </template>
+</el-table-column>
+```
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ JSON弹窗内容保存到localStorage，下次打开自动恢复
+✅ 表格KEY和VALUE列支持直接编辑
+✅ Params和Headers表格都支持编辑
+
+
+---
+
+## 2026-03-06: HttpStepDrawer JSON缓存改为 Pinia + 持久化插件方案
+
+### 任务
+将 JSON 弹窗内容缓存从 localStorage 改为 Pinia + 持久化插件方案。
+
+### 修改内容
+
+#### 1. 安装持久化插件
+```bash
+npm install pinia-plugin-persistedstate --save
+```
+
+#### 2. 修改 main.js 注册插件
+```javascript
+import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
+
+const pinia = createPinia()
+pinia.use(piniaPluginPersistedstate)
+
+app.use(pinia)
+```
+
+#### 3. 创建 Store 文件
+**新建文件:** `src/domains/casemgmt/stores/useJsonCacheStore.js`
+
+```javascript
+import { ref } from 'vue'
+import { defineStore } from 'pinia'
+
+export const useJsonCacheStore = defineStore('jsonCache', () => {
+  const content = ref('')
+
+  function setContent(newContent) {
+    content.value = newContent
+  }
+
+  function clearContent() {
+    content.value = ''
+  }
+
+  return {
+    content,
+    setContent,
+    clearContent
+  }
+}, {
+  persist: true
+})
+```
+
+#### 4. 修改 HttpStepDrawer.vue
+- 导入 Store: `import { useJsonCacheStore } from '../stores/useJsonCacheStore'`
+- 打开弹窗时从 Store 恢复: `jsonForm.value.content = jsonCacheStore.content`
+- 关闭弹窗时保存到 Store: `jsonCacheStore.setContent(jsonForm.value.content)`
+
+### 优势对比
+| 方案 | 优点 |
+|-----|-----|
+| localStorage | 简单直接 |
+| Pinia + 持久化 | 符合项目规范、支持响应式、更好的类型支持、统一的存储管理 |
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ Pinia Store 创建成功
+✅ 持久化插件配置正确
+✅ JSON 弹窗内容使用 Pinia 存储并持久化
+
+
+---
+
+## 2026-03-06: HttpStepDrawer JSON 树形展示优化
+
+### 任务
+修复 JSON 格式化展示问题，支持多级嵌套对象的展开和选择。
+
+### 问题
+原来的实现只展示了第一层级的属性，没有递归展示嵌套对象和数组的内容。
+
+### 解决方案
+创建递归组件 `JsonTreeNode.vue` 来渲染多级 JSON 数据结构。
+
+### 修改内容
+
+#### 1. 新建递归组件
+**文件:** `src/domains/casemgmt/components/JsonTreeNode.vue`
+
+- 递归渲染 JSON 对象的所有层级
+- 支持展开/折叠嵌套对象和数组
+- 每个节点前有复选框用于选择
+- 不同类型值显示不同颜色
+
+#### 2. 修改 HttpStepDrawer.vue
+
+**新增函数:**
+```javascript
+// 扁平化 JSON 数据
+function flattenJson(obj, parentKey = '')
+
+// 切换节点展开/折叠
+function toggleNode(key)
+```
+
+**修改数据结构:**
+```javascript
+const jsonForm = ref({
+  content: '',
+  type: 'params',
+  parsedData: null,
+  selectedKeys: [],
+  showParsed: false,
+  expandedKeys: [],      // 展开的节点
+  flattenedData: []      // 扁平化后的数据
+})
+```
+
+**修改模板:**
+```vue
+<json-tree-node
+  v-for="item in jsonForm.flattenedData"
+  :key="item.key"
+  :node="item"
+  v-model:selected-keys="jsonForm.selectedKeys"
+  v-model:expanded-keys="jsonForm.expandedKeys"
+/>
+```
+
+### 组件特性
+- 支持多级嵌套对象展开/折叠
+- 支持数组展开查看元素
+- 复选框可选择任意层级的节点
+- 不同类型值显示不同颜色（字符串蓝色、数字青色、布尔值黄色）
+- 默认展开所有对象和数组
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ JSON 递归组件创建成功
+✅ 支持多级嵌套对象展开
+✅ 支持数组元素展开
+✅ 每个节点支持复选框选择
+
+
+---
+
+## 2026-03-07: HttpStepDrawer JSON 添加功能组件化
+
+### 任务
+1. 修复 JSON 展示：不用 data. 前缀，直接使用当前参数名
+2. 所有层级都要展示出来，包括数组和对象下的
+3. 将 JSON 添加功能封装成独立组件，断言的地方也需要使用
+
+### 修改内容
+
+#### 1. 新建组件文件
+**文件:** `src/domains/casemgmt/components/JsonAddDialog.vue`
+- 封装完整的 JSON 添加弹窗功能
+- 支持多级嵌套对象的展示和选择
+- 使用 Pinia Store 缓存内容
+
+**文件:** `src/domains/casemgmt/components/JsonTreeNode.vue`
+- 递归渲染 JSON 树
+- 默认展开所有层级
+- 显示当前层级的 key（不显示完整路径）
+- 支持复选框选择
+
+#### 2. 修改 HttpStepDrawer.vue
+- 移除旧的 JSON 相关逻辑
+- 使用新的 JsonAddDialog 组件
+- 通过事件接收保存的数据
+
+### 关键变更
+
+#### JsonTreeNode 组件
+```vue
+<!-- 显示当前层的 displayKey，不显示完整路径 -->
+<span class="json-key">"{{ node.displayKey || node.key }}"</span>
+
+<!-- 默认展开所有层级，不需要 expandedKeys -->
+<div v-if="hasChildren" class="json-children">
+  <json-tree-node ... />
+</div>
+```
+
+#### flattenJson 函数
+```javascript
+function flattenJson(obj, parentKey = '', result = []) {
+  for (const [key, value] of Object.entries(obj)) {
+    const currentKey = parentKey ? `${parentKey}.${key}` : key
+    
+    // 添加 displayKey 只显示当前层级的 key
+    result.push({
+      key: currentKey,        // 完整路径用于保存
+      displayKey: key,        // 只显示当前层级的 key
+      ...
+    })
+    
+    // 递归处理子属性，全部展开
+    if (typeof value === 'object' && value !== null) {
+      flattenJson(value, currentKey, result)
+    }
+  }
+}
+```
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ JSON 添加功能封装为独立组件
+✅ 默认展开所有层级
+✅ 显示当前层级的 key（不显示 data. 前缀）
+
+
+## 2026-03-06: 优化 JSON 对话框显示效果
+
+### 任务
+根据用户反馈，优化 JSON 添加对话框的树形展示效果：
+1. 所有层级默认完整展开显示
+2. 数组不显示 [0], [1] 等索引，直接显示对象字段
+
+### 修改内容
+
+#### 1. JsonAddDialog.vue
+**修改文件:** `src/domains/casemgmt/components/JsonAddDialog.vue`
+
+**核心改动:**
+- 重构 `jsonToTree` 函数，数组直接展开为对象节点
+- 数组中的对象元素使用字段名（如 `logoList1`）代替索引（如 `[0]`）
+- 根数组情况特殊处理，展开所有对象字段
+
+```javascript
+// 数组 - 直接展开为多个对象节点，不显示索引
+if (value.length > 0 && typeof value[0] === 'object' && value[0] !== null) {
+  // 数组元素是对象，为每个元素创建节点
+  value.forEach((item, index) => {
+    const itemKey = `${currentKey}[${index}]`
+    result.push({
+      key: itemKey,
+      displayKey: key, // 显示原始字段名，不显示 [0], [1]
+      value: `[Object]`,
+      type: 'object',
+      children: jsonToTree(item, itemKey)
+    })
+  })
+}
+```
+
+#### 2. JsonTreeNode.vue
+**修改文件:** `src/domains/casemgmt/components/JsonTreeNode.vue`
+
+**核心改动:**
+- 优化节点渲染逻辑，支持 `displayKey` 为空的情况
+- 基本类型数组元素不显示索引标签
+
+```javascript
+// 有 displayKey 时显示 key: value 格式
+<template v-if="node.displayKey || node.displayKey === ''">
+  <span v-if="node.displayKey" class="json-key">"{{ node.displayKey }}"</span>
+  <span v-if="node.displayKey" class="json-colon">: </span>
+  ...
+</template>
+```
+
+### 展示效果对比
+
+**优化前:**
+```
+□ "logoList1": [Array(9)]
+  □ "[0]": "{\"name\":\"尊道\",...}"
+  □ "[1]": "{\"name\":\"美众\",...}"
+  □ "[2]": "{\"name\":\"我打单\",...}"
+```
+
+**优化后:**
+```
+□ "logoList1": [Object]
+  □ "name": "尊道"
+  □ "imgUrl": "//img14.360buyimg.com/..."
+□ "logoList1": [Object]
+  □ "name": "美众"
+  □ "imgUrl": "//img13.360buyimg.com/..."
+□ "logoList1": [Object]
+  □ "name": "我打单"
+  □ "imgUrl": "//img12.360buyimg.com/..."
+```
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 数组对象直接展开，显示字段名而非索引
+✅ 所有层级默认完全展开
+✅ 选中保存后路径解析正确
+
+---
