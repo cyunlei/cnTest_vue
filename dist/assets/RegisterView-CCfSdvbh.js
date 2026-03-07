@@ -1,1 +1,0 @@
-import{A as o,R as r}from"./RegisterForm-6xiEQFQt.js";import{k as a,j as s,w as n,o as i,d as p}from"./index-DLYpDiby.js";import"./useAuthStore-C7x8kGhk.js";const c=a({__name:"RegisterView",setup(u){return(t,e)=>(i(),s(o,null,{default:n(()=>[p(r,{onSwitchPanel:e[0]||(e[0]=m=>t.$router.push("/login"))})]),_:1}))}});export{c as default};

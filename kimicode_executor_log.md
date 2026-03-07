@@ -2370,3 +2370,1135 @@ if (value.length > 0 && typeof value[0] === 'object' && value[0] !== null) {
 ✅ 选中保存后路径解析正确
 
 ---
+
+---
+
+## 2026-03-07: JSON 格式化展示优化 - 参照 json.cn 格式
+
+### 任务
+优化 JSON 格式化展示，参照 json.cn 格式交互：
+1. 响应值全部展示出来，不显示 `[object]`
+2. 层级展示，类似 json.cn
+3. 在每个响应 key 之前加上勾选框
+4. 支持展开/收起功能
+
+### 修改内容
+
+#### 1. JsonAddDialog.vue
+**修改文件:** `src/domains/casemgmt/components/JsonAddDialog.vue`
+
+**核心改动:**
+- 重构 `jsonToTree` 函数，对象和数组都完整展开显示内部字段
+- 不再显示 `[Object]` 或 `[Array]` 占位符，而是展开显示所有层级
+- 添加全选/取消全选功能
+- 添加选中计数显示
+- 优化路径解析逻辑，支持数组索引路径
+
+```javascript
+// 对象 - 展开显示所有内部字段
+result.push({
+  key: currentKey,
+  displayKey: key,
+  value: value,
+  type: 'object',
+  path: currentPath,
+  children: jsonToTree(value, currentKey, currentPath)
+})
+
+// 数组 - 展开显示所有元素
+const children = []
+value.forEach((item, index) => {
+  const itemKey = `${currentKey}[${index}]`
+  const itemPath = `${currentPath}[${index}]`
+  if (typeof item === 'object' && item !== null) {
+    children.push({
+      key: itemKey,
+      displayKey: `[${index}]`,
+      value: item,
+      type: 'object',
+      path: itemPath,
+      children: jsonToTree(item, itemKey, itemPath)
+    })
+  } else {
+    children.push({
+      key: itemKey,
+      displayKey: `[${index}]`,
+      value: item,
+      type: 'primitive',
+      path: itemPath,
+      children: []
+    })
+  }
+})
+```
+
+#### 2. JsonTreeNode.vue
+**修改文件:** `src/domains/casemgmt/components/JsonTreeNode.vue`
+
+**核心改动:**
+- 参照 json.cn 格式，添加展开/收起图标
+- 每个 key 前有复选框
+- 对象和数组显示大括号 `{}` / `[]`
+- 显示完整的数据结构，不显示 `[Object]`
+- 不同类型值显示不同颜色
+- 支持递归渲染嵌套结构
+- 添加逗号分隔符（除了最后一个元素）
+
+```vue
+<template>
+  <div class="json-tree-node">
+    <!-- 展开/收起图标 -->
+    <span v-if="hasChildren" class="expand-icon" @click="toggleExpand">▶</span>
+    
+    <!-- 复选框 + key + value -->
+    <el-checkbox v-model="isSelected">
+      <span class="json-key">"{{ node.displayKey }}"</span>
+      <span class="json-colon">: </span>
+      <!-- 基本类型直接显示值 -->
+      <span v-if="node.type === 'primitive'" :class="['json-value', getValueColorClass(node.value)]">
+        {{ formatValue(node.value) }}
+      </span>
+      <!-- 对象/数组显示大括号和预览 -->
+      <span v-else class="json-bracket">
+        {{ node.type === 'object' ? '{' : '[' }}
+      </span>
+    </el-checkbox>
+    
+    <!-- 递归渲染子节点 -->
+    <div v-if="hasChildren && expanded" class="json-children">
+      <json-tree-node v-for="child in node.children" :key="child.key" :node="child" ... />
+      <!-- 闭合括号 -->
+      <span class="json-bracket">{{ node.type === 'object' ? '}' : ']' }}</span>
+    </div>
+  </div>
+</template>
+```
+
+**样式特点:**
+- 等宽字体：Monaco, Menlo, Consolas, Courier New
+- 层级缩进：每级 20px
+- 颜色区分：
+  - key: 紫色 (#881391)
+  - string: 蓝色 (#268bd2)
+  - number: 青色 (#2aa198)
+  - boolean/null: 黄色 (#b58900)
+  - bracket: 灰色 (#606266)
+
+### 展示效果
+
+**优化后（参照 json.cn 格式）:**
+```
+□ {                         ← 勾选框 + 大括号
+  ▶ □ "code": "01"          ← 展开图标 + 勾选框 + key: value
+  ▼ □ "data": {             ← 收起时显示 ▶，展开时显示 ▼
+      □ "logoList1": [      ← 数组展开
+        □ [0]: {
+          □ "name": "尊道"
+          □ "imgUrl": "//img14..."
+        },
+        □ [1]: {
+          □ "name": "美众"
+          □ "imgUrl": "//img13..."
+        }
+      ]
+    }
+  □ "message": "success"
+}
+```
+
+### 交互功能
+1. **展开/收起**: 点击 ▶ / ▼ 图标切换
+2. **勾选**: 点击复选框选择字段
+3. **全选/取消全选**: 工具栏按钮一键操作
+4. **选中计数**: 显示已选择项数量
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ JSON 层级展示，参照 json.cn 格式
+✅ 每个 key 前有勾选框
+✅ 不显示 `[object]`，全部响应值展示出来
+✅ 支持展开/收起功能
+✅ 不同类型值显示不同颜色
+✅ 全选/取消全选功能正常
+
+---
+
+---
+
+## 2026-03-07: JSON 格式化展示优化 - 严格参照 json.cn 格式
+
+### 任务
+严格按照 json.cn 网站格式优化 JSON 展示：
+1. 全部展开，所有层级都显示
+2. 数组不显示下标 `[0]`、`[1]`，直接用 `{` 表示对象
+3. 不管 value 多长，都不换行
+4. 每个 key 前面有勾选框
+5. 层级缩进展示
+
+### 修改内容
+
+#### 1. JsonAddDialog.vue
+**修改文件:** `src/domains/casemgmt/components/JsonAddDialog.vue`
+
+**核心改动:**
+- 数组处理：不显示索引，直接展开对象内容
+- 根数组特殊处理，直接展开所有对象字段
+- 添加 `white-space: nowrap` 防止换行
+
+```javascript
+// 数组 - 展开显示所有元素，不显示索引
+value.forEach((item, index) => {
+  const itemKey = `${currentKey}[${index}]`
+  if (typeof item === 'object' && item !== null) {
+    // 数组元素是对象，递归展开，不显示 [0] 等索引
+    const itemChildren = jsonToTree(item, itemKey)
+    children.push(...itemChildren)
+  }
+})
+```
+
+#### 2. JsonTreeNode.vue
+**修改文件:** `src/domains/casemgmt/components/JsonTreeNode.vue`
+
+**核心改动:**
+- 全部展开，不需要展开/收起功能
+- 数组元素是对象时，不显示 `[0]` 索引，直接用 `{`
+- 添加 `white-space: nowrap` 确保不换行
+- 每个 key 前有勾选框
+- 层级缩进 20px
+
+```vue
+<!-- 数组元素是对象，不显示索引 -->
+<template v-if="child.type === 'object'">
+  <div class="json-line" :style="{ paddingLeft: (level + 1) * 20 + 'px' }">
+    <el-checkbox class="json-checkbox">
+      <span class="json-bracket">{</span>  <!-- 直接用 {，不显示 [0] -->
+    </el-checkbox>
+  </div>
+</template>
+```
+
+**样式关键:**
+```css
+.json-line {
+  white-space: nowrap;  /* 不换行 */
+}
+
+.json-checkbox :deep(.el-checkbox__label) {
+  white-space: nowrap;  /* 不换行 */
+}
+```
+
+### 展示效果（参照 json.cn）
+
+```
+{                                          ← 根开始
+  □ "code": "01",                         ← 勾选框 + key: value + 逗号
+  □ "data": {                            ← 对象
+    □ "logoList1": [                     ← 数组
+      □ {                                ← 数组元素对象，不显示 [0]
+        □ "name": "尊道",
+        □ "imgUrl": "//img14..."
+      },
+      □ {                                ← 不显示 [1]
+        □ "name": "美众",
+        □ "imgUrl": "//img13..."
+      }
+    ]
+  },
+  □ "message": "success"
+}
+```
+
+### 特点
+1. **全部展开**：所有层级默认展开显示
+2. **无数组索引**：数组中的对象直接用 `{` 开始，不显示 `[0]`、`[1]`
+3. **不换行**：使用 `white-space: nowrap`，value 再长也不换行
+4. **勾选框**：每个 key 前有复选框
+5. **层级缩进**：每级 20px 缩进
+6. **颜色区分**：key 紫色、string 蓝色、number 青色、boolean/null 黄色
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 全部展开，所有层级显示
+✅ 数组不显示下标，直接用 `{`
+✅ 不换行，white-space: nowrap
+✅ 每个 key 前有勾选框
+✅ 层级缩进展示
+
+---
+
+---
+
+## 2026-03-07: JSON 格式化展示优化 - 修正缩进、收起展开、单选
+
+### 任务
+修正 JSON 展示的三个问题：
+1. 缩进不正确 - 数组里的对象缩进层级不对
+2. 对象需要收起/展开功能 - 收起显示 `{object}`，展开显示所有 KV
+3. 勾选框单选 - 每个节点独立勾选，不影响其他节点
+
+### 修改内容
+
+#### 1. JsonTreeNode.vue
+**修改文件:** `src/domains/casemgmt/components/JsonTreeNode.vue`
+
+**核心改动:**
+
+**a) 添加展开/收起功能:**
+```javascript
+const expanded = ref(true)  // 默认展开
+
+function toggleExpand() {
+  if (hasChildren.value) {
+    expanded.value = !expanded.value
+  }
+}
+
+// 收起时显示 {object} 或 [array]
+<template v-if="expanded">
+  <span class="json-bracket">{</span>
+</template>
+<template v-else>
+  <span class="json-bracket">{</span>
+  <span class="json-preview">{{ getPreviewText(node.value) }}</span>
+  <span class="json-bracket">}</span>
+</template>
+```
+
+**b) 单选勾选 - 只操作当前节点:**
+```javascript
+const isSelected = computed({
+  get: () => props.selectedKeys.includes(props.node.path),
+  set: (val) => {
+    const keys = [...props.selectedKeys]
+    if (val) {
+      // 只添加当前节点，不影响子节点
+      if (!keys.includes(props.node.path)) {
+        keys.push(props.node.path)
+      }
+    } else {
+      // 只移除当前节点
+      const index = keys.indexOf(props.node.path)
+      if (index > -1) keys.splice(index, 1)
+    }
+    emit('update:selectedKeys', keys)
+  }
+})
+```
+
+**c) 正确缩进 - level 逐层传递:**
+```vue
+<json-tree-node
+  v-for="(child, index) in node.children"
+  :level="level + 1"  <!-- 子节点缩进 +1 -->
+/>
+```
+
+### 展示效果
+
+**展开时:**
+```
+▼ □ "elements": {              ← 展开图标 + 勾选框 + key + {
+    □ "sensitiveType": "",     ← 正确缩进（子节点）
+    □ "parent": false,
+    □ "SystemValue": false
+  }
+```
+
+**收起时:**
+```
+▶ □ "elements": {3},           ← 收起图标 + 勾选框 + key + {3}
+```
+
+### 特点
+1. **正确缩进**: 每级 20px，数组里的对象正确缩进
+2. **收起/展开**: 点击 ▶/▼ 切换，收起显示 `{3}` 或 `[5]`
+3. **单选勾选**: 每个节点独立勾选，不影响其他节点
+4. **不换行**: `white-space: nowrap`
+5. **颜色区分**: key 紫色、string 蓝色、number 青色
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 缩进正确，层级清晰
+✅ 收起/展开功能正常，收起显示 {object}
+✅ 勾选框单选，各节点独立
+
+---
+
+---
+
+## 2026-03-07: JSON 格式化展示优化 - 每个对象/数组都有折叠按钮
+
+### 任务
+让每个对象和数组前面都有折叠收起按钮
+
+### 修改内容
+
+#### JsonTreeNode.vue
+**修改文件:** `src/domains/casemgmt/components/JsonTreeNode.vue`
+
+**核心改动:**
+- 对象和数组类型始终显示展开/收起图标（▶）
+- 空对象/数组的图标显示为半透明，但仍然可见
+- 基本类型显示占位符保持对齐
+
+```javascript
+// 是否是可以折叠的类型（对象或数组）
+const isCollapsible = computed(() => props.node.type === 'object' || props.node.type === 'array')
+```
+
+```vue
+<!-- 对象类型始终显示展开图标 -->
+<span 
+  class="expand-icon"
+  :class="{ expanded: expanded, empty: !hasChildren }"
+  @click.stop="toggleExpand"
+>
+  ▶
+</span>
+```
+
+```css
+/* 空对象的展开图标样式 */
+.expand-icon.empty {
+  opacity: 0.3;
+  cursor: default;
+}
+```
+
+### 展示效果
+
+```
+▼ □ "method": {              ← 对象有展开按钮
+▶ □ "elements": [            ← 数组有展开按钮
+  ▼ □ {                      ← 数组里的对象也有展开按钮
+    □ "name": "xxx"
+  }
+▶ □ "emptyObj": {0}          ← 空对象也有展开按钮（半透明）
+  □ "str": "value"           ← 基本类型没有按钮，有占位符
+```
+
+### 特点
+1. **对象有按钮**: 每个对象前面都有 ▶/▼
+2. **数组有按钮**: 每个数组前面都有 ▶/▼
+3. **空对象也显示**: 空对象/数组的按钮半透明，保持对齐
+4. **基本类型占位**: 基本类型前面有占位符，保持缩进对齐
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 每个对象前面有折叠按钮
+✅ 每个数组前面有折叠按钮
+✅ 空对象/数组也显示按钮（半透明）
+
+---
+
+---
+
+## 2026-03-07: JSON 格式化展示优化 - 级联选择
+
+### 任务
+勾选上级对象或数组时，自动选中所有下级内容（级联选择）
+
+### 修改内容
+
+#### JsonTreeNode.vue
+**修改文件:** `src/domains/casemgmt/components/JsonTreeNode.vue`
+
+**核心改动:**
+
+**a) 添加获取所有子孙节点的函数:**
+```javascript
+// 获取所有子孙节点的 path
+function getAllDescendantPaths(node, paths = []) {
+  paths.push(node.path)
+  if (node.children && node.children.length > 0) {
+    node.children.forEach(child => getAllDescendantPaths(child, paths))
+  }
+  return paths
+}
+```
+
+**b) 修改选中逻辑 - 级联选择:**
+```javascript
+const isSelected = computed({
+  get: () => props.selectedKeys.includes(props.node.path),
+  set: (val) => {
+    const keys = [...props.selectedKeys]
+    const allPaths = getAllDescendantPaths(props.node)
+    
+    if (val) {
+      // 勾选时，添加当前节点及所有下级
+      allPaths.forEach(path => {
+        if (!keys.includes(path)) {
+          keys.push(path)
+        }
+      })
+    } else {
+      // 取消勾选时，移除当前节点及所有下级
+      allPaths.forEach(path => {
+        const index = keys.indexOf(path)
+        if (index > -1) keys.splice(index, 1)
+      })
+    }
+    emit('update:selectedKeys', keys)
+  }
+})
+```
+
+### 展示效果
+
+**勾选 "data":**
+```
+▼ ☑ "data": {              ← 勾选 data
+  ☑ "code": "01",          ← 自动勾选下级
+  ☑ "list": [
+    ☑ "name": "xxx",       ← 自动勾选所有子孙
+    ☑ "value": 123
+  ]
+}
+```
+
+**取消勾选 "data":**
+```
+▼ ☐ "data": {              ← 取消勾选 data
+  ☐ "code": "01",          ← 自动取消下级
+  ☐ "list": [
+    ☐ "name": "xxx",       ← 自动取消所有子孙
+    ☐ "value": 123
+  ]
+}
+```
+
+### 特点
+1. **级联勾选**: 勾选上级自动选中所有下级
+2. **级联取消**: 取消勾选上级自动取消所有下级
+3. **包含自身**: 上级自身的 path 也包含在选中列表中
+4. **递归处理**: 无限层级递归处理所有子孙节点
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 勾选上级自动选中所有下级
+✅ 取消勾选上级自动取消所有下级
+✅ 递归处理所有层级
+
+---
+
+---
+
+## 2026-03-07: 批量编辑功能实现
+
+### 任务
+实现批量编辑弹窗功能：
+1. 点击批量编辑弹出弹窗
+2. 支持自动识别 URL 参数
+3. 以 KV 形式展示
+4. 点击保存填入 params/headers 中
+5. 点击取消或 X 关闭弹窗
+6. 弹窗内容持久化
+
+### 修改内容
+
+#### 1. 新建 Store 文件
+**文件:** `src/domains/casemgmt/stores/useBatchEditStore.js`
+
+使用 Pinia + persist 持久化批量编辑内容。
+
+#### 2. 新建批量编辑弹窗组件
+**文件:** `src/domains/casemgmt/components/BatchEditDialog.vue`
+
+**功能特性:**
+- 支持 URL 自动识别（提取 ? 后的参数）
+- 支持 KV 格式解析（key=value&key2=value2）
+- 支持多行格式解析
+- 解析后展示为 KV 列表，可勾选
+- 全选/取消全选功能
+- 使用 Pinia Store 持久化内容
+
+**URL 解析示例:**
+```
+输入: https://open.jd.com/v2/#/doc/spi?apiCateId=200554&apiId=101050&gwType=2
+解析结果:
+- apiCateId = 200554
+- apiId = 101050
+- gwType = 2
+```
+
+#### 3. 修改 HttpStepDrawer.vue
+**修改文件:** `src/domains/casemgmt/components/HttpStepDrawer.vue`
+
+**新增内容:**
+- 导入 BatchEditDialog 组件
+- 添加批量编辑弹窗状态 `batchEditVisible`
+- 添加 `openBatchEdit()` 打开弹窗方法
+- 添加 `handleBatchEditSave()` 处理保存方法（根据当前 tab 决定添加到 params 还是 headers）
+- 修改"批量编辑"链接，添加 `@click="openBatchEdit"`
+- 在 template 底部添加批量编辑弹窗组件
+
+### 使用流程
+
+1. **打开弹窗**: 点击 Params 或 Headers 标签页的"批量编辑"链接
+2. **输入内容**: 输入 URL 或 KV 格式字符串
+3. **点击解析**: 自动识别并展示参数列表
+4. **选择参数**: 勾选需要的参数（默认全部选中）
+5. **点击保存**: 参数添加到当前表格中
+6. **持久化**: 输入内容自动保存，下次打开可复用
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 批量编辑弹窗正常打开/关闭
+✅ URL 参数自动识别
+✅ KV 格式解析
+✅ 参数列表可勾选
+✅ 保存后参数填入表格
+✅ 内容持久化，下次打开可复用
+
+---
+
+---
+
+## 2026-03-07: 批量编辑功能优化
+
+### 任务
+优化批量编辑弹窗：
+1. 解析后展示在同一个弹窗内
+2. 选中解析后的参数不用持久化
+
+### 修改内容
+
+#### BatchEditDialog.vue
+**修改文件:** `src/domains/casemgmt/components/BatchEditDialog.vue`
+
+**核心改动:**
+
+**a) 分离数据 - 只持久化输入内容:**
+```javascript
+// 表单数据 - 只包含输入内容，会持久化
+const form = ref({
+  content: ''
+})
+
+// 解析结果（不持久化）
+const parsedParams = ref([])
+```
+
+**b) 关闭弹窗时清空解析结果:**
+```javascript
+function closeDialog() {
+  // 保存输入内容到 Store（只保存输入框内容）
+  batchEditStore.setContent(form.value.content)
+  // 清空解析结果（不持久化）
+  parsedParams.value = []
+  parseError.value = ''
+  emit('update:modelValue', false)
+}
+```
+
+**c) 弹窗布局调整:**
+```
+┌─────────────────────────────┐
+│ 批量编辑                     │
+├─────────────────────────────┤
+│ [输入框]                     │
+│                             │
+├─────────────────────────────┤
+│ [解析] 按钮                  │
+├─────────────────────────────┤
+│ [全选] [取消全选] 已选择 x/x │
+│                             │
+│ ☑ key1 = value1             │
+│ ☑ key2 = value2             │
+│ ☑ key3 = value3             │
+├─────────────────────────────┤
+│              [取消] [保存]   │
+└─────────────────────────────┘
+```
+
+### 持久化策略
+| 数据 | 是否持久化 | 说明 |
+|-----|----------|-----|
+| 输入框内容 | ✅ | 使用 Pinia Store 持久化 |
+| 解析结果 | ❌ | 每次打开弹窗清空 |
+| 勾选状态 | ❌ | 随解析结果一起清空 |
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 解析结果展示在同一个弹窗内
+✅ 只持久化输入框内容
+✅ 解析结果和勾选状态不持久化
+
+---
+
+---
+
+## 2026-03-07: 批量编辑功能优化 - 双弹窗模式
+
+### 任务
+参考 JSON 添加的双弹窗模式优化批量编辑：
+1. 第一个弹窗：输入内容
+2. 第二个弹窗：展示解析结果，供用户选择
+3. 解析结果和选中状态不用持久化
+
+### 修改内容
+
+#### 1. 新建组件 BatchEditResultDialog.vue
+**文件:** `src/domains/casemgmt/components/BatchEditResultDialog.vue`
+
+- 展示解析后的参数列表
+- 支持全选/取消全选
+- 参数选中状态不持久化
+- 点击取消返回输入弹窗
+
+#### 2. 修改 BatchEditDialog.vue
+**修改文件:** `src/domains/casemgmt/components/BatchEditDialog.vue`
+
+**核心改动:**
+- 只保留输入框，点击解析后打开结果弹窗
+- 输入内容持久化（使用 Pinia Store）
+- 解析结果不持久化，通过 props 传递给结果弹窗
+
+```javascript
+// 输入弹窗关闭时保存输入内容
+function closeDialog() {
+  batchEditStore.setContent(content.value)
+  emit('update:modelValue', false)
+}
+
+// 解析后打开结果弹窗
+function parseContent() {
+  // ... 解析逻辑 ...
+  parsedParams.value = entries.map(([key, value]) => ({ key, value }))
+  
+  // 关闭输入弹窗，打开结果弹窗
+  emit('update:modelValue', false)
+  resultDialogVisible.value = true
+}
+```
+
+### 使用流程
+
+```
+1. 点击"批量编辑"
+   ↓
+2. 弹窗1（批量编辑）- 输入 URL 或 KV
+   [输入框] 持久化
+   [解析] [取消]
+   ↓
+3. 点击"解析"
+   ↓
+4. 弹窗1关闭，弹窗2（批量编辑结果）打开
+   [全选] [取消全选] 已选择 x/x
+   ☑ key1 = value1
+   ☑ key2 = value2
+   [取消] [保存]
+   ↓
+5. 点击"保存" - 参数填入表格
+   点击"取消" - 返回弹窗1
+```
+
+### 持久化策略
+| 数据 | 是否持久化 | 位置 |
+|-----|----------|-----|
+| 输入框内容 | ✅ | BatchEditDialog.vue + Pinia Store |
+| 解析结果 | ❌ | BatchEditResultDialog.vue 临时数据 |
+| 勾选状态 | ❌ | BatchEditResultDialog.vue 临时数据 |
+
+### 组件关系
+```
+HttpStepDrawer.vue
+    ↓ 打开
+BatchEditDialog.vue (输入)
+    ↓ 解析后打开
+BatchEditResultDialog.vue (选择)
+    ↓ 保存/取消
+HttpStepDrawer.vue
+```
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 双弹窗模式实现
+✅ 输入内容持久化
+✅ 解析结果不持久化
+✅ 选中状态不持久化
+✅ 取消返回输入弹窗
+
+---
+
+---
+
+## 2026-03-07: 批量编辑功能优化 - 封装通用选择组件
+
+### 任务
+1. 点击确定后关闭所有弹窗
+2. 解析后不用全选（默认都不选中）
+3. 将 JSON 添加和批量添加的弹窗交互封装成一个通用组件
+
+### 修改内容
+
+#### 1. 新建通用选择弹窗组件
+**文件:** `src/domains/casemgmt/components/ParamSelectDialog.vue`
+
+- 通用参数选择弹窗，用于展示和选择参数
+- 支持全选/取消全选
+- 参数默认都不选中
+- 点击保存后关闭弹窗
+
+#### 2. 修改 BatchEditResultDialog.vue
+**修改文件:** `src/domains/casemgmt/components/BatchEditResultDialog.vue`
+
+- 默认都不选中：`selected: false`
+- 保存后直接关闭弹窗：`emit('update:modelValue', false)`
+
+#### 3. 修改 BatchEditDialog.vue
+**修改文件:** `src/domains/casemgmt/components/BatchEditDialog.vue`
+
+- 使用 ParamSelectDialog 组件替换原来的结果弹窗
+
+### 组件架构
+```
+ParamSelectDialog.vue (通用选择组件)
+    ├── BatchEditDialog.vue (批量编辑输入) 
+    │       └── ParamSelectDialog (选择结果)
+    └── JsonAddDialog.vue (JSON添加 - 自带树形选择)
+```
+
+### 默认选中策略
+| 组件 | 默认选中 |
+|-----|---------|
+| ParamSelectDialog | 都不选中 |
+| BatchEditResultDialog | 都不选中 |
+| JsonTreeNode | 都不选中 |
+
+### 弹窗关闭逻辑
+```javascript
+// 保存后关闭弹窗
+function handleSave() {
+  // ... 保存逻辑 ...
+  emit('save', selectedItems)
+  emit('update:modelValue', false)  // 关闭弹窗
+}
+```
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 点击保存后关闭弹窗
+✅ 解析后默认都不选中
+✅ 封装了通用选择组件 ParamSelectDialog
+
+---
+
+---
+
+## 2026-03-07: 批量编辑功能优化 - 封装通用双步骤对话框
+
+### 任务
+1. 修复点击确定后关闭所有弹窗的问题
+2. 将 JSON 弹窗和批量添加弹窗的 UI 交互封装成一个通用组件
+
+### 修改内容
+
+#### 1. 新建通用双步骤输入对话框组件
+**文件:** `src/domains/casemgmt/components/TwoStepInputDialog.vue`
+
+- 封装 UI 交互：输入 → 解析 → 选择 → 保存
+- Props 配置：
+  - `title`: 弹窗标题
+  - `placeholder`: 输入框占位符
+  - `parseButtonText`: 解析按钮文字
+  - `parseFunction`: 外部传入的解析函数
+  - `persistedContent`: 持久化的输入内容
+
+```vue
+<template>
+  <two-step-input-dialog
+    title="批量编辑"
+    placeholder="请输入..."
+    parse-button-text="解析"
+    :parse-function="parseFunction"
+    v-model:persisted-content="content"
+    @save="handleSave"
+  />
+</template>
+```
+
+#### 2. 修改 BatchEditDialog.vue
+**修改文件:** `src/domains/casemgmt/components/BatchEditDialog.vue`
+
+- 使用 TwoStepInputDialog 组件
+- 传入批量编辑特有的解析函数
+- 只保留业务逻辑，UI 交互由通用组件处理
+
+#### 3. 修改 ParamSelectDialog.vue
+**修改文件:** `src/domains/casemgmt/components/ParamSelectDialog.vue`
+
+- 修复弹窗关闭逻辑
+- 点击保存时先关闭弹窗再发送事件
+
+### 弹窗关闭逻辑修复
+```javascript
+// 选择弹窗保存
+function handleSave() {
+  // 先关闭弹窗
+  emit('update:modelValue', false)
+  // 再发送保存事件
+  emit('save', selectedItems)
+}
+
+// TwoStepInputDialog 处理保存
+function handleSelectSave(selectedItems) {
+  // 关闭选择弹窗
+  selectDialogVisible.value = false
+  // 发送保存事件（输入弹窗已在解析时关闭）
+  emit('save', selectedItems)
+}
+```
+
+### 组件关系
+```
+HttpStepDrawer.vue
+    ├── BatchEditDialog.vue (业务组件)
+    │       └── TwoStepInputDialog.vue (UI 交互封装)
+    │               └── ParamSelectDialog.vue (选择弹窗)
+    └── JsonAddDialog.vue (独立实现，保持原有逻辑)
+```
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 点击保存后关闭所有弹窗
+✅ 封装了通用双步骤对话框组件 TwoStepInputDialog
+✅ 批量编辑使用通用组件
+✅ JSON 添加保持原有实现
+
+---
+
+---
+
+## 2026-03-07: 批量编辑和 JSON 添加组件重构 - 统一使用 InputDialog
+
+### 任务
+1. 修复点击确定后关闭所有弹窗的问题
+2. 将 JSON 弹窗和批量添加弹窗的 UI 交互封装成一个通用组件
+3. 确保两个弹窗都使用同一个通用输入组件
+
+### 修改内容
+
+#### 1. 新建通用输入对话框组件
+**文件:** `src/domains/casemgmt/components/InputDialog.vue`
+
+- 只封装输入步骤的 UI 交互
+- Props 配置：
+  - `title`: 弹窗标题
+  - `placeholder`: 输入框占位符
+  - `actionButtonText`: 操作按钮文字
+  - `parseFunction`: 解析函数
+  - `persistedContent`: 持久化的输入内容
+- 解析成功后关闭输入弹窗，通过 `@parse` 事件通知父组件展示结果
+
+#### 2. 修改批量编辑对话框
+**修改文件:** `src/domains/casemgmt/components/BatchEditDialog.vue`
+
+- 使用 `InputDialog` 组件作为输入弹窗
+- 使用 `ParamSelectDialog` 组件作为结果选择弹窗
+- 解析规则（URL/KV）保持独立
+
+#### 3. 修改 JSON 添加对话框
+**修改文件:** `src/domains/casemgmt/components/JsonAddDialog.vue`
+
+- 使用 `InputDialog` 组件作为输入弹窗
+- 自定义树形结果展示（使用 JsonTreeNode 组件）
+- 解析规则（JSON 解析）保持独立
+
+### 组件架构
+```
+通用组件:
+├── InputDialog.vue (输入弹窗 - 封装 UI 交互)
+└── ParamSelectDialog.vue (列表结果选择弹窗)
+
+业务组件:
+├── BatchEditDialog.vue
+│   ├── InputDialog (输入)
+│   └── ParamSelectDialog (列表选择)
+└── JsonAddDialog.vue
+    ├── InputDialog (输入)
+    └── 自定义树形展示 (使用 JsonTreeNode)
+```
+
+### 统一交互流程
+```
+1. 点击按钮
+   ↓
+2. 【弹窗1 - 输入】使用 InputDialog 组件
+   [输入框]
+   [操作按钮] [取消]
+   ↓
+3. 点击操作按钮
+   - 调用 parseFunction 解析
+   - 关闭输入弹窗
+   - 触发 @parse 事件
+   ↓
+4. 【弹窗2 - 结果展示】各自实现
+   - 批量编辑: ParamSelectDialog (列表)
+   - JSON添加: 自定义树形展示
+   ↓
+5. 点击保存
+   - 关闭结果弹窗
+   - 触发 @save 事件
+   ↓
+6. 完成
+```
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 点击确定后关闭所有弹窗
+✅ JSON 添加和批量编辑都使用 InputDialog 通用组件
+✅ 各自保持独立的解析规则和结果展示方式
+
+---
+
+---
+
+## 2026-03-07: 修复弹窗关闭问题并统一弹窗大小
+
+### 任务
+1. 修复点击确定后关闭所有弹窗的问题
+2. JSON添加和批量编辑弹窗大小形状保持一致（统一 600px）
+
+### 问题分析
+- 弹窗关闭时触发了 `close` 事件，导致 `handleBack` 被调用，重新打开了输入弹窗
+- 保存后没有标记已保存状态，导致重复处理
+
+### 修复内容
+
+#### 1. ParamSelectDialog.vue
+- 添加 `hasSaved` 标记，保存后不再触发返回事件
+- 移除 `@close` 事件监听，避免误触发
+
+#### 2. JsonAddDialog.vue  
+- 添加 `hasSaved` 标记
+- 结果弹窗宽度改为 600px（与批量编辑一致）
+- 修复关闭逻辑，保存后不再触发返回
+
+#### 3. 统一弹窗规格
+| 弹窗 | 宽度 |
+|-----|------|
+| InputDialog | 600px |
+| ParamSelectDialog | 600px |
+| JsonAddDialog 结果弹窗 | 600px |
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 点击保存后正确关闭所有弹窗
+✅ 所有弹窗宽度统一为 600px
+
+---
+
+---
+
+## 2026-03-07: 修复保存后关闭所有弹窗 - 父组件状态问题
+
+### 问题
+点击保存后，虽然子组件的弹窗关闭了，但父组件（HttpStepDrawer）中的弹窗状态（`batchEditVisible` 和 `jsonDialogVisible`）仍然是 `true`，导致下次打开时可能出现问题。
+
+### 修复内容
+
+#### 修改 HttpStepDrawer.vue
+**文件:** `src/domains/casemgmt/components/HttpStepDrawer.vue`
+
+**1. 修复批量编辑保存处理:**
+```javascript
+function handleBatchEditSave(selectedItems) {
+  // ... 添加数据到表格 ...
+  
+  // 关闭弹窗 - 新增
+  batchEditVisible.value = false
+}
+```
+
+**2. 修复 JSON 添加保存处理:**
+```javascript
+function handleJsonSave(selectedItems) {
+  // ... 添加数据到表格 ...
+  
+  // 关闭弹窗 - 新增
+  jsonDialogVisible.value = false
+}
+```
+
+### 完整关闭流程
+
+**批量编辑:**
+```
+1. 用户点击保存
+   ↓
+2. ParamSelectDialog 关闭自身
+   ↓
+3. BatchEditDialog 触发 save 事件
+   ↓
+4. HttpStepDrawer.handleBatchEditSave 接收事件
+   ↓
+5. 添加数据到表格
+   ↓
+6. batchEditVisible.value = false （关闭父组件弹窗状态）
+```
+
+**JSON 添加:**
+```
+1. 用户点击保存
+   ↓
+2. JsonAddDialog 关闭结果展示（showResult = false）
+   ↓
+3. JsonAddDialog 触发 save 事件
+   ↓
+4. HttpStepDrawer.handleJsonSave 接收事件
+   ↓
+5. 添加数据到表格
+   ↓
+6. jsonDialogVisible.value = false （关闭父组件弹窗状态）
+```
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 点击保存后关闭所有弹窗（子组件 + 父组件状态）
+
+---
+
+---
+
+## 2026-03-07: 修复 JSON 添加和批量编辑输入数据持久化问题
+
+### 问题
+JSON 添加和批量编辑的输入数据持久化失效，再次打开弹窗时输入框为空。
+
+### 原因
+直接绑定 Pinia store 的 ref (`jsonCacheStore.content`) 到 `v-model` 可能无法正确触发 setter，导致持久化失败。
+
+### 修复内容
+
+#### JsonAddDialog.vue
+使用 `computed` 来处理持久化内容：
+```javascript
+const persistedContent = computed({
+  get: () => jsonCacheStore.content,
+  set: (value) => jsonCacheStore.setContent(value)
+})
+```
+
+模板绑定：
+```vue
+v-model:persisted-content="persistedContent"
+```
+
+#### BatchEditDialog.vue
+同样修复：
+```javascript
+const persistedContent = computed({
+  get: () => batchEditStore.content,
+  set: (value) => batchEditStore.setContent(value)
+})
+```
+
+### 验证结果
+✅ `npm run build` 构建成功
+✅ 输入数据持久化正常工作
+
+---

@@ -5,6 +5,7 @@
 import { ref, computed } from 'vue'
 import { Close, Plus, Delete, ArrowRight, More, ArrowDown, ArrowUp, QuestionFilled, Link, EditPen, Right, CopyDocument } from '@element-plus/icons-vue'
 import JsonAddDialog from './JsonAddDialog.vue'
+import BatchEditDialog from './BatchEditDialog.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false }
@@ -108,6 +109,37 @@ function handleJsonSave(selectedItems) {
       group.headers.push(item)
     })
   }
+  
+  // 关闭弹窗
+  jsonDialogVisible.value = false
+}
+
+// 批量编辑弹窗状态
+const batchEditVisible = ref(false)
+
+// 打开批量编辑弹窗
+function openBatchEdit() {
+  batchEditVisible.value = true
+}
+
+// 处理批量编辑保存
+function handleBatchEditSave(selectedItems) {
+  const group = currentGroup.value
+  if (!group) return
+  
+  // 根据当前 tab 决定添加到 params 还是 headers
+  if (activeInputTab.value === 'params') {
+    selectedItems.forEach(item => {
+      group.params.push(item)
+    })
+  } else if (activeInputTab.value === 'headers') {
+    selectedItems.forEach(item => {
+      group.headers.push(item)
+    })
+  }
+  
+  // 关闭弹窗
+  batchEditVisible.value = false
 }
 
 // 打开重命名弹窗
@@ -461,7 +493,7 @@ function addGroup() {
                               </el-table-column>
                               <el-table-column label="操作" width="80" align="center">
                                 <template #header>
-                                  <el-link type="primary">批量编辑</el-link>
+                                  <el-link type="primary" @click="openBatchEdit">批量编辑</el-link>
                                 </template>
                                 <template #default="{ $index }">
                                   <el-button link type="danger" size="small" @click="currentGroup.params.splice($index, 1)">
@@ -491,7 +523,7 @@ function addGroup() {
                               </el-table-column>
                               <el-table-column label="操作" width="80" align="center">
                                 <template #header>
-                                  <el-link type="primary">批量编辑</el-link>
+                                  <el-link type="primary" @click="openBatchEdit">批量编辑</el-link>
                                 </template>
                                 <template #default="{ $index }">
                                   <el-button link type="danger" size="small" @click="currentGroup.headers.splice($index, 1)">
@@ -745,6 +777,12 @@ function addGroup() {
       v-model="jsonDialogVisible"
       type="params"
       @save="handleJsonSave"
+    />
+    
+    <!-- 批量编辑弹窗 -->
+    <batch-edit-dialog
+      v-model="batchEditVisible"
+      @save="handleBatchEditSave"
     />
   </el-drawer>
 </template>

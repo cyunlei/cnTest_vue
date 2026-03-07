@@ -1,0 +1,1027 @@
+{
+    "msg": "成功",
+    "code": 200,
+    "data": {
+        "home_banner_v5_config": [
+            {
+                "type": "image",
+                "imageUrl": "//img14.360buyimg.com/img/jfs/t1/313890/39/25323/602318/68999dd8F35bc151a/1660a8a257d703b9.png",
+                "clickUrl": "https://open.jd.com/v2/#/announcement/detail?listId=851&itemId=1100821",
+                "content": {
+                    "title": [
+                        "开放平台全新升级"
+                    ],
+                    "desc": "一站式对接京东零售多种业务模式",
+                    "buttonName": "了解详情"
+                }
+            },
+            {
+                "type": "image",
+                "imageUrl": "https://img11.360buyimg.com/imagetools/jfs/t1/396102/38/16000/431372/69a982c3F1954696a/03e6f003843a52c1.png",
+                "clickUrl": "https://open.jd.com/v2/#/announcement/detail?listId=851&itemId=1101323",
+                "content": {
+                    "title": [
+                        "AI开发助手，让开发更高效"
+                    ],
+                    "desc": "写代码、出方案、查报错，你的AI搭档已上线",
+                    "buttonName": "立即体验"
+                }
+            }
+        ],
+        "api_request_v2_method": [
+            {
+                "id": 0,
+                "beta": "https://api-cn-pre.jd.com/rest",
+                "prod": "https://api-cn.jd.com/rest",
+                "method": "API调用方法，",
+                "doc": "//open.jd.com/v2/#/doc/dev-guide?listId=1100587"
+            }
+        ],
+        "brand_case_show_hotel": "false",
+        "home_cooperate_partner_config": {
+            "cooperatePartnerLink": "//pro.jd.com/mall/active/2hofiJ9GCyA9yiteE1DMfToo54mx/index.html",
+            "logoList1": [
+                {
+                    "name": "尊道",
+                    "imgUrl": "//img14.360buyimg.com/img/jfs/t1/194115/31/52940/5451/674ecffbFee27a811/aadbcccb873e808a.png"
+                },
+                {
+                    "name": "美众",
+                    "imgUrl": "//img13.360buyimg.com/img/jfs/t1/219862/26/50200/5280/674ecffaF64756014/913725aafdad6995.png"
+                },
+                {
+                    "name": "我打打单",
+                    "imgUrl": "//img12.360buyimg.com/img/jfs/t1/241316/23/18205/3649/674ec871F55dad337/322af946e0a7acb0.png"
+                },
+                {
+                    "name": "陆泽科技",
+                    "imgUrl": "//img12.360buyimg.com/imagetools/jfs/t1/159730/38/47464/37844/66fa42b2F75aa7e09/e6290ebe9ee7d41c.png"
+                },
+                {
+                    "name": "冠美",
+                    "imgUrl": "//img11.360buyimg.com/img/jfs/t1/240611/3/26523/3712/674ec871Ffa23f135/bc2a679cc61fccd3.png"
+                },
+                {
+                    "name": "呈云科技",
+                    "imgUrl": "//img13.360buyimg.com/img/jfs/t1/200199/21/47452/3374/674ecd5bF2be4798a/1c8bfb045a6ac6cf.png"
+                },
+                {
+                    "name": "东芭",
+                    "imgUrl": "//img14.360buyimg.com/img/jfs/t1/220424/21/50853/3505/674ecffaFd04e93d8/66d211c0813c7114.png"
+                },
+                {
+                    "name": "聚水潭",
+                    "imgUrl": "//img10.360buyimg.com/img/jfs/t1/210276/33/49738/2532/674ec870F7c2617f4/8b4d2a9896f7ceed.png"
+                },
+                {
+                    "name": "赛夫",
+                    "imgUrl": "//img10.360buyimg.com/img/jfs/t1/210529/40/49175/7740/674ecffbF94cc0e81/767025d5b22bc45a.png"
+                }
+            ],
+            "logoList2": [
+                {
+                    "name": "优蓝电商",
+                    "imgUrl": "//img10.360buyimg.com/img/jfs/t1/179339/4/52146/4794/674ecffaFd6cd05c4/b0ab3d68ef9e2183.png"
+                },
+                {
+                    "name": "钜点",
+                    "imgUrl": "//img20.360buyimg.com/img/jfs/t1/190707/31/54061/6745/674ecffaF76e1dc80/3a0c700e643db5ef.png"
+                },
+                {
+                    "name": "京卖通",
+                    "imgUrl": "//img14.360buyimg.com/img/jfs/t1/231808/20/28435/2460/674ec870Feca74301/3e77b78b8a1ba4f7.png"
+                },
+                {
+                    "name": "新设计",
+                    "imgUrl": "//img12.360buyimg.com/img/jfs/t1/246882/21/26212/4290/674ec871Fef39befb/c813c23f89d670ca.png"
+                },
+                {
+                    "name": "小冰",
+                    "imgUrl": "//img10.360buyimg.com/img/jfs/t1/218179/16/51080/2016/674ec870Fe7050382/c46f553b0715bffa.png"
+                },
+                {
+                    "name": "数来科技",
+                    "imgUrl": "//img20.360buyimg.com/img/jfs/t1/171606/14/54072/2116/674ec870F35ce7f2e/7d2b7f4f34502f3d.png"
+                },
+                {
+                    "name": "点转",
+                    "imgUrl": "//img12.360buyimg.com/img/jfs/t1/225178/8/27468/3477/674ecffaFbeeed418/d820ae348f05238b.png"
+                },
+                {
+                    "name": "云起科技",
+                    "imgUrl": "//img20.360buyimg.com/img/jfs/t1/178984/23/49526/6468/674ecd5cFc5957858/d1e617abcdf3a6a5.png"
+                },
+                {
+                    "name": "新锐天成",
+                    "imgUrl": "//img13.360buyimg.com/imagetools/jfs/t1/174153/11/48183/21104/66fa42b3F6b039753/4c0357403053e786.png"
+                }
+            ]
+        },
+        "show_switch_new": "false",
+        "spi_common_params": [
+            {
+                "id": 0,
+                "name": "X-JOS-Target-App-Key",
+                "type": "string",
+                "required": true,
+                "example": "W63C6F03D336F62C1138546D77D23531",
+                "desc": "ISV/商家创建的应用AppKey，也就是SPI接口实现方的AppKey"
+            },
+            {
+                "id": 1,
+                "name": "X-JOS-Source-App-Key",
+                "type": "string",
+                "required": true,
+                "example": "E90C6F03D739F62C6039246D78C19530",
+                "desc": "请求方应用AppKey，此AppKey由开放平台向API调用方分配"
+            },
+            {
+                "id": 2,
+                "name": "X-JOS-Api-Name",
+                "type": "string",
+                "required": true,
+                "example": "jd.spi.testl.get",
+                "desc": "所定义的SPI接口名称"
+            },
+            {
+                "id": 3,
+                "name": "X-JOS-Timestamp",
+                "type": "long",
+                "required": true,
+                "example": "1735660800000",
+                "desc": "时间戳，精确到毫秒。京东API服务端允许客户端请求时间误差为10分钟"
+            },
+            {
+                "id": 4,
+                "name": "X-JOS-Sign",
+                "type": "string",
+                "required": true,
+                "example": "F70825340F4084360B9362B60DGD7941",
+                "desc": "签名",
+                "doc": ""
+            },
+            {
+                "id": 5,
+                "name": "X-JOS-Sign-Method",
+                "type": "string",
+                "required": false,
+                "example": "md5",
+                "desc": "签名加密算法方法，可选md5、hmacmd5、hmacsha256，默认md5"
+            },
+            {
+                "id": 6,
+                "name": "X-JOS-Content-Type",
+                "type": "string",
+                "required": false,
+                "example": "application/json; charset=utf-8",
+                "desc": "固定值：application/json; charset=utf-8"
+            },
+            {
+                "id": 7,
+                "name": "X-JOS-Version",
+                "type": "string",
+                "required": true,
+                "example": "1.0",
+                "desc": "版本version，当前传：1.0"
+            }
+        ],
+        "restful_doc_whitelist": "-766344910,631275208,-463633304,669277092,1195598060,-1992962174,-902599214,950384840,1325662120,1988843291,1643488125,1675055189,1488165691,-1194232718,800041348,-1415458950,1173864582,363387773,-1475629237,1698774289,108865391,-670613220,-1109845496,-1011413714,732534698,969125753,1643954057,-858615495,20815449,805371539,-318511014,621350888,1852546745,758044551,-2064369201,779053292,1436677526,2098042519,-220672189,854774504,1084262568,-1350629410,-858615495,-1976855501,-416545990,758300090,1488165691,-868812849,-416545990,-1860173790,-1800068008,-1400284749,-2004440446,21421304,-482683455",
+        "spi_request_method": [
+            {
+                "id": 0,
+                "beta": "https://spi.jd.local/router/rest",
+                "prod": "https://spi-open.jd.local/router/rest",
+                "method": "SPI实现方法，",
+                "doc": "//open.jd.com/v2/#/doc/dev-guide?listId=1100679"
+            }
+        ],
+        "doc_nps_check_skip": "true",
+        "home_banner_list": [
+            {
+                "type": "image",
+                "imageUrl": "https://img10.360buyimg.com/imagetools/jfs/t1/336455/37/23612/447538/68fae7a6Fb34aebfc/dbede444c7a81c75.png",
+                "clickUrl": "//open.jd.com/v2/#/announcement/detail?listId=851&itemId=1100821",
+                "content": {
+                    "title": [
+                        "平台全面升级，从此化繁为简"
+                    ],
+                    "desc": "全新SP-API，场景化对接向导，让对接变轻松",
+                    "buttonName": "了解详情"
+                }
+            },
+            {
+                "type": "video",
+                "videoUrl": "//storage.jd.com/xtl-zgb-web/open/open-home-banner.mp4",
+                "clickUrl": "//open-console.jd.com",
+                "content": {
+                    "title": [
+                        "开放生态",
+                        "助力商家经营增长"
+                    ],
+                    "desc": "京东零售全链路多场景数字化能力服务商家",
+                    "buttonName": "立即入驻"
+                }
+            }
+        ],
+        "only_in_jdo5": [
+            "/doc/begin-guide",
+            "/doc/scene",
+            "/doc/code-example",
+            "/doc/fwsc-v5",
+            "/case-detai",
+            "/devtools?listId=messageLog",
+            "/devtools?listId=mapping"
+        ],
+        "switch_new_tip": [
+            {
+                "tip": "尊敬的开发者：<br/><br/>为提供更高效顺畅的技术对接服务和体验，在基于大量用户调研分析的前提下，开放平台启动本次版本升级。新版本旨在支持商家通过开放平台完成一站式系统高效对接，通过开放门户整合、开发流程重构和核心API升级三大策略，为您提供更清晰、高效、更省力的开发体验。<br/><br/>目前Beta版本已开放体验申请路径，<b>且截至2026年6月30日前，SP-API接口均实施免费调用政策，</b>欢迎试用。",
+                "docId": 1100821,
+                "btnName": "立即试用"
+            },
+            {
+                "tip": "尊敬的开发者：<br/><br/>京东商家开放平台新版本及SP-API（Seller & Supplier Partner API）正式进入公测阶段<br/><ul><li>立即体验：新版本灰度已启动，支持一键切换，无需等待</li><li>效率革新：体验全新的场景化对接向导及SP-API，让开发更简单、更高效</li><li>重磅福利：全新SP-API即日起至2026年6月30日，全面免费</li>",
+                "docId": 1100946,
+                "btnName": "立即试用"
+            }
+        ],
+        "api_request_v1_method": [
+            {
+                "id": 0,
+                "beta": "https://api-dev.jd.com/routerjson",
+                "prod": "https://api.jd.com/routerjson",
+                "method": "API调用方法，",
+                "doc": "//open.jd.com/v2/#/doc/guide?listId=1909"
+            }
+        ],
+        "api_v2_common_params": [
+            {
+                "id": 0,
+                "name": "X-JOS-App-Key",
+                "type": "string",
+                "required": "是",
+                "example": "012D834080F3339C1FF301F8EC763E13",
+                "desc": "创建的应用appKey"
+            },
+            {
+                "id": 1,
+                "name": "X-JOS-Access-Token",
+                "type": "string",
+                "required": "否",
+                "example": "7f1bcd13fc57d46bac21793a18e560",
+                "desc": "用户授权成功后，平台颁发给应用的授权令牌。当此API文档的标签上注明：“需用户授权”，则此参数必传；“免用户授权”，则此参数不需要传"
+            },
+            {
+                "id": 2,
+                "name": "X-JOS-Timestamp",
+                "type": "long",
+                "required": "是",
+                "example": "1735660800000",
+                "desc": "时间戳，精确到毫秒。京东API服务端允许客户端请求时间误差为10分钟"
+            },
+            {
+                "id": 3,
+                "name": "X-JOS-Sign",
+                "type": "string",
+                "required": "是",
+                "example": "-",
+                "desc": "签名，",
+                "doc": "//open.jd.com/v2/#/doc/dev-guide?listId=1100604"
+            },
+            {
+                "id": 4,
+                "name": "X-JOS-Sign-Method",
+                "type": "string",
+                "required": "否",
+                "example": "md5",
+                "desc": "签名加密算法方法，可选md5、hmacmd5、hmacsha256，默认md5"
+            },
+            {
+                "id": 5,
+                "name": "X-JOS-Content-Type",
+                "type": "string",
+                "required": "否",
+                "example": "application/json; charset=utf-8",
+                "desc": "请求方法为POST/PATCH/PUT则必填，GET/DELETE为非必填。固定值：application/json; charset=utf-8"
+            },
+            {
+                "id": 6,
+                "name": "X-JOS-Request-Identity",
+                "type": "string",
+                "required": "否",
+                "example": "vender",
+                "desc": "当API为多业务聚合接口且支持多个数据维度时，需传入业务身份标识，以确保返回对应业务场景的数据资源。若“API数据维度”标签包含多个选项，则此参数必传；若标签仅有一项或无标签，则无需传参。可选值包括：\n vender：店铺范围数据；\n   supplier：供应商简码范围数据；\n    userPin：供应商PIN范围数据；"
+            }
+        ],
+        "dev_registration_config": {
+            "image": {
+                "title": "开放平台AI开发者大赛2025 - 创想赛段报名表",
+                "beginTime": "2025-07-28 00:00:00",
+                "endTime": "2025-08-17 23:59:59",
+                "formType": "1",
+                "formSchema": [
+                    {
+                        "key": "base",
+                        "title": "基础信息",
+                        "items": [
+                            {
+                                "key": "type",
+                                "label": "参赛类型（单选）",
+                                "type": "radio-group",
+                                "required": true,
+                                "options": [
+                                    {
+                                        "label": "个人开发者",
+                                        "value": 1
+                                    },
+                                    {
+                                        "label": "高校/科研团队",
+                                        "value": 2
+                                    },
+                                    {
+                                        "label": "创业公司",
+                                        "value": 3
+                                    },
+                                    {
+                                        "label": "企业创新部门",
+                                        "value": 4
+                                    }
+                                ]
+                            },
+                            {
+                                "key": "academicInput",
+                                "label": "",
+                                "type": "input",
+                                "required": true,
+                                "props": {
+                                    "maxlength": 20,
+                                    "showWordLimit": true,
+                                    "placeholder": "请输入高校/科研团队名称"
+                                },
+                                "showOn": {
+                                    "type": [
+                                        2
+                                    ]
+                                }
+                            },
+                            {
+                                "key": "startupInput",
+                                "label": "",
+                                "type": "input",
+                                "required": true,
+                                "props": {
+                                    "maxlength": 20,
+                                    "showWordLimit": true,
+                                    "placeholder": "请输入公司名称"
+                                },
+                                "showOn": {
+                                    "type": [
+                                        3
+                                    ]
+                                }
+                            },
+                            {
+                                "key": "corperateInput",
+                                "label": "",
+                                "type": "input",
+                                "required": true,
+                                "props": {
+                                    "maxlength": 20,
+                                    "showWordLimit": true,
+                                    "placeholder": "请输入部门名称"
+                                },
+                                "showOn": {
+                                    "type": [
+                                        4
+                                    ]
+                                }
+                            },
+                            {
+                                "key": "teamName",
+                                "label": "团队名称",
+                                "type": "input",
+                                "required": true,
+                                "props": {
+                                    "placeholder": "请输入团队名称",
+                                    "maxlength": 20,
+                                    "showWordLimit": true
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "key": "contact",
+                        "title": "主要联系人信息",
+                        "customClass": "contact-grid",
+                        "items": [
+                            {
+                                "key": "contactName",
+                                "label": "姓名",
+                                "type": "input",
+                                "required": true,
+                                "props": {
+                                    "maxlength": 20,
+                                    "showWordLimit": true,
+                                    "placeholder": "请输入联系人姓名"
+                                }
+                            },
+                            {
+                                "key": "phoneNumber",
+                                "label": "手机",
+                                "type": "input",
+                                "required": true,
+                                "regex": "^1[3-9]\\d{9}$",
+                                "props": {
+                                    "maxlength": 11,
+                                    "showWordLimit": true,
+                                    "placeholder": "请输入手机号码"
+                                }
+                            },
+                            {
+                                "key": "contactEmail",
+                                "label": "邮箱",
+                                "type": "input",
+                                "required": true,
+                                "regex": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$",
+                                "props": {
+                                    "maxlength": 50,
+                                    "showWordLimit": true,
+                                    "placeholder": "请输入邮箱地址"
+                                }
+                            },
+                            {
+                                "key": "contactWechat",
+                                "label": "微信号",
+                                "type": "input",
+                                "required": true,
+                                "props": {
+                                    "maxlength": 20,
+                                    "showWordLimit": true,
+                                    "placeholder": "请输入微信号"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "key": "idea",
+                        "title": "创意提案",
+                        "items": [
+                            {
+                                "key": "ideaName",
+                                "label": "创意名称",
+                                "type": "input",
+                                "required": true,
+                                "props": {
+                                    "maxlength": 20,
+                                    "showWordLimit": true,
+                                    "placeholder": "请输入创意名称"
+                                }
+                            },
+                            {
+                                "key": "ideaTrack",
+                                "label": "所属赛道",
+                                "type": "radio-group",
+                                "required": true,
+                                "options": [
+                                    {
+                                        "label": "内容生产赛道",
+                                        "value": "内容生产赛道"
+                                    },
+                                    {
+                                        "label": "经营提效赛道",
+                                        "value": "经营提效赛道"
+                                    },
+                                    {
+                                        "label": "商家智能助手赛道",
+                                        "value": "商家智能助手赛道"
+                                    }
+                                ]
+                            },
+                            {
+                                "key": "ideaDesc",
+                                "label": "创新应用构想",
+                                "type": "input",
+                                "required": true,
+                                "props": {
+                                    "type": "textarea",
+                                    "maxlength": 1000,
+                                    "showWordLimit": true,
+                                    "rows": 6,
+                                    "placeholder": "请描述您的创新应用构想...",
+                                    "tips": "建议包含以下方面：痛点描述、目标用户、技术方案亮点、预计实现的功能、预期商业价值"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "key": "attachment",
+                        "title": "附件上传",
+                        "items": [
+                            {
+                                "key": "pptFile",
+                                "label": "请上传创意赛阶段PPT（PPT/PDF）",
+                                "type": "upload-file",
+                                "required": true,
+                                "props": {
+                                    "maxSize": 10,
+                                    "limit": 3,
+                                    "downloadLabel": "创想赛段PPT内容要求",
+                                    "downloadUrl": "//open.jd.com/v2/#/doc/guide?listId=1100325",
+                                    "accept": ".ppt,.pptx,.pdf"
+                                }
+                            },
+                            {
+                                "key": "otherFile",
+                                "label": "其他附件（可选）",
+                                "type": "upload-file",
+                                "required": false,
+                                "props": {
+                                    "maxSize": 10,
+                                    "limit": 3,
+                                    "downloadLabel": "",
+                                    "downloadUrl": "",
+                                    "accept": ".jpeg,.jpg,.png,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,.txt,.zip,.rar,.mp4",
+                                    "tips": "可视情况增加其他说明材料"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "key": "statement",
+                        "title": "提交声明",
+                        "items": [
+                            {
+                                "key": "statements",
+                                "type": "statement-check",
+                                "label": "",
+                                "required": true,
+                                "options": [
+                                    {
+                                        "label": "我已阅读并同意《知识产权许可协议》全部条款",
+                                        "value": "agreeLicense"
+                                    },
+                                    {
+                                        "label": "您同意京麦服务市场通过您填写的联系方式联系您",
+                                        "value": "contactConsent"
+                                    },
+                                    {
+                                        "label": "保证此创意为本团队原创，若出现法律纠纷自行承担责任",
+                                        "value": "originalityDeclaration"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            "action": {
+                "title": "开放平台AI开发者大赛2025 - 实践赛段报名表",
+                "beginTime": "2025-09-22 00:00:00",
+                "endTime": "2025-10-21 23:59:59",
+                "formType": "2",
+                "formSchema": [
+                    {
+                        "key": "qualification",
+                        "title": "团队资质",
+                        "customClass": "contact-grid",
+                        "items": [
+                            {
+                                "key": "companyName",
+                                "label": "企业/团队全称",
+                                "type": "input",
+                                "required": true,
+                                "props": {
+                                    "maxlength": 20,
+                                    "showWordLimit": true,
+                                    "placeholder": "请输入企业或团队全称"
+                                }
+                            },
+                            {
+                                "key": "socialCreditCode",
+                                "label": "统一社会信用代码",
+                                "type": "input",
+                                "required": true,
+                                "regex": "^[0-9A-HJ-NPQRTUWXY]{2}\\d{6}[0-9A-HJ-NPQRTUWXY]{10}$",
+                                "props": {
+                                    "placeholder": "请输入统一社会信用代码"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "key": "coreMembers",
+                        "title": "核心成员（至少3人）",
+                        "type": "array",
+                        "min": 3,
+                        "max": 10,
+                        "items": [
+                            {
+                                "key": "memberName",
+                                "label": "姓名",
+                                "type": "input",
+                                "required": true,
+                                "props": {
+                                    "maxlength": 20,
+                                    "showWordLimit": true,
+                                    "placeholder": "请输入姓名"
+                                }
+                            },
+                            {
+                                "key": "memberPosition",
+                                "label": "职位",
+                                "type": "input",
+                                "required": true,
+                                "props": {
+                                    "maxlength": 20,
+                                    "showWordLimit": true,
+                                    "placeholder": "请输入职位"
+                                }
+                            },
+                            {
+                                "key": "memberExpertise",
+                                "label": "技术专长",
+                                "type": "input",
+                                "required": true,
+                                "props": {
+                                    "maxlength": 20,
+                                    "showWordLimit": true,
+                                    "placeholder": "请输入技术专长"
+                                }
+                            },
+                            {
+                                "key": "phoneNumber",
+                                "label": "手机号",
+                                "type": "input",
+                                "required": true,
+                                "regex": "^1[3-9]\\d{9}$",
+                                "props": {
+                                    "maxlength": 11,
+                                    "showWordLimit": true,
+                                    "placeholder": "请输入手机号"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "key": "techQualification",
+                        "title": "技术资质",
+                        "items": [
+                            {
+                                "key": "tech",
+                                "label": "",
+                                "type": "checkbox-group",
+                                "required": true,
+                                "options": [
+                                    {
+                                        "label": "已获融资",
+                                        "value": 1
+                                    },
+                                    {
+                                        "label": "拥有相关专利",
+                                        "value": 2
+                                    },
+                                    {
+                                        "label": "已上线同类产品",
+                                        "value": 3
+                                    },
+                                    {
+                                        "label": "其他",
+                                        "value": 4
+                                    }
+                                ]
+                            },
+                            {
+                                "key": "fundingInput",
+                                "label": "",
+                                "type": "input",
+                                "required": true,
+                                "props": {
+                                    "maxlength": 100,
+                                    "showWordLimit": true,
+                                    "placeholder": "请输入轮次"
+                                },
+                                "showOn": {
+                                    "type": [
+                                        1
+                                    ]
+                                }
+                            },
+                            {
+                                "key": "patentInput",
+                                "label": "",
+                                "type": "input",
+                                "required": true,
+                                "props": {
+                                    "maxlength": 100,
+                                    "showWordLimit": true,
+                                    "placeholder": "请输入专利编号"
+                                },
+                                "showOn": {
+                                    "type": [
+                                        2
+                                    ]
+                                }
+                            },
+                            {
+                                "key": "productInput",
+                                "label": "",
+                                "type": "input",
+                                "required": true,
+                                "props": {
+                                    "maxlength": 500,
+                                    "showWordLimit": true,
+                                    "placeholder": "请输入产品名称及访问地址"
+                                },
+                                "showOn": {
+                                    "type": [
+                                        3
+                                    ]
+                                }
+                            },
+                            {
+                                "key": "otherInput",
+                                "label": "",
+                                "type": "input",
+                                "required": true,
+                                "props": {
+                                    "maxlength": 100,
+                                    "showWordLimit": true,
+                                    "placeholder": "请说明"
+                                },
+                                "showOn": {
+                                    "type": [
+                                        4
+                                    ]
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "key": "productInfo",
+                        "title": "本次参赛产品信息",
+                        "items": [
+                            {
+                                "key": "productName",
+                                "label": "产品名称",
+                                "type": "input",
+                                "required": true,
+                                "props": {
+                                    "placeholder": "请输入产品名称",
+                                    "showWordLimit": true,
+                                    "maxlength": 20
+                                }
+                            },
+                            {
+                                "key": "track",
+                                "label": "所属赛道",
+                                "type": "radio-group",
+                                "required": true,
+                                "options": [
+                                    {
+                                        "label": "内容生产赛道",
+                                        "value": "content"
+                                    },
+                                    {
+                                        "label": "经营提效赛道",
+                                        "value": "efficiency"
+                                    },
+                                    {
+                                        "label": "商家智能助手赛道",
+                                        "value": "assistant"
+                                    }
+                                ]
+                            },
+                            {
+                                "key": "jdApi",
+                                "label": "已实现的京东API对接",
+                                "type": "checkbox-group",
+                                "required": true,
+                                "options": [
+                                    {
+                                        "label": "商品API",
+                                        "value": "product"
+                                    },
+                                    {
+                                        "label": "订单API",
+                                        "value": "order"
+                                    },
+                                    {
+                                        "label": "客服API",
+                                        "value": "service"
+                                    },
+                                    {
+                                        "label": "数据API",
+                                        "value": "data"
+                                    },
+                                    {
+                                        "label": "无",
+                                        "value": "none"
+                                    },
+                                    {
+                                        "label": "其他",
+                                        "value": "other"
+                                    }
+                                ]
+                            },
+                            {
+                                "key": "otherApi",
+                                "label": "",
+                                "type": "input",
+                                "required": true,
+                                "showOn": {
+                                    "type": [
+                                        "other"
+                                    ]
+                                },
+                                "props": {
+                                    "maxlength": 100,
+                                    "showWordLimit": true,
+                                    "placeholder": "请说明"
+                                }
+                            },
+                            {
+                                "key": "productOverview",
+                                "label": "产品概述",
+                                "type": "input",
+                                "required": true,
+                                "props": {
+                                    "type": "textarea",
+                                    "maxlength": 1000,
+                                    "showWordLimit": true,
+                                    "rows": 6,
+                                    "placeholder": "请输入产品概述，包括但不限于：产品介绍、面向服务商、商业模式、运营数据、实现案例（如有）等"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "key": "attachment",
+                        "title": "附件上传",
+                        "items": [
+                            {
+                                "key": "pptFile",
+                                "label": "请上传实践赛阶段PPT（PPT/PDF）",
+                                "type": "upload-file",
+                                "required": true,
+                                "props": {
+                                    "maxSize": 10,
+                                    "limit": 3,
+                                    "downloadLabel": "实践赛段PPT内容要求",
+                                    "downloadUrl": "//open.jd.com/v2/#/doc/guide?listId=1100337",
+                                    "accept": ".ppt,.pptx,.pdf"
+                                }
+                            },
+                            {
+                                "key": "otherFile",
+                                "label": "其他附件（可选）",
+                                "type": "upload-file",
+                                "required": false,
+                                "props": {
+                                    "maxSize": 10,
+                                    "limit": 3,
+                                    "downloadUrl": "",
+                                    "accept": ".jpeg,.jpg,.png,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,.txt,.zip,.rar,.mp4",
+                                    "tips": "可视情况增加其他说明材料"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "key": "legal",
+                        "title": "法律声明",
+                        "items": [
+                            {
+                                "key": "statements",
+                                "label": "",
+                                "type": "statement-check",
+                                "required": true,
+                                "options": [
+                                    {
+                                        "label": "我已阅读并同意《知识产权许可协议》全部条款",
+                                        "value": "agreeLicense"
+                                    },
+                                    {
+                                        "label": "承诺数据真实有效",
+                                        "value": "dataAuthenticity"
+                                    },
+                                    {
+                                        "label": "同意接受技术审计",
+                                        "value": "auditConsent"
+                                    },
+                                    {
+                                        "label": "您同意京麦服务市场通过您填写的联系方式联系您",
+                                        "value": "contactConsent"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "api_v1_common_params": [
+            {
+                "id": 0,
+                "name": "method",
+                "type": "string",
+                "required": "是",
+                "desc": "API接口名称"
+            },
+            {
+                "id": 1,
+                "name": "access_token",
+                "type": "string",
+                "required": "是",
+                "desc": "采用OAuth授权方式为必填参数"
+            },
+            {
+                "id": 2,
+                "name": "app_key",
+                "type": "string",
+                "required": "是",
+                "desc": "应用的app_key"
+            },
+            {
+                "id": 3,
+                "name": "sign",
+                "type": "string",
+                "required": "是",
+                "desc": "签名"
+            },
+            {
+                "id": 4,
+                "name": "timestamp",
+                "type": "string",
+                "required": "是",
+                "desc": "时间戳，例如：1735660800000。京东API服务端允许客户端请求时间误差为10分钟"
+            },
+            {
+                "id": 5,
+                "name": "format",
+                "type": "string",
+                "required": "否",
+                "desc": "暂时只支持json"
+            },
+            {
+                "id": 6,
+                "name": "v",
+                "type": "string",
+                "required": "否",
+                "desc": "版本："
+            }
+        ],
+        "api_o2o_common_params": [
+            {
+                "id": 1,
+                "name": "token",
+                "type": "String",
+                "required": "是",
+                "desc": "采用OAuth授权方式为必填参数"
+            },
+            {
+                "id": 2,
+                "name": "app_key",
+                "type": "String",
+                "required": "是",
+                "desc": "应用的app_key"
+            },
+            {
+                "id": 3,
+                "name": "sign",
+                "type": "String",
+                "required": "是",
+                "desc": "签名"
+            },
+            {
+                "id": 4,
+                "name": "timestamp",
+                "type": "String",
+                "required": "是",
+                "desc": "时间戳，格式为yyyy-MM-dd HH:mm:ss，例如：2011-06-16 13:23:30"
+            },
+            {
+                "id": 5,
+                "name": "format",
+                "type": "String",
+                "required": "是",
+                "desc": "暂时只支持json"
+            },
+            {
+                "id": 6,
+                "name": "v",
+                "type": "String",
+                "required": "是",
+                "desc": "API协议版本，可选值:1.0"
+            }
+        ],
+        "api_v1_o2o_method": [
+            {
+                "id": 0,
+                "beta": "-",
+                "prod": "https://openapi.jddj.com/djapi",
+                "method": "API调用方法，",
+                "doc": "//open.jd.com/v2/#/doc/dev-guide?listId=1100926"
+            }
+        ]
+    },
+    "dsm-trace-id": "5903433.41661.17728968653257118"
+}
