@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>JSON折叠图标 18x18</title>
+  <style>
+    .json-item {
+      margin: 6px 0;
+      line-height: 1.8;
+      font-size: 14px;
+    }
+
+    /* 18x18 圆角折叠按钮 */
+    .fold-btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 15px;    /* 18x18 大小 */
+      height: 15px;
+      border-radius: 4px; /* 圆角 */
+      cursor: pointer;
+      margin-right: 8px;
+      vertical-align: middle;
+      background: #fff;
+    }
+
+    /* 加号样式 青色 #00cfe8 */
+    .fold-btn.plus {
+      border: 1px solid #00cfe8;
+    }
+    .fold-btn.plus::before,
+    .fold-btn.plus::after {
+      content: '';
+      position: absolute;
+      background: #00cfe8;
+    }
+    .fold-btn.plus::before {
+      width: 8px;
+      height: 1px;
+    }
+    .fold-btn.plus::after {
+      width: 1px;
+      height: 8px;
+    }
+
+    /* 减号样式 红色 #ea5455 */
+    .fold-btn.minus {
+      border: 1px solid #ea5455;
+    }
+    .fold-btn.minus::before {
+      content: '';
+      position: absolute;
+      width: 8px;
+      height: 1px;
+      background: #ea5455;
+    }
+
+    /* 子节点 */
+    .json-children {
+      margin-left: 26px;
+      display: none;
+    }
+    .json-children.open {
+      display: block;
+    }
+  </style>
+</head>
+
+<body style="padding: 30px;">
+  <div class="json-item">
+    <span class="fold-btn plus"></span>
+    "josCmsApi": {
+    <div class="json-children">
+      <div class="json-item">"code": 0,</div>
+      <div class="json-item">"msg": "成功"</div>
+    </div>
+    }
+  </div>
+
+  <script>
+    const btn = document.querySelector('.fold-btn');
+    const child = document.querySelector('.json-children');
+
+    btn.onclick = () => {
+      const open = child.classList.toggle('open');
+      btn.className = open ? 'fold-btn minus' : 'fold-btn plus';
+    };
+  </script>
+</body>
+</html>
