@@ -1,91 +1,283 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <title>JSON折叠图标 18x18</title>
-  <style>
-    .json-item {
-      margin: 6px 0;
-      line-height: 1.8;
-      font-size: 14px;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Body 格式化工具</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .container {
+            width: 774px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 20px;
+        }
+        .tabs-header {
+            display: flex;
+            background-color: #f9fafb;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .tab-item {
+            padding: 12px 16px;
+            font-size: 14px;
+            color: #4b5563;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+        .tab-item.active {
+            color: #2563eb;
+            border-bottom-color: #2563eb;
+            font-weight: 500;
+        }
+        .content-types {
+            display: flex;
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+            background-color: #fff;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+        .type-btn {
+            padding: 6px 12px;
+            font-size: 13px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            background-color: #fff;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .type-btn.blue {
+            color: #2563eb;
+            border-color: #2563eb;
+            background-color: #eff6ff;
+        }
+        /* 下拉文字样式 */
+        .format-select {
+            position: relative;
+            font-size: 13px;
+            color: #25aae2;
+            cursor: pointer;
+            padding: 4px 0;
+            user-select: none;
+        }
+        /* 下拉菜单 - 宽度49px */
+        .select-dropdown {
+            display: none;
+            position: absolute;
+            top: 24px;
+            left: 0;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            width: 49px;
+            z-index: 99;
+        }
+        .select-dropdown div {
+            padding: 6px 8px;
+            font-size: 12px;
+            color: #333;
+        }
+        .select-dropdown div:hover {
+            background-color: #f3f4f6;
+        }
+        /* 编辑器区域 */
+        .body-area {
+            position: relative;
+            padding: 16px;
+        }
+        .editor {
+            width: 100%;
+            min-height: 180px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            padding: 12px;
+            font-size: 14px;
+            resize: vertical;
+            font-family: "Consolas", "Monaco", "Courier New", monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            line-height: 1.5;
+            overflow-y: auto;
+            outline: none;
+        }
+        /* json.cn 高亮颜色 */
+        .json-key { color: #92278f; }    /* 键名：紫色 */
+        .json-string { color: #3ab54a; }  /* 字符串：绿色 */
+        .json-number { color: #25aae2; }  /* 数字：蓝色 */
+        .json-boolean { color: #f98280; } /* 布尔值：浅红 */
+        .json-null { color: #f1592a; }    /* null：橙色 */
+        .json-brace { color: #586e75; }   /* 括号：深灰 */
 
-    /* 18x18 圆角折叠按钮 */
-    .fold-btn {
-      position: relative;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 15px;    /* 18x18 大小 */
-      height: 15px;
-      border-radius: 4px; /* 圆角 */
-      cursor: pointer;
-      margin-right: 8px;
-      vertical-align: middle;
-      background: #fff;
-    }
-
-    /* 加号样式 青色 #00cfe8 */
-    .fold-btn.plus {
-      border: 1px solid #00cfe8;
-    }
-    .fold-btn.plus::before,
-    .fold-btn.plus::after {
-      content: '';
-      position: absolute;
-      background: #00cfe8;
-    }
-    .fold-btn.plus::before {
-      width: 8px;
-      height: 1px;
-    }
-    .fold-btn.plus::after {
-      width: 1px;
-      height: 8px;
-    }
-
-    /* 减号样式 红色 #ea5455 */
-    .fold-btn.minus {
-      border: 1px solid #ea5455;
-    }
-    .fold-btn.minus::before {
-      content: '';
-      position: absolute;
-      width: 8px;
-      height: 1px;
-      background: #ea5455;
-    }
-
-    /* 子节点 */
-    .json-children {
-      margin-left: 26px;
-      display: none;
-    }
-    .json-children.open {
-      display: block;
-    }
-  </style>
+        /* 格式化按钮 */
+        .format-btn {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            font-size: 13px;
+            color: #dc2626;
+            cursor: pointer;
+            display: block;
+            z-index: 10;
+        }
+        .format-btn:hover {
+            text-decoration: underline;
+        }
+        /* 隐藏格式化按钮 */
+        .format-btn.hidden {
+            display: none;
+        }
+    </style>
 </head>
+<body>
+    <div class="container">
+        <div class="tabs-header">
+            <div class="tab-item">Params</div>
+            <div class="tab-item">Headers</div>
+            <div class="tab-item active">Body</div>
+            <div class="tab-item">IPPort</div>
+            <div class="tab-item">加密</div>
+        </div>
+        <div class="content-types">
+            <button class="type-btn">application/json</button>
+            <button class="type-btn">multipart/form-data</button>
+            <button class="type-btn">x-www-form-urlencoded</button>
+            <button class="type-btn blue">raw</button>
+            <button class="type-btn">binary</button>
 
-<body style="padding: 30px;">
-  <div class="json-item">
-    <span class="fold-btn plus"></span>
-    "josCmsApi": {
-    <div class="json-children">
-      <div class="json-item">"code": 0,</div>
-      <div class="json-item">"msg": "成功"</div>
+            <!-- 下拉选择：TEXT/JSON/XML/HTML -->
+            <div class="format-select" id="typeText">
+                JSON
+                <div class="select-dropdown" id="dropdown">
+                    <div onclick="switchType('TEXT')">TEXT</div>
+                    <div onclick="switchType('JSON')">JSON</div>
+                    <div onclick="switchType('XML')">XML</div>
+                    <div onclick="switchType('HTML')">HTML</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="body-area">
+            <div class="format-btn" id="formatBtn" onclick="formatContent()">格式化</div>
+            <div class="editor" id="editor" contenteditable="true" placeholder="请输入内容..."></div>
+        </div>
     </div>
-    }
-  </div>
 
-  <script>
-    const btn = document.querySelector('.fold-btn');
-    const child = document.querySelector('.json-children');
+    <script>
+        // 当前选中的类型
+        let currentType = 'JSON';
+        const typeText = document.getElementById('typeText');
+        const dropdown = document.getElementById('dropdown');
+        const formatBtn = document.getElementById('formatBtn');
+        const editor = document.getElementById('editor');
 
-    btn.onclick = () => {
-      const open = child.classList.toggle('open');
-      btn.className = open ? 'fold-btn minus' : 'fold-btn plus';
-    };
-  </script>
+        // 鼠标悬浮显示下拉
+        typeText.addEventListener('mouseenter', () => {
+            dropdown.style.display = 'block';
+        });
+        typeText.addEventListener('mouseleave', () => {
+            dropdown.style.display = 'none';
+        });
+
+        // 切换类型 + 选中后关闭下拉
+        function switchType(type) {
+            currentType = type;
+            typeText.firstChild.textContent = type;
+            dropdown.style.display = 'none'; 
+
+            // TEXT隐藏格式化，其他显示
+            formatBtn.classList.toggle('hidden', type === 'TEXT');
+            // 切换时清空编辑器样式
+            editor.innerText = editor.innerText;
+        }
+
+        // 格式化内容
+        function formatContent() {
+            let content = editor.innerText.trim();
+            if (!content) return;
+
+            try {
+                switch (currentType) {
+                    case 'JSON':
+                        const jsonObj = JSON.parse(content);
+                        const formattedJson = JSON.stringify(jsonObj, null, 2);
+                        // 应用高亮并渲染
+                        editor.innerHTML = highlightJson(formattedJson);
+                        break;
+                    case 'XML':
+                        const formattedXml = formatXml(content);
+                        editor.innerText = formattedXml;
+                        break;
+                    case 'HTML':
+                        const formattedHtml = formatHtml(content);
+                        editor.innerText = formattedHtml;
+                        break;
+                }
+            } catch (e) {
+                alert('格式错误，请检查内容！');
+            }
+        }
+
+        // JSON高亮（完全匹配 json.cn）
+        function highlightJson(json) {
+            if (!json) return '';
+            return json
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                // 键名："key":
+                .replace(/"([^"\\]*(\\.[^"\\]*)*)"\s*:/g, '<span class="json-key">"$1"</span>:')
+                // 字符串值：: "value"
+                .replace(/: "([^"\\]*(\\.[^"\\]*)*)"/g, ': <span class="json-string">"$1"</span>')
+                // 数字：: 123
+                .replace(/: (\d+(\.\d+)?)/g, ': <span class="json-number">$1</span>')
+                // 布尔值：: true / false
+                .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
+                // null：: null
+                .replace(/: null/g, ': <span class="json-null">null</span>')
+                // 括号：{} []
+                .replace(/([{}[\]])/g, '<span class="json-brace">$1</span>');
+        }
+
+        // XML格式化
+        function formatXml(xml) {
+            let formatted = '';
+            let reg = /(>)(<)(\/*)/g;
+            xml = xml.replace(reg, '$1\r\n$2$3');
+            let pad = 0;
+            xml.split('\r\n').forEach(node => {
+                let indent = 0;
+                if (node.match(/.+<\/\w[^>]*>$/)) indent = 0;
+                else if (node.match(/^<\/\w/)) pad--;
+                else if (node.match(/^<\w[^>]*[^\/]>.*$/)) indent = pad++;
+                formatted += '  '.repeat(indent) + node + '\r\n';
+            });
+            return formatted.trim();
+        }
+
+        // HTML格式化
+        function formatHtml(html) {
+            return html
+                .replace(/></g, '>\n<')
+                .replace(/\n +/g, '\n')
+                .split('\n')
+                .map(line => line.trim())
+                .join('\n');
+        }
+
+        // 编辑时重置为纯文本，避免高亮干扰输入
+        editor.addEventListener('input', () => {
+            if (currentType === 'JSON' && editor.innerHTML.includes('<span')) {
+                const text = editor.innerText;
+                editor.innerText = text;
+            }
+        });
+    </script>
 </body>
 </html>

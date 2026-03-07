@@ -6,6 +6,12 @@ import { ref, computed } from 'vue'
 import { Close, Plus, Delete, ArrowRight, More, ArrowDown, ArrowUp, QuestionFilled, Link, EditPen, Right, CopyDocument } from '@element-plus/icons-vue'
 import JsonAddDialog from './JsonAddDialog.vue'
 import BatchEditDialog from './BatchEditDialog.vue'
+import CurlParser from './CurlParser.vue'
+import BodyJson from './BodyJson.vue'
+import BodyFormData from './BodyFormData.vue'
+import BodyUrlencoded from './BodyUrlencoded.vue'
+import BodyRaw from './BodyRaw.vue'
+import BodyBinary from './BodyBinary.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false }
@@ -26,6 +32,19 @@ const activeDetailTab = ref('input')
 
 // 入参/断言子Tab
 const activeInputTab = ref('params')
+
+// Body 内容类型子Tab
+const activeBodyContentType = ref('json')
+
+// Raw 内容类型 - 从当前组获取
+const rawContentType = computed({
+  get: () => currentGroup.value?.bodyRawContentType || 'json',
+  set: (val) => {
+    if (currentGroup.value) {
+      currentGroup.value.bodyRawContentType = val
+    }
+  }
+})
 
 // 响应Tab
 const activeResponseTab = ref('body')
@@ -72,7 +91,24 @@ const assertForm = ref({
 
 // 多组参数
 const paramGroups = ref([
-  { id: 1, name: '第1组', checked: true, params: [], headers: [], body: '', ipport: '', encrypt: '' }
+  { 
+    id: 1, 
+    name: '第1组', 
+    checked: true, 
+    params: [], 
+    headers: [], 
+    body: '', 
+    ipport: '', 
+    encrypt: '',
+    // Body 各类型数据
+    bodyJson: '',
+    bodyFormData: [],
+    bodyUrlencoded: [],
+    bodyRaw: '',
+    bodyRawContentType: 'json',
+    binaryFile: null,
+    binaryFileName: ''
+  }
 ])
 const currentGroupId = ref(1)
 
@@ -176,7 +212,15 @@ function copyGroup(group) {
     headers: JSON.parse(JSON.stringify(group.headers || [])),
     body: group.body || '',
     ipport: group.ipport || '',
-    encrypt: group.encrypt || ''
+    encrypt: group.encrypt || '',
+    // Body 各类型数据
+    bodyJson: group.bodyJson || '',
+    bodyFormData: JSON.parse(JSON.stringify(group.bodyFormData || [])),
+    bodyUrlencoded: JSON.parse(JSON.stringify(group.bodyUrlencoded || [])),
+    bodyRaw: group.bodyRaw || '',
+    bodyRawContentType: group.bodyRawContentType || 'json',
+    binaryFile: group.binaryFile || null,
+    binaryFileName: group.binaryFileName || ''
   })
 }
 
@@ -233,10 +277,177 @@ function addGroup() {
     headers: [],
     body: '',
     ipport: '',
-    encrypt: ''
+    encrypt: '',
+    // Body 各类型数据
+    bodyJson: '',
+    bodyFormData: [],
+    bodyUrlencoded: [],
+    bodyRaw: '',
+    bodyRawContentType: 'json',
+    binaryFile: null,
+    binaryFileName: ''
   })
   // 切换到新添加的组
   currentGroupId.value = newId
+}
+
+// ================= cURL 解析结果处理 =================
+
+// 处理解析出的 Params，自动添加到当前组的 params 中
+function handleParseParams(params) {
+  if (!params || Object.keys(params).length === 0) return
+  
+  const group = currentGroup.value
+  if (!group) return
+  
+  // 将解析出的 params 添加到当前组的 params 数组中
+  Object.entries(params).forEach(([key, value]) => {
+    // 检查是否已存在相同的 key
+    const exists = group.params.some(p => p.key === key)
+    if (!exists) {
+      group.params.push({
+        key: key,
+        value: String(value)
+      })
+    }
+  })
+}
+
+// 处理解析出的 Headers，自动添加到当前组的 headers 中
+function handleParseHeaders(headers) {
+  if (!headers || Object.keys(headers).length === 0) return
+  
+  const group = currentGroup.value
+  if (!group) return
+  
+  // 将解析出的 headers 添加到当前组的 headers 数组中
+  Object.entries(headers).forEach(([key, value]) => {
+    // 检查是否已存在相同的 key
+    const exists = group.headers.some(h => h.key === key)
+    if (!exists) {
+      group.headers.push({
+        key: key,
+        value: String(value)
+      })
+    }
+  })
+}
+
+// 处理解析出的 Body，自动填写到当前组的 body 中
+function handleParseBody(body) {
+  if (!body || body.trim() === '') return
+
+  const group = currentGroup.value
+  if (!group) return
+
+  // 将解析出的 body 设置到当前组的 bodyJson 字段
+  group.bodyJson = body
+}
+
+// 处理 Raw 内容格式化
+function handleRawFormat() {
+  const group = currentGroup.value
+  if (!group || !group.bodyRaw) return
+
+  try {
+    const content = group.bodyRaw.trim()
+    if (!content) return
+
+    // 根据 contentType 进行格式化
+    switch (rawContentType.value) {
+      case 'json':
+        // JSON 格式化
+        try {
+          const parsed = JSON.parse(content)
+          group.bodyRaw = JSON.stringify(parsed, null, 2)
+        } catch (e) {
+          // 不是有效的 JSON，保持原样
+          console.warn('Invalid JSON format')
+        }
+        break
+      case 'xml':
+        // XML 格式化 - 简单的缩进处理
+        group.bodyRaw = formatXml(content)
+        break
+      case 'html':
+        // HTML 格式化 - 简单的缩进处理
+        group.bodyRaw = formatHtml(content)
+        break
+      default:
+        // text 类型不处理
+        break
+    }
+  } catch (error) {
+    console.warn('Format error:', error)
+  }
+}
+
+// 简单的 XML 格式化
+function formatXml(xml) {
+  let formatted = ''
+  let indent = 0
+  const lines = xml.split(/>\s*</)
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i]
+    if (i > 0) line = '<' + line
+    if (i < lines.length - 1) line = line + '>'
+
+    if (line.match(/^<\/\w/)) {
+      indent--
+    }
+
+    formatted += '  '.repeat(Math.max(0, indent)) + line + '\n'
+
+    if (line.match(/^<\w[^>]*[^\/]>.*$/)) {
+      indent++
+    }
+  }
+
+  return formatted.trim()
+}
+
+// 简单的 HTML 格式化
+function formatHtml(html) {
+  let formatted = ''
+  let indent = 0
+  const lines = html.split(/>\s*</)
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i]
+    if (i > 0) line = '<' + line
+    if (i < lines.length - 1) line = line + '>'
+
+    if (line.match(/^<\/\w/)) {
+      indent--
+    }
+
+    formatted += '  '.repeat(Math.max(0, indent)) + line + '\n'
+
+    if (line.match(/^<\w[^>]*[^\/]>.*$/)) {
+      indent++
+    }
+  }
+
+  return formatted.trim()
+}
+
+// 处理 binary 文件上传
+function handleBinaryChange(file) {
+  const group = currentGroup.value
+  if (!group) return
+  
+  group.binaryFile = file.raw
+  group.binaryFileName = file.name
+}
+
+// 清除 binary 文件
+function clearBinaryFile() {
+  const group = currentGroup.value
+  if (!group) return
+  
+  group.binaryFile = null
+  group.binaryFileName = ''
 }
 </script>
 
@@ -316,14 +527,14 @@ function addGroup() {
                           :class="`method-option color-${opt.value}`"
                         />
                       </el-select>
-                      <el-input 
-                        v-model="basicForm.url" 
-                        placeholder="请选择接口地址，支持输入，支持CURL命令" 
-                        class="url-input"
+                      <curl-parser
+                        v-model="basicForm.url"
+                        v-model:method="basicForm.method"
+                        @parse:params="handleParseParams"
+                        @parse:headers="handleParseHeaders"
+                        @parse:body="handleParseBody"
+                        class="curl-parser-wrapper"
                       />
-                      <el-button class="url-enter-btn" title="入参转换">
-                        <el-icon><Right /></el-icon>
-                      </el-button>
                     </div>
                   </el-form-item>
                 </el-col>
@@ -535,8 +746,47 @@ function addGroup() {
                           </div>
                         </el-tab-pane>
                         <el-tab-pane label="Body" name="body">
-                          <div class="empty-body">
-                            <el-empty description="GET请求不支持body传参" :image-size="64" />
+                          <div class="body-tabs-wrapper">
+                            <el-tabs v-model="activeBodyContentType" class="body-content-tabs" :type="false">
+                              <el-tab-pane label="application/json" name="json">
+                                <body-json v-model="currentGroup.bodyJson" />
+                              </el-tab-pane>
+                              <el-tab-pane label="multipart/form-data" name="formData">
+                                <body-form-data v-model="currentGroup.bodyFormData" />
+                              </el-tab-pane>
+                              <el-tab-pane label="x-www-form-urlencoded" name="urlencoded">
+                                <body-urlencoded v-model="currentGroup.bodyUrlencoded" />
+                              </el-tab-pane>
+                              <el-tab-pane label="raw" name="raw">
+                                <body-raw
+                                  v-model="currentGroup.bodyRaw"
+                                  :content-type="rawContentType"
+                                  @format="handleRawFormat"
+                                />
+                              </el-tab-pane>
+                              <el-tab-pane label="binary" name="binary">
+                                <body-binary
+                                  v-model:file="currentGroup.binaryFile"
+                                  v-model:fileName="currentGroup.binaryFileName"
+                                />
+                              </el-tab-pane>
+                            </el-tabs>
+                            <!-- Raw 类型选择器 - 始终显示在 tab header 最后 -->
+                            <el-dropdown
+                              trigger="hover"
+                              @command="(cmd) => rawContentType = cmd"
+                              class="raw-type-selector"
+                            >
+                              <span class="raw-type-label" :class="{ active: activeBodyContentType === 'raw' }">{{ rawContentType.toUpperCase() }}</span>
+                              <template #dropdown>
+                                <el-dropdown-menu>
+                                  <el-dropdown-item command="json">JSON</el-dropdown-item>
+                                  <el-dropdown-item command="text">TEXT</el-dropdown-item>
+                                  <el-dropdown-item command="xml">XML</el-dropdown-item>
+                                  <el-dropdown-item command="html">HTML</el-dropdown-item>
+                                </el-dropdown-menu>
+                              </template>
+                            </el-dropdown>
                           </div>
                         </el-tab-pane>
                         <el-tab-pane label="IPPort" name="ipport">
@@ -959,20 +1209,20 @@ function addGroup() {
   color: #8E1A10;
 }
 
-.url-input {
-  flex: 1; /* 填满剩余空间 */
+.curl-parser-wrapper {
+  flex: 1;
   min-width: 0;
+  display: flex;
 }
 
-.url-input :deep(.el-input__wrapper) {
+.curl-parser-wrapper :deep(.curl-input) {
   border-radius: 0 !important;
   border-left: none !important;
-
+  height: 32px;
 }
 
-.url-enter-btn {
-  width: 46px;
-  flex-shrink: 0;
+.curl-parser-wrapper :deep(.input-wrapper) {
+  width: 100%;
 }
 
 /* 更多链接 */
@@ -1095,6 +1345,129 @@ function addGroup() {
 
 .params-tabs :deep(.el-tabs__content) {
   padding: 0;
+}
+
+/* ==================== Body 子 Tabs - Tab Header 区域样式 ==================== */
+
+/* Tabs 包装器 */
+.body-tabs-wrapper {
+  position: relative;
+}
+
+/* Tab 容器 */
+.body-content-tabs {
+  border-top: 1px solid #f0f0f0;
+}
+
+/* Tab header 区域 */
+.body-content-tabs :deep(.el-tabs__header) {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+/* Tab 导航容器 */
+.body-content-tabs :deep(.el-tabs__nav) {
+  margin-left: 12px;
+  background: transparent;
+}
+
+/* Tab 项通用样式 */
+.body-content-tabs :deep(.el-tabs__item) {
+  font-size: 12px;
+  padding: 0 12px;
+  margin: 0;
+  height: 32px;
+  line-height: 32px;
+  background: transparent;
+  border: none;
+}
+
+/* 第一个 tab (application/json) 左边距 */
+.body-content-tabs :deep(.el-tabs__item:first-child) {
+  margin-left: 8px;
+}
+
+/* 激活状态的 tab */
+.body-content-tabs :deep(.el-tabs__item.is-active) {
+  color: #409eff;
+  border-bottom: 2px solid #409eff;
+}
+
+/* Raw tab 标签样式 */
+.raw-type-dropdown {
+  vertical-align: middle;
+}
+
+.raw-label {
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Raw 类型选择器 - 放在 tab header 最后 */
+.raw-type-selector {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 32px;
+  line-height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+  z-index: 10;
+  background: transparent;
+}
+
+.raw-type-label {
+  color: #c0c4cc;
+  cursor: pointer;
+  user-select: none;
+}
+
+.raw-type-label.active {
+  color: #409eff;
+}
+
+.raw-type-label:hover {
+  color: #409eff;
+}
+
+.raw-type-selector :deep(.el-dropdown__trigger) {
+  display: inline-block;
+}
+
+/* ==================== Body 子 Tabs - Tab Content 区域样式 ==================== */
+
+/* Tab content 容器 */
+.body-content-tabs :deep(.el-tabs__content) {
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: none;
+}
+
+/* Tab pane 容器 */
+.body-content-tabs :deep(.el-tab-pane) {
+  padding: 0;
+  margin: 0;
+}
+
+/* Body 组件容器 */
+.body-content-tabs :deep(.body-json),
+.body-content-tabs :deep(.body-form-data),
+.body-content-tabs :deep(.body-urlencoded),
+.body-content-tabs :deep(.body-raw),
+.body-content-tabs :deep(.body-binary) {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* 移除子 tabs 的默认边框和阴影 */
+.body-content-tabs :deep(.el-tabs--border-card) {
+  border: none;
+  box-shadow: none;
 }
 
 /* 键值表格 */

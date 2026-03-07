@@ -41,14 +41,16 @@ export const ParamSelectDialog = {
       }
     })
     
-    // 全选
-    function selectAll() {
-      paramList.value.forEach(item => item.selected = true)
-    }
-    
-    // 取消全选
-    function unselectAll() {
-      paramList.value.forEach(item => item.selected = false)
+    // 全选/取消全选切换（与 Json添加Param 弹窗逻辑保持一致）
+    function toggleSelectAll() {
+      const allSelected = paramList.value.every(item => item.selected)
+      if (allSelected) {
+        // 当前已全选，再次点击则取消全选
+        paramList.value.forEach(item => item.selected = false)
+      } else {
+        // 未全选时，点击则全选所有参数
+        paramList.value.forEach(item => item.selected = true)
+      }
     }
     
     // 保存
@@ -92,13 +94,18 @@ export const ParamSelectDialog = {
       return paramList.value.some(item => item.selected)
     })
     
+    // 是否全部选中（用于显示按钮文字）
+    const allSelected = computed(() => {
+      return paramList.value.length > 0 && paramList.value.every(item => item.selected)
+    })
+    
     return {
       paramList,
       hasSaved,
       selectedCount,
       hasSelected,
-      selectAll,
-      unselectAll,
+      allSelected,
+      toggleSelectAll,
       handleSave,
       handleBack
     }
@@ -272,14 +279,16 @@ function handleResultSave() {
   emit('save', selectedParams)
 }
 
-// 全选
-function selectAll() {
-  paramList.value.forEach(item => item.selected = true)
-}
-
-// 取消全选
-function unselectAll() {
-  paramList.value.forEach(item => item.selected = false)
+// 全选/取消全选切换（与 Json添加Param 弹窗逻辑保持一致）
+function toggleSelectAll() {
+  const allSelected = paramList.value.every(item => item.selected)
+  if (allSelected) {
+    // 当前已全选，再次点击则取消全选
+    paramList.value.forEach(item => item.selected = false)
+  } else {
+    // 未全选时，点击则全选所有参数
+    paramList.value.forEach(item => item.selected = true)
+  }
 }
 
 // 处理结果弹窗返回/取消
@@ -327,8 +336,9 @@ function handleInputClose() {
       <div class="select-content">
         <!-- 工具栏 -->
         <div class="toolbar">
-          <el-button size="small" @click="selectAll">全选</el-button>
-          <el-button size="small" @click="unselectAll">取消全选</el-button>
+          <el-button size="small" @click="toggleSelectAll">
+            {{ paramList.length > 0 && paramList.every(item => item.selected) ? '取消全选' : '全选' }}
+          </el-button>
           <span class="selected-info">已选择 {{ selectedCount }} / {{ paramList.length }} 项</span>
         </div>
         

@@ -2,11 +2,9 @@
 /**
  * JSON 添加对话框组件
  */
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useJsonCacheStore } from '../stores/useJsonCacheStore'
 import InputDialog from './InputDialog.vue'
-
-console.log('[JsonAddDialog] ===== SCRIPT SETUP START =====')
 
 const props = defineProps({
   modelValue: {
@@ -22,7 +20,6 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'save'])
 
 const jsonCacheStore = useJsonCacheStore()
-console.log('[JsonAddDialog] Store initialized, content:', jsonCacheStore.content?.substring(0, 30))
 
 // 保存当前输入的内容
 const currentInput = ref('')
@@ -38,23 +35,17 @@ const hasSaved = ref(false)
 const allLeafKeyCount = computed(() => collectAllLeafKeys(treeData.value, []).length)
 
 // 监听弹窗打开
-watch(() => props.modelValue, (val, oldVal) => {
-  console.log('[JsonAddDialog] ===== WATCH modelValue =====')
-  console.log('  new:', val, 'old:', oldVal, 'showResult:', showResult.value)
-  
+watch(() => props.modelValue, (val) => {
   if (val) {
-    console.log('[JsonAddDialog] Dialog opened, resetting state')
     parsedData.value = null
     treeData.value = []
     selectedKeys.value = []
     hasSaved.value = false
     currentInput.value = jsonCacheStore.content || ''
-    console.log('[JsonAddDialog] currentInput set to:', currentInput.value?.substring(0, 50))
   }
 })
 
 function jsonToTree(obj, parentKey = '', parentPath = '', options = {}) {
-  console.log('[jsonToTree] Processing, parentKey:', parentKey)
   const result = []
   
   for (const [key, value] of Object.entries(obj)) {
@@ -125,19 +116,15 @@ function jsonToTree(obj, parentKey = '', parentPath = '', options = {}) {
     }
   }
   
-  console.log('[jsonToTree] Result length:', result.length)
   return result
 }
 
 async function parseJson(input) {
-  console.log('[parseJson] ===== START ===== input length:', input?.length)
   try {
     currentInput.value = input
     jsonCacheStore.setContent(input)
-    console.log('[parseJson] Saved to store')
     
     const parsed = JSON.parse(input.trim())
-    console.log('[parseJson] JSON parsed')
     
     if (typeof parsed !== 'object' || parsed === null) {
       throw new Error('只支持 JSON 对象或数组结构的数据')
@@ -205,10 +192,8 @@ async function parseJson(input) {
     selectedKeys.value = []
     showResult.value = true
     
-    console.log('[parseJson] ===== END ===== treeData length:', treeData.value.length)
     return []
   } catch (e) {
-    console.error('[parseJson] Error:', e.message)
     throw new Error(e.message || 'JSON 格式错误，请检查')
   }
 }
@@ -225,22 +210,15 @@ function collectAllLeafKeys(nodes, result = []) {
 }
 
 function toggleSelectAll() {
-  console.log('[toggleSelectAll] ===== START =====')
   const allKeys = collectAllLeafKeys(treeData.value, [])
   if (selectedKeys.value.length === allKeys.length) {
-    // 当前已全选，再次点击则取消全选
     selectedKeys.value = []
-    console.log('[toggleSelectAll] Cancel all, total:', allKeys.length)
   } else {
-    // 未全选时，点击则全选所有叶子节点
     selectedKeys.value = allKeys
-    console.log('[toggleSelectAll] Select all, total:', allKeys.length)
   }
-  console.log('[toggleSelectAll] ===== END =====')
 }
 
 function handleSave() {
-  console.log('[handleSave] ===== START =====')
   if (!parsedData.value) return
   
   const result = []
@@ -258,37 +236,28 @@ function handleSave() {
   showResult.value = false
   emit('update:modelValue', false)
   emit('save', result)
-  console.log('[handleSave] ===== END =====')
 }
 
 function handleClose() {
-  console.log('[handleClose] ===== START =====')
   if (hasSaved.value) return
   showResult.value = false
   emit('update:modelValue', false)
-  console.log('[handleClose] ===== END ===== emitted false')
 }
 
 function handleBack() {
-  console.log('[handleBack] ===== START =====')
   if (hasSaved.value) return
   showResult.value = false
-  console.log('[handleBack] ===== END =====')
 }
 
 function handleInputClose() {
-  console.log('[handleInputClose] ===== START ===== showResult:', showResult.value)
   if (!showResult.value) {
     emit('update:modelValue', false)
   }
-  console.log('[handleInputClose] ===== END =====')
 }
 
 function handlePersistedContentUpdate(content) {
-  console.log('[handlePersistedContentUpdate] ===== START ===== length:', content?.length)
   currentInput.value = content
   jsonCacheStore.setContent(content)
-  console.log('[handlePersistedContentUpdate] ===== END =====')
 }
 
 function getValueByPath(obj, path) {
@@ -315,7 +284,6 @@ function getValueByPath(obj, path) {
   return value
 }
 
-console.log('[JsonAddDialog] ===== SCRIPT SETUP END =====')
 </script>
 
 <template>
@@ -383,8 +351,6 @@ console.log('[JsonAddDialog] ===== SCRIPT SETUP END =====')
 <script>
 import { h, ref } from 'vue'
 
-console.log('[JsonTreeNode] ===== COMPONENT DEFINITION =====')
-
 const JsonTreeNode = {
   name: 'JsonTreeNode',
   props: {
@@ -395,7 +361,6 @@ const JsonTreeNode = {
   },
   emits: ['update:selectedKeys'],
   setup(props, { emit }) {
-    console.log('[JsonTreeNode] setup:', props.node?.key, 'level:', props.level)
     
     const isSelected = (node) => props.selectedKeys.includes(node.path)
     
@@ -416,7 +381,6 @@ const JsonTreeNode = {
     }
     
     const onSelectChange = (node, val) => {
-      console.log('[JsonTreeNode] onSelectChange (cascade):', node.path, val)
       const keys = [...props.selectedKeys]
       const allPaths = collectDescendantPaths(node, [])
       
@@ -474,7 +438,6 @@ const JsonTreeNode = {
     const level = this.level || 0
     const isLast = this.isLast
     
-    console.log('[JsonTreeNode] render:', node?.key, 'type:', node?.type)
     const { isSelected, onSelectChange, formatValue, getValueColor, expanded, toggleExpand } = this
     
     const baseIndent = level * 20
@@ -638,7 +601,6 @@ const JsonTreeNode = {
     
     // 基本类型 - 使用三列布局
     const valueColor = getValueColor(node.value)
-    console.log('[JsonTreeNode] primitive color:', valueColor, 'for value:', node.value)
     
     const primitiveCheckbox = h('input', {
       type: 'checkbox',
