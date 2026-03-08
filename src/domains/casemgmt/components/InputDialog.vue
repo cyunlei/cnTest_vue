@@ -9,7 +9,7 @@
  * - actionButtonText: 操作按钮文字（如"解析"、"生成"）
  * - parseFunction: 解析函数，接收输入内容，返回参数数组
  * - persistedContent: 持久化的输入内容
- */
+ */   
 import { ref, watch } from 'vue'
 
 const props = defineProps({
