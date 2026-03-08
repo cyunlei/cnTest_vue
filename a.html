@@ -213,12 +213,6 @@
             color: #4b5563;
             cursor: pointer;
         }
-        .header-bulk-edit {
-            font-size: 12px;
-            color: #2563eb;
-            cursor: pointer;
-            white-space: nowrap;
-        }
 
         .form-data-table td,
         .urlencoded-table td {
@@ -369,31 +363,161 @@
         .json-null { color: #f1592a; }
         .json-brace { color: #586e75; }
 
-        /* 新增：文件选择下拉样式 */
-        .value-wrapper {
+        /* ============ 文件输入组件样式 ============ */
+        .file-input-component {
             position: relative;
             width: 100%;
+            height: 100%;
         }
-        .file-select-dropdown {
+        
+        /* 文件输入组件容器 */
+        .file-input-component {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* 普通输入框 */
+        .file-input-component .text-input {
+            width: 90%;
+            border: 1px solid #d1d5db;
+            padding: 4px;
+            border-radius: 4px;
+            font-size: 13px;
+            text-align: center;
+            outline: none;
+            box-sizing: border-box;
+        }
+        
+        /* 文件模式下的输入框 - 保持可输入 */
+        .file-input-component.file-mode .text-input {
+            background: #fff;
+        }
+        
+        /* Text模式下隐藏文件相关元素 */
+        .file-input-component[data-mode="text"] .file-input-dropdown,
+        .file-input-component[data-mode="text"] .file-tags-overlay {
+            display: none !important;
+        }
+        
+        /* 下拉菜单 */
+        .file-input-dropdown {
+            display: none;
             position: absolute;
             top: 100%;
             left: 5%;
             width: 90%;
             background: #fff;
             border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 8px 0;
+            margin-top: 2px;
+        }
+        
+        .file-input-dropdown.show {
+            display: block;
+        }
+        
+        .file-input-dropdown .dropdown-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 13px;
+            text-align: left;
+            color: #4b5563;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .file-input-dropdown .dropdown-item:hover {
+            background-color: #f3f4f6;
+        }
+        
+        .file-input-dropdown .dropdown-item.new-file::before {
+            content: '+';
+            font-size: 16px;
+            color: #6b7280;
+        }
+        
+        .file-input-dropdown .dropdown-item.disabled {
+            color: #9ca3af;
+            cursor: default;
+        }
+        
+        .file-input-dropdown .dropdown-item.disabled:hover {
+            background-color: transparent;
+        }
+        
+        /* 展开的文件标签容器 - 放大输入框效果 */
+        .file-tags-overlay {
+            display: none;
+            position: absolute;
+            top: 2px;
+            left: 5%;
+            width: 90%;
+            min-height: 60px;
+            height: auto;
+            background: #fff;
+            border: 1px solid #2563eb;
             border-radius: 4px;
             z-index: 100;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            display: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 6px;
         }
-        .file-option {
-            padding: 6px 8px;
+        
+        .file-tags-overlay.show {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            gap: 4px;
+        }
+        
+        /* 文件标签 */
+        .file-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 6px;
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 4px;
+            font-size: 11px;
+            color: #92400e;
+            white-space: nowrap;
+        }
+        
+        .file-tag-remove {
             cursor: pointer;
+            color: #92400e;
             font-size: 12px;
-            text-align: left;
+            padding: 0 2px;
         }
-        .file-option:hover {
-            background-color: #f3f6f6;
+        
+        .file-tag-remove:hover {
+            color: #dc2626;
+        }
+        
+        /* 添加文件按钮 */
+        .add-file-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2px 8px;
+            background: #dbeafe;
+            border: 1px solid #2563eb;
+            border-radius: 4px;
+            font-size: 11px;
+            color: #1e40af;
+            cursor: pointer;
+        }
+        
+        .add-file-btn:hover {
+            background: #bfdbfe;
         }
     </style>
 </head>
@@ -428,7 +552,7 @@
             <div class="editor none" id="noneEditor">此请求没有请求体</div>
 
             <div class="nested-container" id="formDataContainer">
-                <table class="form-data-table">
+                <table class="form-data-table" id="formDataTable">
                     <thead>
                         <tr>
                             <th class="col-checkbox"></th>
@@ -446,8 +570,8 @@
                             </th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr>
+                    <tbody id="formDataBody">
+                        <tr data-file-mode="false">
                             <td class="col-checkbox"><input type="checkbox"></td>
                             <td class="col-key">
                                 <table class="key-split-table">
@@ -466,11 +590,15 @@
                                 </table>
                             </td>
                             <td class="col-value">
-                                <div class="value-wrapper">
-                                    <input type="text" class="table-input value-input" placeholder="Value">
-                                    <div class="file-select-dropdown">
-                                        <div class="file-option">+选择本地文件</div>
+                                <!-- 文件输入组件 -->
+                                <div class="file-input-component" data-mode="text">
+                                    <input type="text" class="text-input" placeholder="Value">
+                                    <div class="file-input-dropdown">
+                                        <div class="dropdown-item new-file">New file from local machine</div>
+                                        <div class="dropdown-item disabled">Files uploaded to team</div>
+                                        <div class="dropdown-item disabled">No file found</div>
                                     </div>
+                                    <div class="file-tags-overlay"></div>
                                 </div>
                             </td>
                             <td class="col-content-type hide-column"><input type="text" class="table-input" placeholder="Auto" value="Auto"></td>
@@ -484,7 +612,7 @@
             </div>
 
             <div class="nested-container" id="urlencodedContainer">
-                <table class="urlencoded-table">
+                <table class="urlencoded-table" id="urlencodedTable">
                     <thead>
                         <tr>
                             <th class="col-checkbox"></th>
@@ -502,8 +630,8 @@
                             </th>
                         </tr>
                     </thead>
-                    <tbody>
-                        <tr>
+                    <tbody id="urlencodedBody">
+                        <tr data-file-mode="false">
                             <td class="col-checkbox"><input type="checkbox"></td>
                             <td class="col-key">
                                 <table class="key-split-table">
@@ -522,11 +650,15 @@
                                 </table>
                             </td>
                             <td class="col-value">
-                                <div class="value-wrapper">
-                                    <input type="text" class="table-input value-input" placeholder="Value">
-                                    <div class="file-select-dropdown">
-                                        <div class="file-option">+选择本地文件</div>
+                                <!-- 文件输入组件 -->
+                                <div class="file-input-component" data-mode="text">
+                                    <input type="text" class="text-input" placeholder="Value">
+                                    <div class="file-input-dropdown">
+                                        <div class="dropdown-item new-file">New file from local machine</div>
+                                        <div class="dropdown-item disabled">Files uploaded to team</div>
+                                        <div class="dropdown-item disabled">No file found</div>
                                     </div>
+                                    <div class="file-tags-overlay"></div>
                                 </div>
                             </td>
                             <td class="col-content-type hide-column"><input type="text" class="table-input" placeholder="Auto" value="Auto"></td>
@@ -576,126 +708,310 @@
             bindDropdownEvents(moreBtn, tableDropdown);
             bindDropdownEvents(moreBtn2, tableDropdown);
             initTableEvents();
+            initFileInputComponents();
             toggleColumn();
             bindDropdownEvents(document.getElementById('typeText'), document.getElementById('dropdown'));
             
-            // 全局点击关闭所有下拉框
+            // 全局点击关闭下拉框
             document.addEventListener('click', function(e) {
+                // 检查点击的是否是文件输入组件内的元素
+                const isInFileComponent = e.target.closest('.file-input-component');
+                if (isInFileComponent) return; // 不关闭，让组件自己处理
+                
                 if (activeDropdown && !activeDropdown.contains(e.target)) {
                     closeAllDropdowns();
                 }
             });
         }
 
-        // 关闭所有下拉框（核心修复函数）
         function closeAllDropdowns() {
             if (activeDropdown) {
                 activeDropdown.style.display = 'none';
                 activeDropdown = null;
             }
+            document.querySelectorAll('.file-input-dropdown').forEach(d => {
+                d.classList.remove('show');
+            });
+        }
+
+        // ============ 文件输入组件 ============
+        function initFileInputComponents() {
+            document.querySelectorAll('.file-input-component').forEach(component => {
+                initFileInputComponent(component);
+            });
+        }
+        
+        function initFileInputComponent(component) {
+            // 避免重复初始化
+            if (component.dataset.initialized === 'true') return;
+            component.dataset.initialized = 'true';
+            
+            const input = component.querySelector('.text-input');
+            const dropdown = component.querySelector('.file-input-dropdown');
+            const tagsOverlay = component.querySelector('.file-tags-overlay');
+            const newFileItem = dropdown.querySelector('.new-file');
+            
+            // 存储文件列表
+            if (!component.selectedFiles) {
+                component.selectedFiles = [];
+            }
+            
+            // 点击输入框显示下拉菜单（只在File模式下）
+            input.addEventListener('click', function(e) {
+                // 通过 input 找到对应的 component
+                const comp = this.closest('.file-input-component');
+                const isFileMode = comp.getAttribute('data-mode') === 'file';
+                console.log('Input clicked, isFileMode:', isFileMode);
+                if (!isFileMode) return;
+                
+                e.stopPropagation();
+                
+                const dd = comp.querySelector('.file-input-dropdown');
+                console.log('Dropdown element:', dd);
+                
+                // 先关闭其他所有下拉菜单
+                document.querySelectorAll('.file-input-dropdown').forEach(d => d.classList.remove('show'));
+                dd.classList.add('show');
+            });
+            
+            // 聚焦时如果有文件则展开显示所有标签
+            input.addEventListener('focus', function(e) {
+                const comp = this.closest('.file-input-component');
+                const isFileMode = comp.getAttribute('data-mode') === 'file';
+                console.log('Input focused, isFileMode:', isFileMode, 'files:', comp.selectedFiles.length);
+                if (!isFileMode) return;
+                
+                // 有文件时展开显示所有标签（不显示下拉菜单，避免和click冲突）
+                if (comp.selectedFiles.length > 0) {
+                    showFileTags(comp);
+                }
+            });
+            
+            // 失焦时收起下拉菜单和标签，显示统计
+            input.addEventListener('blur', function(e) {
+                const comp = this.closest('.file-input-component');
+                const dd = comp.querySelector('.file-input-dropdown');
+                const overlay = comp.querySelector('.file-tags-overlay');
+                const inputEl = this;
+                
+                setTimeout(() => {
+                    const activeEl = document.activeElement;
+                    const isInDropdown = dd && dd.contains(activeEl);
+                    const isInOverlay = overlay && overlay.contains(activeEl);
+                    
+                    console.log('Blur check - inDropdown:', isInDropdown, 'inOverlay:', isInOverlay, 'activeEl:', activeEl);
+                    
+                    // 总是收起下拉菜单和标签弹窗
+                    if (dd) dd.classList.remove('show');
+                    hideFileTags(comp);
+                    
+                    // 更新输入框显示统计
+                    updateInputDisplay(comp);
+                }, 200);
+            });
+            
+            // 点击"New file from local machine"
+            newFileItem.addEventListener('click', function(e) {
+                e.stopPropagation();
+                openFileSelector(component);
+            });
+        }
+        
+        // 打开文件选择器
+        function openFileSelector(component) {
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.multiple = true;
+            fileInput.style.display = 'none';
+            document.body.appendChild(fileInput);
+            
+            fileInput.onchange = function(e) {
+                const files = Array.from(e.target.files || []);
+                if (files.length > 0) {
+                    files.forEach(file => {
+                        const exists = component.selectedFiles.some(f => f.name === file.name && f.size === file.size);
+                        if (!exists) {
+                            component.selectedFiles.push(file);
+                        }
+                    });
+                    
+                    // 选中checkbox
+                    const row = component.closest('tr');
+                    const checkbox = row.querySelector('.col-checkbox input');
+                    if (checkbox) checkbox.checked = true;
+                    
+                    // 显示文件标签
+                    showFileTags(component);
+                    
+                    // 检查是否需要添加新行
+                    const tbody = row.parentElement;
+                    if (tbody && row === tbody.lastElementChild) {
+                        addNewRow(tbody.id);
+                    }
+                }
+                
+                document.body.removeChild(fileInput);
+            };
+            
+            fileInput.click();
+        }
+        
+        // 显示文件标签
+        function showFileTags(component) {
+            const tagsOverlay = component.querySelector('.file-tags-overlay');
+            const input = component.querySelector('.text-input');
+            
+            tagsOverlay.innerHTML = '';
+            
+            component.selectedFiles.forEach((file, index) => {
+                const tag = document.createElement('div');
+                tag.className = 'file-tag';
+                tag.innerHTML = `
+                    <span>📎</span>
+                    <span>${file.name}</span>
+                    <span class="file-tag-remove" data-index="${index}">×</span>
+                `;
+                
+                tag.querySelector('.file-tag-remove').addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    component.selectedFiles.splice(index, 1);
+                    showFileTags(component);
+                });
+                
+                tagsOverlay.appendChild(tag);
+            });
+            
+            // 添加按钮
+            const addBtn = document.createElement('div');
+            addBtn.className = 'add-file-btn';
+            addBtn.innerHTML = '<span>+</span>';
+            addBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                openFileSelector(component);
+            });
+            tagsOverlay.appendChild(addBtn);
+            
+            tagsOverlay.classList.add('show');
+        }
+        
+        // 隐藏文件标签
+        function hideFileTags(component) {
+            const tagsOverlay = component.querySelector('.file-tags-overlay');
+            tagsOverlay.classList.remove('show');
+        }
+        
+        // 更新输入框显示（显示统计）
+        function updateInputDisplay(component) {
+            const input = component.querySelector('.text-input');
+            const files = component.selectedFiles || [];
+            const isFileMode = component.getAttribute('data-mode') === 'file';
+            
+            if (!isFileMode) {
+                // Text模式，显示Value
+                input.value = '';
+                return;
+            }
+            
+            if (files.length === 0) {
+                input.value = '';
+            } else if (files.length === 1) {
+                input.value = files[0].name;
+            } else {
+                input.value = `📎 ${files.length} files`;
+            }
         }
 
         function initTableEvents() {
-            bindTableEvents('.form-data-table');
-            bindTableEvents('.urlencoded-table');
+            initTable('formDataTable');
+            initTable('urlencodedTable');
         }
 
-        function bindTableEvents(tableSelector) {
-            const table = document.querySelector(tableSelector);
-            if (!table) return; // 新增：校验table是否存在
-            const tbody = table.querySelector('tbody');
-            if (!tbody) return; // 新增：校验tbody是否存在
-            const rows = tbody.querySelectorAll('tr');
-            rows.forEach(row => bindRowEvents(row, tableSelector));
-        }
-
-        // 核心修复：全量增加null校验，避免空指针
-        function bindRowEvents(row, tableSel) {
-            // 获取元素并做null检查
-            const keyInput = row.querySelector('.key-input');
-            const valueInput = row.querySelector('.value-input');
-            const checkbox = row.querySelector('.col-checkbox input');
-            const typeBtn = row.querySelector('.row-value-type-btn');
-            const typeDropdown = row.querySelector('.row-value-type-dropdown');
-            const fileDropdown = row.querySelector('.file-select-dropdown');
-            // 修正：先找fileDropdown再找fileOption，避免直接获取null
-            const fileOption = fileDropdown ? fileDropdown.querySelector('.file-option') : null;
-
-            // 绑定类型选择按钮的事件（仅当元素存在时）
-            if (typeBtn && typeDropdown) {
-                bindDropdownEvents(typeBtn, typeDropdown);
-                // 绑定类型下拉选项的点击事件
-                typeDropdown.querySelectorAll('div').forEach(item => {
-                    item.addEventListener('click', () => {
-                        typeBtn.textContent = item.textContent;
+        function initTable(tableId) {
+            const table = document.getElementById(tableId);
+            if (!table) return;
+            
+            table.addEventListener('click', function(e) {
+                const target = e.target;
+                
+                // 处理类型按钮点击
+                if (target.classList.contains('row-value-type-btn')) {
+                    e.stopPropagation();
+                    const dropdown = target.nextElementSibling;
+                    if (dropdown) {
                         closeAllDropdowns();
+                        const rect = target.getBoundingClientRect();
+                        dropdown.style.left = rect.left + 'px';
+                        dropdown.style.top = (rect.bottom + 2) + 'px';
+                        dropdown.style.display = 'block';
+                        activeDropdown = dropdown;
+                    }
+                    return;
+                }
+                
+                // 处理选择 Text 或 File
+                if (target.parentElement && target.parentElement.classList.contains('row-value-type-dropdown')) {
+                    const btn = target.parentElement.previousElementSibling;
+                    const selectedType = target.textContent.trim();
+                    
+                    console.log('=== SELECT TYPE ===', selectedType);
+                    
+                    // 获取外层表格行
+                    let row = target.closest('tr');
+                    console.log('First tr:', row);
+                    while (row && !row.hasAttribute('data-file-mode')) {
+                        row = row.parentElement ? row.parentElement.closest('tr') : null;
+                        console.log('Next tr:', row);
+                    }
+                    
+                    if (!btn || !row) {
+                        console.log('No btn or row found');
+                        return;
+                    }
+                    
+                    console.log('Found row:', row);
+                    
+                    // 更新按钮文字
+                    btn.textContent = selectedType;
+                    closeAllDropdowns();
+                    
+                    // 更新行状态
+                    const isFileMode = selectedType === 'File';
+                    row.setAttribute('data-file-mode', isFileMode ? 'true' : 'false');
+                    console.log('Set data-file-mode:', isFileMode);
+                    
+                    // 更新文件输入组件
+                    const fileComponent = row.querySelector('.file-input-component');
+                    console.log('File component:', fileComponent);
+                    if (fileComponent) {
+                        fileComponent.setAttribute('data-mode', isFileMode ? 'file' : 'text');
+                        const input = fileComponent.querySelector('.text-input');
+                        const dropdown = fileComponent.querySelector('.file-input-dropdown');
+                        const overlay = fileComponent.querySelector('.file-tags-overlay');
                         
-                        // 确保valueInput存在时才修改属性
-                        if (valueInput) {
-                            if (item.textContent === 'File') {
-                                valueInput.placeholder = '选择文件';
-                                valueInput.readOnly = true;
-                                valueInput.style.cursor = 'pointer';
-                                if (fileDropdown) {
-                                    fileDropdown.style.display = 'block';
-                                }
-                            } else {
-                                valueInput.placeholder = 'Value';
-                                valueInput.readOnly = false;
-                                valueInput.style.cursor = 'text';
-                                if (fileDropdown) {
-                                    fileDropdown.style.display = 'none';
-                                }
-                                valueInput.value = '';
-                            }
-                        }
-                    });
-                });
-            }
-
-            // 绑定valueInput和fileDropdown的事件（仅当元素存在时）
-            if (valueInput && fileDropdown) {
-                bindDropdownEvents(valueInput, fileDropdown);
-            }
-
-            // 绑定文件选择选项的点击事件（仅当元素存在时）
-            if (fileOption) {
-                fileOption.addEventListener('click', () => {
-                    const fileInput = document.createElement('input');
-                    fileInput.type = 'file';
-                    fileInput.multiple = true;
-                    fileInput.onchange = (e) => {
-                        const files = Array.from(e.target.files).map(f => f.name).join(', ');
-                        if (valueInput) {
-                            valueInput.value = files;
-                        }
-                        if (fileDropdown) {
-                            fileDropdown.style.display = 'none';
-                        }
-                    };
-                    fileInput.click();
-                });
-            }
-
-            // 处理输入事件（仅当keyInput和valueInput存在时）
-            if (keyInput && valueInput && checkbox) {
-                function handleInput() {
-                    if(keyInput.value.trim() || valueInput.value.trim()) {
-                        checkbox.checked = true;
-                        const tbody = document.querySelector(tableSel)?.querySelector('tbody');
-                        if(tbody && row === tbody.lastElementChild) {
-                            addNewRow(tableSel);
+                        if (isFileMode) {
+                            input.placeholder = '选择文件';
+                            updateInputDisplay(fileComponent);
+                        } else {
+                            // 切换为Text模式，清理所有文件相关UI
+                            input.placeholder = 'Value';
+                            input.value = '';
+                            fileComponent.selectedFiles = [];
+                            // 隐藏下拉菜单和标签弹窗
+                            if (dropdown) dropdown.classList.remove('show');
+                            if (overlay) overlay.classList.remove('show');
                         }
                     }
+                    return;
                 }
-                keyInput.addEventListener('input', handleInput);
-                valueInput.addEventListener('input', handleInput);
-            }
+            });
         }
 
-        function addNewRow(tableSelector) {
-            const tbody = document.querySelector(tableSelector).querySelector('tbody');
+        function addNewRow(tbodyId) {
+            const tbody = document.getElementById(tbodyId);
+            if (!tbody) return;
+            
             const newRow = document.createElement('tr');
+            newRow.setAttribute('data-file-mode', 'false');
             newRow.innerHTML = `
                 <td class="col-checkbox"><input type="checkbox"></td>
                 <td class="col-key">
@@ -715,11 +1031,14 @@
                     </table>
                 </td>
                 <td class="col-value">
-                    <div class="value-wrapper">
-                        <input type="text" class="table-input value-input" placeholder="Value">
-                        <div class="file-select-dropdown">
-                            <div class="file-option">+选择本地文件</div>
+                    <div class="file-input-component" data-mode="text">
+                        <input type="text" class="text-input" placeholder="Value">
+                        <div class="file-input-dropdown">
+                            <div class="dropdown-item new-file">New file from local machine</div>
+                            <div class="dropdown-item disabled">Files uploaded to team</div>
+                            <div class="dropdown-item disabled">No file found</div>
                         </div>
+                        <div class="file-tags-overlay"></div>
                     </div>
                 </td>
                 <td class="col-content-type hide-column"><input type="text" class="table-input" placeholder="Auto" value="Auto"></td>
@@ -729,12 +1048,14 @@
                 <td class="col-bulk"></td>
             `;
             tbody.appendChild(newRow);
-            bindRowEvents(newRow, tableSelector);
+            
+            // 初始化新行的文件输入组件
+            const newComponent = newRow.querySelector('.file-input-component');
+            initFileInputComponent(newComponent);
         }
 
-        // 终极修复：下拉框绑定（点击显示+鼠标离开关闭）
         function bindDropdownEvents(trigger, dropdown) {
-            if(!trigger || !dropdown) return; // 新增：空值校验
+            if(!trigger || !dropdown) return;
             
             trigger.addEventListener('click', function(e) {
                 e.stopPropagation();
@@ -747,7 +1068,6 @@
                 activeDropdown = dropdown;
             });
 
-            // 鼠标离开下拉框 → 自动关闭
             dropdown.addEventListener('mouseleave', function() {
                 closeAllDropdowns();
             });
@@ -758,9 +1078,9 @@
         }
 
         function toggleColumn() {
-            const showValue = document.querySelector('input[value="value"]').checked;
-            const showCt = document.querySelector('input[value="contentType"]').checked;
-            const showDesc = document.querySelector('input[value="desc"]').checked;
+            const showValue = document.querySelector('input[value="value"]')?.checked;
+            const showCt = document.querySelector('input[value="contentType"]')?.checked;
+            const showDesc = document.querySelector('input[value="desc"]')?.checked;
 
             document.querySelectorAll('.col-value').forEach(el => el.classList.toggle('hide-column', !showValue));
             document.querySelectorAll('.col-content-type').forEach(el => el.classList.toggle('hide-column', !showCt));
@@ -773,7 +1093,7 @@
                 radioGroups.forEach(l => l.classList.remove('active'));
                 label.classList.add('active');
                 hideAllAreas();
-                const v = label.querySelector('input').value;
+                const v = label.querySelector('input')?.value;
                 switch(v) {
                     case 'none': showNone(); break;
                     case 'form-data': showFormData(); break;
@@ -809,25 +1129,31 @@
 
         function switchType(type){
             currentType = type;
-            document.getElementById('typeText').firstChild.textContent = type;
+            const typeText = document.getElementById('typeText');
+            if (typeText) typeText.firstChild.textContent = type;
             closeAllDropdowns();
-            document.getElementById('formatBtn').style.display = type === 'TEXT' ? 'none' : 'block';
+            const formatBtn = document.getElementById('formatBtn');
+            if (formatBtn) formatBtn.display = type === 'TEXT' ? 'none' : 'block';
         }
+        
         function formatContent(){
-            let content = document.getElementById('rawEditor').innerText.trim();
+            let content = document.getElementById('rawEditor')?.innerText?.trim();
             if(!content) return;
             try {
                 if(currentType === 'JSON'){
                     const jsonObj = JSON.parse(content);
                     const formatted = JSON.stringify(jsonObj, null, 2);
-                    document.getElementById('rawEditor').innerHTML = formatted
-                        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                        .replace(/"([^"\\]*(\\.[^"\\]*)*)"\s*:/g, '<span class="json-key">"$1"</span>:')
-                        .replace(/: "([^"\\]*(\\.[^"\\]*)*)"/g, ': <span class="json-string">"$1"</span>')
-                        .replace(/: (\d+(\.\d+)?)/g, ': <span class="json-number">$1</span>')
-                        .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
-                        .replace(/: null/g, ': <span class="json-null">null</span>')
-                        .replace(/([{}[\]])/g, '<span class="json-brace">$1</span>');
+                    const rawEditor = document.getElementById('rawEditor');
+                    if (rawEditor) {
+                        rawEditor.innerHTML = formatted
+                            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                            .replace(/"([^"\\]*(\\.[^"\\]*)*)"\s*:/g, '<span class="json-key">"$1"</span>:')
+                            .replace(/: "([^"\\]*(\\.[^"\\]*)*)"/g, ': <span class="json-string">"$1"</span>')
+                            .replace(/: (\d+(\.\d+)?)/g, ': <span class="json-number">$1</span>')
+                            .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
+                            .replace(/: null/g, ': <span class="json-null">null</span>')
+                            .replace(/([{}[\]])/g, '<span class="json-brace">$1</span>');
+                    }
                 }
             } catch(e) { alert('JSON格式错误！'); }
         }
