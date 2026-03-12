@@ -12,7 +12,7 @@ import PresetVariablesTable from './PresetVariablesTable.vue'
 import PresetTemplateDialog from './PresetTemplateDialog.vue'
 import MysqlStepDrawer from './steps/MysqlStepDrawer.vue'
 import DuccStepDrawer from './steps/DuccStepDrawer.vue'
-import JimdbStepDrawer from './steps/JimdbStepDrawer.vue'
+import RedisStepDrawer from './steps/RedisStepDrawer.vue'
 import ScriptStepDrawer from './steps/ScriptStepDrawer.vue'
 import DelayStepDrawer from './steps/DelayStepDrawer.vue'
 import ExtractVarStepDrawer from './steps/ExtractVarStepDrawer.vue'
@@ -137,19 +137,36 @@ const preAllCollapsed = ref(false)
 const postCollapseKey = ref(0)
 const postAllCollapsed = ref(false)
 
+// 历史版本对比弹窗（DUCC 使用）
+const duccDiffVisible = ref(false)
+const dummyLeft = ref('v20260302204818')
+const dummyRight = ref('v20260302204843')
+
 // 前置/后置操作添加下拉：根据 command 新增步骤
 function handlePreActionCommand(command) {
+  const index = preSteps.value.length + 1
   preSteps.value.push({
     id: Date.now(),
-    type: command
+    type: command,
+    name: `操作步骤${index}`
   })
 }
 
 function handlePostActionCommand(command) {
+  const index = postSteps.value.length + 1
   postSteps.value.push({
     id: Date.now(),
-    type: command
+    type: command,
+    name: `操作步骤${index}`
   })
+}
+
+// 提取变量步骤里的“快捷添加 JSONPATH”
+function handleExtractQuickAdd(stepId) {
+  currentExtractStepId.value = stepId
+  jsonDialogType.value = 'jsonpath'
+  jsonDialogTitle.value = '快捷添加 JSONPATH'
+  jsonDialogVisible.value = true
 }
 
 function togglePreCollapseAll() {
@@ -162,6 +179,48 @@ function togglePostCollapseAll() {
   postCollapseKey.value++
 }
 
+function handlePreStepDelete(id) {
+  const idx = preSteps.value.findIndex((s) => s && s.id === id)
+  if (idx !== -1) {
+    preSteps.value.splice(idx, 1)
+  }
+}
+
+function handlePreStepCopy(id) {
+  const idx = preSteps.value.findIndex((s) => s && s.id === id)
+  if (idx !== -1) {
+    const step = preSteps.value[idx]
+    preSteps.value.splice(idx + 1, 0, {
+      ...step,
+      id: Date.now(),
+      name: (step && step.name ? step.name : `操作步骤${idx + 1}`) + '-copy'
+    })
+  }
+}
+
+function handlePostStepDelete(id) {
+  const idx = postSteps.value.findIndex((s) => s && s.id === id)
+  if (idx !== -1) {
+    postSteps.value.splice(idx, 1)
+  }
+}
+
+function handlePostStepCopy(id) {
+  const idx = postSteps.value.findIndex((s) => s && s.id === id)
+  if (idx !== -1) {
+    const step = postSteps.value[idx]
+    postSteps.value.splice(idx + 1, 0, {
+      ...step,
+      id: Date.now(),
+      name: (step && step.name ? step.name : `操作步骤${idx + 1}`) + '-copy'
+    })
+  }
+}
+
+function openDuccDiff() {
+  duccDiffVisible.value = true
+}
+
 // 计算当前组
 const currentGroup = computed(() => {
   return paramGroups.value.find(g => g.id === currentGroupId.value) || paramGroups.value[0]
@@ -171,31 +230,48 @@ const currentGroup = computed(() => {
 const renameDialogVisible = ref(false)
 const renameForm = ref({ id: null, name: '' })
 
-// JSON 添加弹窗状态
+// JSON 添加弹窗状态（参数 / 头 / JSONPATH 通用）
 const jsonDialogVisible = ref(false)
 const jsonDialogType = ref('params')
+const jsonDialogTitle = ref('Json添加Param')
+const currentExtractStepId = ref(null)
+
+const extractStepRefs = ref({})
 
 // 打开 JSON 添加弹窗
 function openJsonDialog(type = 'params') {
   jsonDialogType.value = type
+  jsonDialogTitle.value = type === 'jsonpath' ? '快捷添加 JSONPATH' : 'Json添加Param'
   jsonDialogVisible.value = true
 }
 
-// 处理 JSON 保存
+// 处理 JSON / JSONPATH 保存
 function handleJsonSave(selectedItems) {
+  if (jsonDialogType.value === 'jsonpath') {
+    // 将选中的 JSONPath 填充到当前提取变量步骤中
+    const stepId = currentExtractStepId.value
+    const comp = stepId && extractStepRefs.value[stepId]
+    if (comp && typeof comp.addRowsFromJsonpaths === 'function') {
+      const paths = (selectedItems || []).map((item) => item.key)
+      comp.addRowsFromJsonpaths(paths)
+    }
+    jsonDialogVisible.value = false
+    return
+  }
+
   const group = currentGroup.value
   if (!group) return
-  
+
   if (jsonDialogType.value === 'params') {
-    selectedItems.forEach(item => {
+    selectedItems.forEach((item) => {
       group.params.push(item)
     })
   } else if (jsonDialogType.value === 'headers') {
-    selectedItems.forEach(item => {
+    selectedItems.forEach((item) => {
       group.headers.push(item)
     })
   }
-  
+
   // 关闭弹窗
   jsonDialogVisible.value = false
 }
@@ -867,7 +943,7 @@ function clearBinaryFile() {
                         <el-dropdown-menu>
                           <el-dropdown-item command="mysql">MySQL</el-dropdown-item>
                           <el-dropdown-item command="ducc">DUCC</el-dropdown-item>
-                          <el-dropdown-item command="jimdb">JIMDB</el-dropdown-item>
+                          <el-dropdown-item command="redis">REDIS</el-dropdown-item>
                           <el-dropdown-item command="script">自定义脚本</el-dropdown-item>
                           <el-dropdown-item command="delay">延迟时间</el-dropdown-item>
                         </el-dropdown-menu>
@@ -884,13 +960,54 @@ function clearBinaryFile() {
                     <template v-else>
                       <div class="step-list">
                         <template
-                          v-for="step in preSteps"
+                          v-for="(step, idx) in preSteps"
                           :key="step && step.id"
                         >
                           <MysqlStepDrawer
                             v-if="step && step.type === 'mysql'"
+                            v-model:name="step.name"
+                            :index="idx + 1"
                             :collapse-key="preCollapseKey"
                             :collapsed="preAllCollapsed"
+                            @delete="handlePreStepDelete(step.id)"
+                            @copy="handlePreStepCopy(step.id)"
+                          />
+                          <DuccStepDrawer
+                            v-else-if="step && step.type === 'ducc'"
+                            v-model:name="step.name"
+                            :index="idx + 1"
+                            :collapse-key="preCollapseKey"
+                            :collapsed="preAllCollapsed"
+                            @delete="handlePreStepDelete(step.id)"
+                            @copy="handlePreStepCopy(step.id)"
+                            @compare="openDuccDiff"
+                          />
+                          <RedisStepDrawer
+                            v-else-if="step && step.type === 'redis'"
+                            v-model:name="step.name"
+                            :index="idx + 1"
+                            :collapse-key="preCollapseKey"
+                            :collapsed="preAllCollapsed"
+                            @delete="handlePreStepDelete(step.id)"
+                            @copy="handlePreStepCopy(step.id)"
+                          />
+                          <ScriptStepDrawer
+                            v-else-if="step && step.type === 'script'"
+                            v-model:name="step.name"
+                            :index="idx + 1"
+                            :collapse-key="preCollapseKey"
+                            :collapsed="preAllCollapsed"
+                            @delete="handlePreStepDelete(step.id)"
+                            @copy="handlePreStepCopy(step.id)"
+                          />
+                          <DelayStepDrawer
+                            v-else-if="step && step.type === 'delay'"
+                            v-model:name="step.name"
+                            :index="idx + 1"
+                            :collapse-key="preCollapseKey"
+                            :collapsed="preAllCollapsed"
+                            @delete="handlePreStepDelete(step.id)"
+                            @copy="handlePreStepCopy(step.id)"
                           />
                         </template>
                       </div>
@@ -909,7 +1026,7 @@ function clearBinaryFile() {
                         <el-dropdown-menu>
                           <el-dropdown-item command="mysql">MySQL</el-dropdown-item>
                           <el-dropdown-item command="ducc">DUCC</el-dropdown-item>
-                          <el-dropdown-item command="jimdb">JIMDB</el-dropdown-item>
+                          <el-dropdown-item command="redis">REDIS</el-dropdown-item>
                           <el-dropdown-item command="script">自定义脚本</el-dropdown-item>
                           <el-dropdown-item command="delay">延迟时间</el-dropdown-item>
                           <el-dropdown-item command="extract">提取变量</el-dropdown-item>
@@ -927,13 +1044,65 @@ function clearBinaryFile() {
                     <template v-else>
                       <div class="step-list">
                         <template
-                          v-for="step in postSteps"
+                          v-for="(step, idx) in postSteps"
                           :key="step && step.id"
                         >
                           <MysqlStepDrawer
                             v-if="step && step.type === 'mysql'"
+                            v-model:name="step.name"
+                            :index="idx + 1"
                             :collapse-key="postCollapseKey"
                             :collapsed="postAllCollapsed"
+                            @delete="handlePostStepDelete(step.id)"
+                            @copy="handlePostStepCopy(step.id)"
+                          />
+                          <DuccStepDrawer
+                            v-else-if="step && step.type === 'ducc'"
+                            v-model:name="step.name"
+                            :index="idx + 1"
+                            :collapse-key="postCollapseKey"
+                            :collapsed="postAllCollapsed"
+                            @delete="handlePostStepDelete(step.id)"
+                            @copy="handlePostStepCopy(step.id)"
+                            @compare="openDuccDiff"
+                          />
+                          <RedisStepDrawer
+                            v-else-if="step && step.type === 'redis'"
+                            v-model:name="step.name"
+                            :index="idx + 1"
+                            :collapse-key="postCollapseKey"
+                            :collapsed="postAllCollapsed"
+                            @delete="handlePostStepDelete(step.id)"
+                            @copy="handlePostStepCopy(step.id)"
+                          />
+                          <ScriptStepDrawer
+                            v-else-if="step && step.type === 'script'"
+                            v-model:name="step.name"
+                            :index="idx + 1"
+                            :collapse-key="postCollapseKey"
+                            :collapsed="postAllCollapsed"
+                            @delete="handlePostStepDelete(step.id)"
+                            @copy="handlePostStepCopy(step.id)"
+                          />
+                          <ExtractVarStepDrawer
+                            v-else-if="step && step.type === 'extract'"
+                            v-model:name="step.name"
+                            :index="idx + 1"
+                            :collapse-key="postCollapseKey"
+                            :collapsed="postAllCollapsed"
+                            @delete="handlePostStepDelete(step.id)"
+                            @copy="handlePostStepCopy(step.id)"
+                            :ref="el => { if (el) extractStepRefs[step.id] = el }"
+                            @quick-add-jsonpath="handleExtractQuickAdd(step.id)"
+                          />
+                          <DelayStepDrawer
+                            v-else-if="step && step.type === 'delay'"
+                            v-model:name="step.name"
+                            :index="idx + 1"
+                            :collapse-key="postCollapseKey"
+                            :collapsed="postAllCollapsed"
+                            @delete="handlePostStepDelete(step.id)"
+                            @copy="handlePostStepCopy(step.id)"
                           />
                         </template>
                       </div>
@@ -955,6 +1124,39 @@ function clearBinaryFile() {
           </div>
         </div>
       </div>
+
+      <!-- DUCC 历史版本对比弹窗 -->
+      <el-dialog
+        v-model="duccDiffVisible"
+        title="历史版本对比"
+        width="80%"
+      >
+        <div class="ducc-diff-dialog">
+          <div class="ducc-diff-header">
+            <el-select v-model="dummyLeft" class="ducc-diff-select" size="small">
+              <el-option label="v20260302204818" value="v20260302204818" />
+            </el-select>
+            <el-select v-model="dummyRight" class="ducc-diff-select" size="small">
+              <el-option label="v20260302204843" value="v20260302204843" />
+            </el-select>
+          </div>
+          <div class="ducc-diff-body">
+            <div class="ducc-diff-panel">
+              <pre class="ducc-diff-code">"label": "14",
+"desc": "商城",
+"enabled": false</pre>
+            </div>
+            <div class="ducc-diff-panel">
+              <pre class="ducc-diff-code">"label": "14",
+"desc": "商城",
+"enabled": true</pre>
+            </div>
+          </div>
+        </div>
+        <template #footer>
+          <el-button @click="duccDiffVisible = false">取消</el-button>
+        </template>
+      </el-dialog>
 
       <!-- 第二个容器：响应信息（测试后才显示） -->
       <div v-if="showResponse" class="response-container">
@@ -1047,7 +1249,8 @@ function clearBinaryFile() {
     <!-- JSON 添加弹窗 -->
     <json-add-dialog
       v-model="jsonDialogVisible"
-      type="params"
+      :type="jsonDialogType"
+      :title="jsonDialogTitle"
       @save="handleJsonSave"
     />
     
@@ -1286,7 +1489,6 @@ function clearBinaryFile() {
 .prepost-pane {
   display: flex;
   flex-direction: column;
-  height: 360px;
 }
 
 .prepost-toolbar {
@@ -1298,14 +1500,14 @@ function clearBinaryFile() {
 }
 
 .prepost-list {
-  flex: 1;
   border: 1px solid #ebeef5;
   border-radius: 4px;
   background: #fff;
   display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
+  align-items: center;
+  justify-content: center;
   padding: 8px 12px;
+  box-sizing: border-box;
 }
 
 .step-list {
@@ -1581,6 +1783,45 @@ function clearBinaryFile() {
 /* 工具类 */
 .w-100 {
   width: 100% !important;
+}
+
+.ducc-diff-dialog {
+  display: flex;
+  flex-direction: column;
+  height: 60vh;
+}
+
+.ducc-diff-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.ducc-diff-select {
+  width: 260px;
+}
+
+.ducc-diff-body {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.ducc-diff-panel {
+  flex: 1;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  padding: 8px;
+  background: #fdfdfd;
+  overflow: auto;
+}
+
+.ducc-diff-code {
+  margin: 0;
+  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  white-space: pre;
 }
 
 /* 覆盖 Element Plus 默认样式 */

@@ -27,11 +27,11 @@ const groups = [
 ]
 
 function handleTypeClick(type) {
-  console.log('Selected type:', type)
+  // selected type
 }
 
 function handleNav(path) {
-  console.log('Navigate to:', path)
+  // navigate to path
 }
 </script>
 

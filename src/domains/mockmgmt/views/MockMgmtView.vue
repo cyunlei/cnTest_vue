@@ -17,7 +17,7 @@ const mockData = ref([
 ])
 
 function handleNav(path) {
-  console.log('Navigate to:', path)
+  // navigate to path
 }
 </script>
 

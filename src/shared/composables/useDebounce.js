@@ -23,7 +23,6 @@ import { ref, onUnmounted } from 'vue'
  * @param {UseDebounceOptions} [options]
  * @returns {UseDebounceReturn}
  * @example
- * const { debouncedFn } = useDebounce((val) => console.log(val), { delay: 300 })
  */
 export function useDebounce(fn, options = {}) {
   const { delay = 300, immediate = false } = options

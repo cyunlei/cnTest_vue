@@ -14,6 +14,10 @@ const props = defineProps({
   type: {
     type: String,
     default: 'params'
+  },
+  title: {
+    type: String,
+    default: 'Json添加Param'
   }
 })
 
@@ -293,7 +297,7 @@ function getValueByPath(obj, path) {
       v-if="!showResult"
       :model-value="modelValue"
       @update:model-value="$emit('update:modelValue', $event)"
-      title="Json添加Param"
+      :title="title"
       placeholder="请在此填写 JSON 格式数据，然后点击弹层下方左侧生成按钮"
       action-button-text="生成"
       :parse-function="parseJson"
@@ -307,7 +311,7 @@ function getValueByPath(obj, path) {
       v-else
       :model-value="true"
       @update:model-value="handleClose"
-      title="Json添加Param"
+      :title="title"
       width="600px"
       :close-on-click-modal="false"
       destroy-on-close

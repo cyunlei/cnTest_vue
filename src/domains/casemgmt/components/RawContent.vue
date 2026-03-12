@@ -75,37 +75,12 @@ export default {
   mounted() {
     this.content = this.modelValue || ''
     this.$nextTick(() => this.syncScroll())
-    try {
-      // eslint-disable-next-line no-console
-      console.log('[RawContent] mounted', {
-        contentType: this.contentType,
-        len: (this.content || '').length,
-        hasHighlightRef: !!this.$refs.rawHighlight,
-        hasInputRef: !!this.$refs.rawEditor
-      })
-    } catch {}
-    this.$nextTick(() => this.debugDump('mounted-nextTick'))
   },
   methods: {
     onInput(e) {
       this.content = e?.target?.value ?? ''
       this.$emit('input', this.content)
       this.$nextTick(() => this.syncScroll())
-      try {
-        const html = this.highlightedHtml
-        // eslint-disable-next-line no-console
-        console.log('[RawContent] input', {
-          contentType: this.contentType,
-          len: (this.content || '').length,
-          htmlLen: (html || '').length,
-          hasSpan: typeof html === 'string' && html.includes('json-key'),
-          htmlHead: String(html || '').slice(0, 120)
-        })
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.log('[RawContent] input log error', err)
-      }
-      this.$nextTick(() => this.debugDump('input-nextTick'))
     },
 
     formatContent() {
@@ -362,57 +337,8 @@ export default {
       return out.join('\n')
     },
 
-    debugDump(tag) {
-      try {
-        const input = this.$refs.rawEditor
-        const hl = this.$refs.rawHighlight
-        const html = this.highlightedHtml
-        const hasSpanInComputed = typeof html === 'string' && html.includes('json-key')
-        const hlHtml = hl?.innerHTML ?? ''
-        const hasSpanInDom = typeof hlHtml === 'string' && hlHtml.includes('json-key')
-        const spanCount = hl ? hl.querySelectorAll('span').length : 0
-        const keyCount = hl ? hl.querySelectorAll('span.json-key').length : 0
-        const csInput = input ? window.getComputedStyle(input) : null
-        const csHl = hl ? window.getComputedStyle(hl) : null
-        // eslint-disable-next-line no-console
-        console.log('[RawContent][debugDump]', tag, {
-          contentType: this.contentType,
-          len: (this.content || '').length,
-          computedHtmlLen: String(html || '').length,
-          hasSpanInComputed,
-          domHtmlLen: String(hlHtml || '').length,
-          hasSpanInDom,
-          spanCount,
-          keyCount,
-          input: csInput
-            ? {
-                bg: csInput.backgroundColor,
-                color: csInput.color,
-                webkitTextFill: csInput.getPropertyValue('-webkit-text-fill-color'),
-                opacity: csInput.opacity,
-                z: csInput.zIndex,
-                pointer: csInput.pointerEvents
-              }
-            : null,
-          highlight: csHl
-            ? {
-                color: csHl.color,
-                bg: csHl.backgroundColor,
-                opacity: csHl.opacity,
-                z: csHl.zIndex,
-                display: csHl.display,
-                visibility: csHl.visibility
-              }
-            : null
-        })
-        if (hl) {
-          // eslint-disable-next-line no-console
-          console.log('[RawContent][debugDump] domHead', String(hlHtml || '').slice(0, 200))
-        }
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.log('[RawContent][debugDump] error', tag, err)
-      }
+    debugDump() {
+      // reserved for debugging; no-op
     }
   }
 }
