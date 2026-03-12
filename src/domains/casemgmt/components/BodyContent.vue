@@ -16,9 +16,6 @@
       <label class="radio-group" :class="{ active: contentType === 'binary' }" @click="setContentType('binary')">
         <input type="radio" name="contentType" value="binary" v-model="contentType"> binary
       </label>
-      <label class="radio-group" :class="{ active: contentType === 'graphql' }" @click="setContentType('graphql')">
-        <input type="radio" name="contentType" value="graphql" v-model="contentType"> GraphQL
-      </label>
 
       <div class="format-select" id="typeText" ref="typeText" v-show="contentType === 'raw'">
         {{ currentType }}
@@ -40,8 +37,14 @@
         ref="bodyFormDataRef"
         v-model="formData"
       />
-      <body-urlencoded v-if="contentType === 'x-www-form-urlencoded'" />
-      <body-binary v-if="contentType === 'binary'" />
+      <body-urlencoded
+        v-if="contentType === 'x-www-form-urlencoded'"
+        v-model="urlencoded"
+      />
+      <body-binary
+        v-if="contentType === 'binary'"
+        v-model="binary"
+      />
       <body-raw
         v-if="contentType === 'raw'"
         ref="rawContentRef"
@@ -49,7 +52,6 @@
         :model-value="rawContent"
         @update:model-value="updateBodyData('raw', $event)"
       />
-      <body-graphql v-if="contentType === 'graphql'" />
     </div>
 
     <div class="global-dropdown" id="tableDropdown" ref="tableDropdown">
@@ -72,7 +74,6 @@ import BodyFormData from './body/BodyFormData.vue'
 import BodyUrlencoded from './body/BodyUrlencoded.vue'
 import BodyBinary from './body/BodyBinary.vue'
 import BodyRaw from './body/BodyRaw.vue'
-import BodyGraphql from './body/BodyGraphql.vue'
 
 export default {
   name: 'BodyContent',
@@ -81,8 +82,7 @@ export default {
     BodyFormData,
     BodyUrlencoded,
     BodyBinary,
-    BodyRaw,
-    BodyGraphql
+    BodyRaw
   },
   props: {
     modelValue: {
@@ -128,6 +128,22 @@ export default {
       },
       set(val) {
         this.updateBodyData('formData', val)
+      }
+    },
+    urlencoded: {
+      get() {
+        return this.modelValue?.urlencoded || []
+      },
+      set(val) {
+        this.updateBodyData('urlencoded', val)
+      }
+    },
+    binary: {
+      get() {
+        return this.modelValue?.binary || null
+      },
+      set(val) {
+        this.updateBodyData('binary', val)
       }
     },
     rawContent: {

@@ -1,457 +1,522 @@
 <template>
-  <div class="nested-container">
-    <table class="urlencoded-table" ref="table">
-      <thead>
-        <tr>
-          <th class="col-checkbox"></th>
-          <th class="col-key">Key</th>
-          <th class="col-value">Value</th>
-          <th class="col-content-type hide-column">Content-Type</th>
-          <th class="col-desc">Description</th>
-          <th class="col-bulk">
-            <div class="header-bulk-wrapper">
-              <div class="header-more-container">
-                <div class="header-more-btn" ref="moreBtn">⋯</div>
+  <div class="urlencoded">
+    <div class="table-container" v-if="!isBulkMode">
+      <table class="urlencoded-table" ref="tableRef">
+        <thead>
+          <tr>
+            <th class="col-checkbox"></th>
+            <th class="col-key">Key</th>
+            <th class="col-value" :class="{ 'col-hidden': !showValueColumn }">Value</th>
+            <th class="col-description" :class="{ 'col-hidden': !showDescriptionColumn }">Description</th>
+            <th class="col-actions">
+              <div class="header-actions">
+                <button class="column-toggle-btn" type="button" ref="columnToggleBtnRef" @click.stop="toggleColumnDropdown">⋯</button>
+                <div class="column-dropdown" v-show="columnDropdownVisible" ref="columnDropdownRef" @click.stop>
+                  <label class="dropdown-item">
+                    <input type="checkbox" v-model="showValueColumn" /> value
+                  </label>
+                  <label class="dropdown-item">
+                    <input type="checkbox" v-model="showDescriptionColumn" /> Description
+                  </label>
+                </div>
+                <button class="bulk-edit-btn" type="button" @click="openBulkEdit">批量编辑</button>
               </div>
-              <span class="header-bulk-edit">Bulk Edit</span>
-            </div>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td class="col-checkbox"><input type="checkbox"></td>
-          <td class="col-key">
-            <table class="key-split-table">
-              <tr>
-                <td class="key-input-cell"><input type="text" class="key-input" placeholder="Key"></td>
-                <td class="type-select-cell">
-                  <div class="row-value-type-select">
-                    <div class="row-value-type-btn">Text</div>
-                    <div class="row-value-type-dropdown">
-                      <div>Text</div>
-                      <div>File</div>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            </table>
-          </td>
-          <td class="col-value">
-            <div class="value-wrapper">
-              <input type="text" class="table-input value-input" placeholder="Value">
-              <div class="file-select-dropdown">
-                <div class="file-option">+选择本地文件</div>
-              </div>
-            </div>
-          </td>
-          <td class="col-content-type hide-column"><input type="text" class="table-input" placeholder="Auto" value="Auto"></td>
-          <td class="col-desc">
-            <div class="desc-input-wrapper"><input type="text" class="table-input" placeholder="Description"></div>
-          </td>
-          <td class="col-bulk">
-            <span class="delete-btn" style="display:none;cursor:pointer;color:#f56c6c;font-size:12px;">删除</span>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+            </th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <tr v-for="(row, index) in rows" :key="row.id ?? index">
+            <td class="col-checkbox">
+              <input type="checkbox" v-model="row.enabled" @change="syncModel" />
+            </td>
+            <td class="col-key">
+              <input v-model="row.key" class="cell-input" type="text" placeholder="Key" @input="onFieldChange(index)" />
+            </td>
+            <td class="col-value" :class="{ 'col-hidden': !showValueColumn }">
+              <input v-model="row.value" class="cell-input" type="text" placeholder="Value" @input="onFieldChange(index)" />
+            </td>
+            <td class="col-description" :class="{ 'col-hidden': !showDescriptionColumn }">
+              <input v-model="row.description" class="cell-input" type="text" placeholder="Description" @input="onFieldChange(index)" />
+            </td>
+            <td class="col-actions">
+              <button class="delete-row-btn" type="button" @click="removeRow(index)" :disabled="rows.length === 1" title="删除该行">
+                <svg class="delete-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                </svg>
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bulk-edit-container" v-else>
+      <textarea v-model="bulkText" class="bulk-edit-textarea" placeholder="key:value&#10;key2:value2..." />
+      <div class="bulk-edit-toolbar">
+        <span class="hint">点击保存返回表格</span>
+        <div class="buttons">
+          <button type="button" class="btn-cancel" @click="cancelBulkEdit">取消</button>
+          <button type="button" class="btn-confirm" @click="confirmBulkEdit">保存</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
-<script>
-export default {
-  name: 'UrlencodedTable',
-  mounted() {
-    this.initTableEvents()
-    this.updateDeleteButtons()
+<script setup lang="ts">
+import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+
+interface UrlencodedRow {
+  id?: string | number
+  enabled: boolean
+  key: string
+  value: string
+  description: string
+}
+
+const props = defineProps<{
+  modelValue: UrlencodedRow[]
+}>()
+const emit = defineEmits<{
+  (e: 'update:modelValue', v: UrlencodedRow[]): void
+}>()
+
+const createEmptyRow = (): UrlencodedRow => ({
+  enabled: false,
+  key: '',
+  value: '',
+  description: ''
+})
+
+const rows = ref<UrlencodedRow[]>([])
+
+const hasContent = (r: UrlencodedRow) => !!(r.key || r.value || r.description)
+
+const ensureEmptyRow = () => {
+  if (rows.value.length === 0) rows.value.push(createEmptyRow())
+  const last = rows.value[rows.value.length - 1]
+  if (hasContent(last)) rows.value.push(createEmptyRow())
+}
+
+watch(
+  () => props.modelValue,
+  (val) => {
+    const list = Array.isArray(val) && val.length ? val : [createEmptyRow()]
+    rows.value = list.map((it) => ({ ...createEmptyRow(), ...it }))
+    ensureEmptyRow()
   },
-  methods: {
-    initTableEvents() {
-      const table = this.$refs.table
-      if (!table) return
-      const tbody = table.querySelector('tbody')
-      if (!tbody) return
-      const rows = tbody.querySelectorAll('tr')
-      rows.forEach(row => this.bindRowEvents(row))
-    },
+  { immediate: true, deep: true }
+)
 
-    bindRowEvents(row) {
-      const keyInput = row.querySelector('.key-input')
-      const valueInput = row.querySelector('.value-input')
-      const checkbox = row.querySelector('.col-checkbox input')
-      const typeBtn = row.querySelector('.row-value-type-btn')
-      const typeDropdown = row.querySelector('.row-value-type-dropdown')
-      const fileDropdown = row.querySelector('.file-select-dropdown')
-      const fileOption = fileDropdown ? fileDropdown.querySelector('.file-option') : null
-      const deleteBtn = row.querySelector('.delete-btn')
+const syncModel = () => emit('update:modelValue', rows.value)
 
-      if (typeBtn && typeDropdown) {
-        this.bindDropdownEvents(typeBtn, typeDropdown)
-        typeDropdown.querySelectorAll('div').forEach(item => {
-          item.addEventListener('click', () => {
-            typeBtn.textContent = item.textContent
-            this.closeAllDropdowns()
-            if (valueInput) {
-              if (item.textContent === 'File') {
-                valueInput.placeholder = '选择文件'
-                valueInput.readOnly = true
-                valueInput.style.cursor = 'pointer'
-                if (fileDropdown) fileDropdown.style.display = 'block'
-              } else {
-                valueInput.placeholder = 'Value'
-                valueInput.readOnly = false
-                valueInput.style.cursor = 'text'
-                if (fileDropdown) fileDropdown.style.display = 'none'
-                valueInput.value = ''
-              }
-            }
-          })
-        })
+const onFieldChange = (index: number) => {
+  const r = rows.value[index]
+  if (!r.enabled && hasContent(r)) r.enabled = true
+  ensureEmptyRow()
+  syncModel()
+}
+
+const removeRow = (index: number) => {
+  if (rows.value.length === 1) {
+    rows.value[0] = createEmptyRow()
+  } else {
+    rows.value.splice(index, 1)
+  }
+  ensureEmptyRow()
+  syncModel()
+}
+
+// ========== 列显示（⋯ 下拉） ==========
+const showValueColumn = ref(true)
+const showDescriptionColumn = ref(true)
+const columnDropdownVisible = ref(false)
+const columnDropdownRef = ref<HTMLElement | null>(null)
+const columnToggleBtnRef = ref<HTMLElement | null>(null)
+
+const toggleColumnDropdown = () => {
+  columnDropdownVisible.value = !columnDropdownVisible.value
+  if (columnDropdownVisible.value) {
+    nextTick(() => {
+      const dropdown = columnDropdownRef.value
+      const btn = columnToggleBtnRef.value
+      if (!dropdown) return
+      // fixed 浮层，避免被容器遮挡
+      dropdown.style.position = 'fixed'
+      dropdown.style.zIndex = '9999'
+      if (btn) {
+        const rect = btn.getBoundingClientRect()
+        dropdown.style.top = `${rect.bottom + 2}px`
+        // 右对齐按钮
+        dropdown.style.left = `${Math.max(8, rect.right - dropdown.offsetWidth)}px`
       }
-
-      if (valueInput && fileDropdown) {
-        this.bindDropdownEvents(valueInput, fileDropdown)
-      }
-
-      if (fileOption) {
-        fileOption.addEventListener('click', () => {
-          const fileInput = document.createElement('input')
-          fileInput.type = 'file'
-          fileInput.multiple = true
-          fileInput.onchange = (e) => {
-            const files = Array.from(e.target.files).map(f => f.name).join(', ')
-            if (valueInput) valueInput.value = files
-            if (fileDropdown) fileDropdown.style.display = 'none'
-          }
-          fileInput.click()
-        })
-      }
-
-      if (keyInput && valueInput && checkbox) {
-        const handleInput = () => {
-          if (keyInput.value.trim() || valueInput.value.trim()) {
-            checkbox.checked = true
-            const tbody = this.$refs.table.querySelector('tbody')
-            if (tbody && row === tbody.lastElementChild) {
-              this.addNewRow()
-            }
-          }
-        }
-        keyInput.addEventListener('input', handleInput)
-        valueInput.addEventListener('input', handleInput)
-      }
-
-      if (deleteBtn) {
-        deleteBtn.addEventListener('click', () => {
-          this.deleteRow(row)
-        })
-      }
-    },
-
-    bindDropdownEvents(trigger, dropdown) {
-      if (!trigger || !dropdown) return
-      trigger.addEventListener('click', (e) => {
-        e.stopPropagation()
-        this.closeAllDropdowns()
-        const rect = trigger.getBoundingClientRect()
-        dropdown.style.left = rect.left + 'px'
-        dropdown.style.top = (rect.bottom + 2) + 'px'
-        dropdown.style.display = 'block'
-        this.activeDropdown = dropdown
-      })
-      dropdown.addEventListener('mouseleave', () => {
-        this.closeAllDropdowns()
-      })
-      dropdown.addEventListener('click', (e) => {
-        e.stopPropagation()
-      })
-    },
-
-    closeAllDropdowns() {
-      if (this.activeDropdown) {
-        this.activeDropdown.style.display = 'none'
-        this.activeDropdown = null
-      }
-    },
-
-    addNewRow() {
-      const tbody = this.$refs.table.querySelector('tbody')
-      const newRow = document.createElement('tr')
-      newRow.innerHTML = `
-        <td class="col-checkbox"><input type="checkbox"></td>
-        <td class="col-key">
-          <table class="key-split-table">
-            <tr>
-              <td class="key-input-cell"><input type="text" class="key-input" placeholder="Key"></td>
-              <td class="type-select-cell">
-                <div class="row-value-type-select">
-                  <div class="row-value-type-btn">Text</div>
-                  <div class="row-value-type-dropdown">
-                    <div>Text</div>
-                    <div>File</div>
-                  </div>
-                </div>
-              </td>
-            </tr>
-          </table>
-        </td>
-        <td class="col-value">
-          <div class="value-wrapper">
-            <input type="text" class="table-input value-input" placeholder="Value">
-            <div class="file-select-dropdown">
-              <div class="file-option">+选择本地文件</div>
-            </div>
-          </div>
-        </td>
-        <td class="col-content-type hide-column"><input type="text" class="table-input" placeholder="Auto" value="Auto"></td>
-        <td class="col-desc">
-          <div class="desc-input-wrapper"><input type="text" class="table-input" placeholder="Description"></div>
-        </td>
-        <td class="col-bulk">
-          <span class="delete-btn" style="display:none;cursor:pointer;color:#f56c6c;font-size:12px;">删除</span>
-        </td>
-      `
-      tbody.appendChild(newRow)
-      this.bindRowEvents(newRow)
-      this.updateDeleteButtons()
-    },
-
-    deleteRow(row) {
-      const tbody = this.$refs.table.querySelector('tbody')
-      if (tbody.children.length > 1) {
-        row.remove()
-        this.updateDeleteButtons()
-      }
-    },
-
-    updateDeleteButtons() {
-      const tbody = this.$refs.table.querySelector('tbody')
-      if (!tbody) return
-      const rows = Array.from(tbody.children).filter(el => el.tagName === 'TR')
-      const showDelete = rows.length >= 2
-      rows.forEach(row => {
-        const deleteBtn = row.querySelector('.delete-btn')
-        if (deleteBtn) {
-          deleteBtn.style.display = showDelete ? 'inline' : 'none'
-        }
-      })
-    }
+    })
   }
 }
+
+const closeColumnDropdown = (e: MouseEvent) => {
+  if (!columnDropdownVisible.value) return
+  const dropdown = columnDropdownRef.value
+  const btn = columnToggleBtnRef.value
+  const target = e.target as Node | null
+  if (!target) return
+  if (dropdown && dropdown.contains(target)) return
+  if (btn && btn.contains(target)) return
+  columnDropdownVisible.value = false
+}
+
+onMounted(() => {
+  document.addEventListener('mousedown', closeColumnDropdown, true)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', closeColumnDropdown, true)
+})
+
+// ========== Bulk Edit ==========
+const isBulkMode = ref(false)
+const bulkText = ref('')
+
+const buildBulkText = () =>
+  rows.value
+    .filter((r) => r.key || r.value)
+    .map((r) => `${r.key}:${r.value ?? ''}`)
+    .join('\n')
+
+const applyBulkText = (text: string) => {
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+
+  const next: UrlencodedRow[] = []
+  for (const line of lines) {
+    const [k, ...rest] = line.split(':')
+    const key = (k || '').trim()
+    const value = rest.join(':').trim()
+    if (!key) continue
+    next.push({ enabled: true, key, value, description: '' })
+  }
+
+  rows.value = next.length ? [...next, createEmptyRow()] : [createEmptyRow()]
+  syncModel()
+}
+
+const openBulkEdit = () => {
+  bulkText.value = buildBulkText()
+  isBulkMode.value = true
+}
+const cancelBulkEdit = () => {
+  isBulkMode.value = false
+}
+const confirmBulkEdit = () => {
+  applyBulkText(bulkText.value)
+  isBulkMode.value = false
+}
+
+// ========== 列宽拖拽（相邻两列） ==========
+const tableRef = ref<HTMLTableElement | null>(null)
+let headerCells: HTMLTableCellElement[] = []
+let resizeInited = false
+let activeLeft = -1
+let activeRight = -1
+let startX = 0
+let startLeftW = 0
+let startRightW = 0
+
+const setColumnWidth = (index: number, width: number) => {
+  const minWidth = 60
+  const finalWidth = Math.max(minWidth, width)
+  const headCell = headerCells[index]
+  if (!headCell || !tableRef.value) return
+  headCell.style.width = `${finalWidth}px`
+  headCell.style.minWidth = `${finalWidth}px`
+  const bodyRows = tableRef.value.querySelectorAll('tbody tr')
+  bodyRows.forEach((row) => {
+    const cell = row.children[index] as HTMLElement | undefined
+    if (cell) {
+      cell.style.width = `${finalWidth}px`
+      cell.style.minWidth = `${finalWidth}px`
+    }
+  })
+}
+
+const onMouseMove = (e: MouseEvent) => {
+  if (activeLeft === -1 || activeRight === -1) return
+  const dx = e.clientX - startX
+  const minWidth = 60
+  let nextLeft = startLeftW + dx
+  let nextRight = startRightW - dx
+  if (nextLeft < minWidth) {
+    const applied = minWidth - startLeftW
+    nextLeft = minWidth
+    nextRight = startRightW - applied
+  } else if (nextRight < minWidth) {
+    const applied = startRightW - minWidth
+    nextRight = minWidth
+    nextLeft = startLeftW + applied
+  }
+  setColumnWidth(activeLeft, nextLeft)
+  setColumnWidth(activeRight, nextRight)
+}
+
+const stopResize = () => {
+  activeLeft = -1
+  activeRight = -1
+  document.removeEventListener('mousemove', onMouseMove)
+  document.removeEventListener('mouseup', stopResize)
+}
+
+const initResizableColumns = () => {
+  if (resizeInited || !tableRef.value) return
+  const headRow = tableRef.value.querySelector('thead tr')
+  if (!headRow) return
+  headerCells = Array.from(headRow.querySelectorAll('th'))
+  if (!headerCells.length) return
+
+  headerCells.forEach((th, idx) => {
+    if (idx === 0 || idx === headerCells.length - 1) return
+    th.style.position = 'relative'
+    const resizer = document.createElement('div')
+    Object.assign(resizer.style, {
+      position: 'absolute',
+      top: '0',
+      bottom: '0',
+      right: '-4px',
+      width: '10px',
+      cursor: 'col-resize',
+      userSelect: 'none'
+    })
+    resizer.addEventListener('mousedown', (e: MouseEvent) => {
+      e.preventDefault()
+      activeLeft = idx
+      activeRight = idx + 1
+      startX = e.clientX
+      startLeftW = th.offsetWidth
+      startRightW = headerCells[idx + 1].offsetWidth
+      document.addEventListener('mousemove', onMouseMove)
+      document.addEventListener('mouseup', stopResize)
+    })
+    th.appendChild(resizer)
+  })
+  resizeInited = true
+}
+
+onMounted(() => nextTick(() => initResizableColumns()))
+onBeforeUnmount(() => stopResize())
 </script>
 
-<style>
-.nested-container {
+<style scoped>
+.urlencoded {
   width: 100%;
-  background-color: #fff;
-  overflow-y: auto;
-  overflow-x: hidden;
+}
+
+.table-container {
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  overflow-x: auto;
+  border: 1px solid #d4d4d4;
+  border-radius: 4px;
+  box-sizing: border-box;
 }
 
 .urlencoded-table {
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  overflow: visible !important;
+  min-width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+  color: #333;
+}
+
+.urlencoded-table th,
+.urlencoded-table td {
+  border: 1px solid #d4d4d4;
+  padding: 6px 8px;
+  box-sizing: border-box;
 }
 
 .urlencoded-table th {
-  background-color: #f8f9fa;
-  color: #374151;
-  font-size: 12px;
-  font-weight: 600;
-  height: 35px !important;
-  line-height: 35px !important;
-  padding: 0 8px;
-  text-align: center !important;
-  border-bottom: 1px solid #e5e7eb;
-  border-left: 1px solid #e5e7eb;
-  vertical-align: middle;
+  background-color: #fafafa;
+  font-weight: 500;
+  text-align: center;
   position: relative;
-  white-space: nowrap;
 }
 
-.urlencoded-table th:last-child {
-  border-right: 1px solid #e5e7eb;
+.col-checkbox {
+  width: 32px;
+  text-align: center;
+  padding-left: 4px;
+  padding-right: 4px;
 }
 
-.col-bulk {
-  width: 70px !important;
-  padding: 0 4px !important;
-  min-width: 70px !important;
-  white-space: nowrap;
+.col-key {
+  width: 30%;
+}
+.col-value {
+  width: 35%;
+}
+.col-description {
+  width: 35%;
 }
 
-.header-bulk-wrapper {
+.col-actions {
+  width: 84px;
+  min-width: 84px;
+  max-width: 84px;
+  text-align: center;
+}
+.urlencoded-table td.col-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.col-hidden {
+  display: none !important;
+}
+
+.cell-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  font-size: 13px;
+  height: 28px;
+  border-radius: 3px;
+  border: 1px solid #d4d4d4;
+}
+
+.header-actions {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 2px;
-}
-
-.header-bulk-edit {
-  font-size: 11px;
-  color: #2563eb;
-  cursor: pointer;
-}
-
-.header-more-btn {
-  font-size: 13px;
-  cursor: pointer;
-  color: #6b7280;
-  padding: 0 2px;
-}
-
-.urlencoded-table td {
-  height: 35px !important;
-  padding: 0;
-  font-size: 13px;
-  color: #4b5563;
-  text-align: center !important;
-  border-bottom: 1px solid #e5e7eb;
-  border-left: 1px solid #e5e7eb;
-  vertical-align: middle;
   position: relative;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
-.urlencoded-table td:last-child {
-  border-right: 1px solid #e5e7eb;
+.column-toggle-btn {
+  border: none;
+  background: none;
+  color: #666;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0 1px;
+  border-radius: 3px;
 }
 
-.urlencoded-table tbody tr:last-child td {
-  border-bottom: none;
+.bulk-edit-btn {
+  border: none;
+  background: none;
+  color: #007cbf;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0 2px;
+  border-radius: 3px;
+  white-space: nowrap;
 }
 
-.col-checkbox { width: 36px; padding: 0 8px !important; }
-.col-key { width: 180px; }
-.col-value { width: 140px; }
-.col-content-type { width: 110px;}
-.col-desc { width: 180px; }
-
-.key-split-table {
-  width: 100%;
-  height: 100%;
-  border-collapse: collapse;
-  text-align: center !important;
-}
-
-.key-split-table td {
-  padding: 4px;
-  border: 1px solid #e5e7eb;
-  height: 27px;
-  margin: 0;
-  text-align: center !important;
-  vertical-align: middle;
-  position: static;
-}
-
-.key-input-cell { width: 92%; }
-.type-select-cell { width: 8%; }
-
-.key-input {
-  width: 90%;
-  border: 1px solid #d1d5db;
-  padding: 4px;
+.column-dropdown {
+  position: fixed;
+  top: 0;
+  left: 0;
+  min-width: 140px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
   border-radius: 4px;
-  font-size: 13px;
-  text-align: center;
-  margin: 0 auto;
-  outline: none;
-  box-sizing: border-box;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  padding: 6px 0;
+  z-index: 9999;
 }
 
-.table-input {
-  width: 90%;
-  border: 1px solid #d1d5db;
-  padding: 4px;
-  border-radius: 4px;
-  font-size: 13px;
-  text-align: center;
-  margin: 0 auto;
-  outline: none;
-  box-sizing: border-box;
-}
-
-.desc-input-wrapper {
-  width: 100%;
-  height: 100%;
-  padding: 4px 8px;
+.dropdown-item {
   display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dropdown-item:hover {
+  background: #f5f5f5;
+}
+
+.delete-row-btn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: #999;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
 }
-
-.row-value-type-select {
-  position: relative;
-  display: inline-block;
-  text-align: center;
+.delete-row-btn:hover:enabled {
+  background-color: #ffebee;
+  color: #d32f2f;
+}
+.delete-row-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.delete-icon {
+  display: block;
 }
 
-.row-value-type-btn {
-  padding: 2px 4px;
-  font-size: 11px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  background: #fff;
-  cursor: pointer;
-  text-align: center;
-  width: 40px;
-}
-
-.row-value-type-dropdown {
-  display: none;
-  position: fixed;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 4px;
-  width: 60px;
-  z-index: 99999;
-  text-align: center;
-}
-
-.row-value-type-dropdown div {
-  padding: 4px 6px;
-  font-size: 11px;
-  color: #333;
-  cursor: pointer;
-}
-
-.row-value-type-dropdown div:hover {
-  background-color: #f3f6f6;
-}
-
-.hide-column {
-  display: none !important;
-}
-
-.value-wrapper {
-  position: relative;
+.bulk-edit-container {
   width: 100%;
-}
-
-.file-select-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 5%;
-  width: 90%;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  box-sizing: border-box;
+  border: 1px solid #d4d4d4;
   border-radius: 4px;
-  z-index: 100;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  display: none;
+  padding: 8px;
 }
 
-.file-option {
-  padding: 6px 8px;
-  cursor: pointer;
+.bulk-edit-textarea {
+  width: 100%;
+  min-height: 160px;
+  box-sizing: border-box;
+  border-radius: 3px;
+  border: 1px solid #d4d4d4;
+  font-family: monospace;
+  font-size: 13px;
+  padding: 8px;
+  resize: vertical;
+}
+
+.bulk-edit-toolbar {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 12px;
-  text-align: left;
+  color: #777;
 }
 
-.file-option:hover {
-  background-color: #f3f6f6;
+.bulk-edit-toolbar .buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-cancel,
+.btn-confirm {
+  border-radius: 3px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.btn-cancel {
+  background-color: #f5f5f5;
+  color: #555;
+  border-color: #ddd;
+}
+.btn-confirm {
+  background-color: #007cbf;
+  color: #fff;
 }
 </style>
