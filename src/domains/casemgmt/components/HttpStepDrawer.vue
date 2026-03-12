@@ -8,6 +8,16 @@ import JsonAddDialog from './JsonAddDialog.vue'
 import BatchEditDialog from './BatchEditDialog.vue'
 import CurlParser from './CurlParser.vue'
 import BodyContent from './BodyContent.vue'
+import PresetVariablesTable from './PresetVariablesTable.vue'
+import PresetTemplateDialog from './PresetTemplateDialog.vue'
+import MysqlStepDrawer from './steps/MysqlStepDrawer.vue'
+import DuccStepDrawer from './steps/DuccStepDrawer.vue'
+import JimdbStepDrawer from './steps/JimdbStepDrawer.vue'
+import ScriptStepDrawer from './steps/ScriptStepDrawer.vue'
+import DelayStepDrawer from './steps/DelayStepDrawer.vue'
+import ExtractVarStepDrawer from './steps/ExtractVarStepDrawer.vue'
+import { usePresetVariablesStore } from '../stores/usePresetVariablesStore'
+import { usePresetTemplateStore } from '../stores/usePresetTemplateStore'
 
 const props = defineProps({
   visible: { type: Boolean, default: false }
@@ -85,7 +95,7 @@ const paramGroups = ref([
     encrypt: '',
     // Body 数据（使用新的统一结构）
     bodyData: {
-      contentType: 'none',
+      contentType: 'raw',
       formData: [],
       urlencoded: [],
       raw: '',
@@ -95,6 +105,62 @@ const paramGroups = ref([
   }
 ])
 const currentGroupId = ref(1)
+
+// 预设变量（持久化）
+const presetVariablesStore = usePresetVariablesStore()
+const presetVariables = computed({
+  get: () => presetVariablesStore.rows,
+  set: (v) => presetVariablesStore.setRows(v)
+})
+
+function handlePresetSaveTemplate() {
+  // 保存模板时不再清空持久化数据，保持当前 store 内容
+}
+
+const presetTemplateDialogVisible = ref(false)
+const presetTemplateStore = usePresetTemplateStore()
+
+function handleOpenNewTemplate() {
+  presetTemplateDialogVisible.value = true
+}
+
+function handleTemplateSave(payload) {
+  presetTemplateStore.addTemplate(payload)
+}
+
+// ===== 前置/后置操作 - 步骤展示（支持多步骤 + 展开/收起全部） =====
+const preSteps = ref([])
+const postSteps = ref([])
+
+const preCollapseKey = ref(0)
+const preAllCollapsed = ref(false)
+const postCollapseKey = ref(0)
+const postAllCollapsed = ref(false)
+
+// 前置/后置操作添加下拉：根据 command 新增步骤
+function handlePreActionCommand(command) {
+  preSteps.value.push({
+    id: Date.now(),
+    type: command
+  })
+}
+
+function handlePostActionCommand(command) {
+  postSteps.value.push({
+    id: Date.now(),
+    type: command
+  })
+}
+
+function togglePreCollapseAll() {
+  preAllCollapsed.value = !preAllCollapsed.value
+  preCollapseKey.value++
+}
+
+function togglePostCollapseAll() {
+  postAllCollapsed.value = !postAllCollapsed.value
+  postCollapseKey.value++
+}
 
 // 计算当前组
 const currentGroup = computed(() => {
@@ -199,7 +265,7 @@ function copyGroup(group) {
     encrypt: group.encrypt || '',
     // Body 数据（使用新的统一结构）
     bodyData: {
-      contentType: group.bodyData?.contentType || 'none',
+      contentType: group.bodyData?.contentType || 'raw',
       formData: JSON.parse(JSON.stringify(group.bodyData?.formData || [])),
       urlencoded: JSON.parse(JSON.stringify(group.bodyData?.urlencoded || [])),
       raw: group.bodyData?.raw || '',
@@ -265,7 +331,7 @@ function addGroup() {
     encrypt: '',
     // Body 数据（使用新的统一结构）
     bodyData: {
-      contentType: 'none',
+      contentType: 'raw',
       formData: [],
       urlencoded: [],
       raw: '',
@@ -372,7 +438,7 @@ function clearBinaryFile() {
   <el-drawer
     v-model="props.visible"
     size="95%"
-    :close-on-click-modal="false"
+    :close-on-click-modal="true"
     :destroy-on-close="true"
     @close="handleClose"
     class="http-step-drawer"
@@ -782,19 +848,97 @@ function clearBinaryFile() {
                   </el-row>
                 </div>  
               </el-tab-pane>
+
               <el-tab-pane label="预设变量" name="preset">
-                <div class="placeholder-content">
-                  <span>预设变量配置区域</span>
-                </div>
+                <preset-variables-table
+                  v-model="presetVariables"
+                  @new-template="handleOpenNewTemplate"
+                  @save-template="handlePresetSaveTemplate"
+                />
               </el-tab-pane>
               <el-tab-pane label="前置操作" name="pre">
-                <div class="placeholder-content">
-                  <span>前置操作配置区域</span>
+                <div class="prepost-pane">
+                  <div class="prepost-toolbar">
+                    <el-dropdown trigger="hover" @command="handlePreActionCommand">
+                      <el-button size="small" type="primary">
+                        添加
+                      </el-button>
+                      <template #dropdown>
+                        <el-dropdown-menu>
+                          <el-dropdown-item command="mysql">MySQL</el-dropdown-item>
+                          <el-dropdown-item command="ducc">DUCC</el-dropdown-item>
+                          <el-dropdown-item command="jimdb">JIMDB</el-dropdown-item>
+                          <el-dropdown-item command="script">自定义脚本</el-dropdown-item>
+                          <el-dropdown-item command="delay">延迟时间</el-dropdown-item>
+                        </el-dropdown-menu>
+                      </template>
+                    </el-dropdown>
+                    <el-button link type="primary" @click="togglePreCollapseAll">
+                      {{ preAllCollapsed ? '展开全部' : '收起全部' }}
+                    </el-button>
+                  </div>
+                  <div class="prepost-list">
+                    <template v-if="preSteps.length === 0">
+                      <el-empty description="暂无前置操作" />
+                    </template>
+                    <template v-else>
+                      <div class="step-list">
+                        <template
+                          v-for="step in preSteps"
+                          :key="step && step.id"
+                        >
+                          <MysqlStepDrawer
+                            v-if="step && step.type === 'mysql'"
+                            :collapse-key="preCollapseKey"
+                            :collapsed="preAllCollapsed"
+                          />
+                        </template>
+                      </div>
+                    </template>
+                  </div>
                 </div>
               </el-tab-pane>
               <el-tab-pane label="后置操作" name="post">
-                <div class="placeholder-content">
-                  <span>后置操作配置区域</span>
+                <div class="prepost-pane">
+                  <div class="prepost-toolbar">
+                    <el-dropdown trigger="hover" @command="handlePostActionCommand">
+                      <el-button size="small" type="primary">
+                        添加
+                      </el-button>
+                      <template #dropdown>
+                        <el-dropdown-menu>
+                          <el-dropdown-item command="mysql">MySQL</el-dropdown-item>
+                          <el-dropdown-item command="ducc">DUCC</el-dropdown-item>
+                          <el-dropdown-item command="jimdb">JIMDB</el-dropdown-item>
+                          <el-dropdown-item command="script">自定义脚本</el-dropdown-item>
+                          <el-dropdown-item command="delay">延迟时间</el-dropdown-item>
+                          <el-dropdown-item command="extract">提取变量</el-dropdown-item>
+                        </el-dropdown-menu>
+                      </template>
+                    </el-dropdown>
+                    <el-button link type="primary" @click="togglePostCollapseAll">
+                      {{ postAllCollapsed ? '展开全部' : '收起全部' }}
+                    </el-button>
+                  </div>
+                  <div class="prepost-list">
+                    <template v-if="postSteps.length === 0">
+                      <el-empty description="暂无后置操作" />
+                    </template>
+                    <template v-else>
+                      <div class="step-list">
+                        <template
+                          v-for="step in postSteps"
+                          :key="step && step.id"
+                        >
+                          <MysqlStepDrawer
+                            v-if="step && step.type === 'mysql'"
+                            :collapse-key="postCollapseKey"
+                            :collapsed="postAllCollapsed"
+                          />
+                        </template>
+                      </div>
+                    </template>
+                  </div>
                 </div>
               </el-tab-pane>
               <el-tab-pane label="设置" name="settings">
@@ -913,6 +1057,11 @@ function clearBinaryFile() {
       @save="handleBatchEditSave"
     />
   </el-drawer>
+
+  <preset-template-dialog
+    v-model="presetTemplateDialogVisible"
+    @save="handleTemplateSave"
+  />
 </template>
 
 <style scoped>
@@ -1131,6 +1280,42 @@ function clearBinaryFile() {
 
 .detail-tabs :deep(.el-tabs__content) {
   padding: 16px;
+}
+
+/* 前置/后置操作 Tab 布局 */
+.prepost-pane {
+  display: flex;
+  flex-direction: column;
+  height: 360px;
+}
+
+.prepost-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.prepost-list {
+  flex: 1;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  background: #fff;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 8px 12px;
+}
+
+.step-list {
+  width: 100%;
+}
+
+/* 前置/后置操作 - 添加按钮更圆润 */
+.prepost-toolbar :deep(.el-button--primary) {
+  border-radius: 16px;
+  padding: 6px 18px;
 }
 
 /* 入参/断言布局 */
