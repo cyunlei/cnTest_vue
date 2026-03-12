@@ -666,13 +666,15 @@ function clearBinaryFile() {
                           <body-content v-model="currentGroup.bodyData" />
                         </el-tab-pane>
                         <el-tab-pane label="IPPort" name="ipport">
-                          <el-form-item label="IP:PORT">
-                            <el-input 
-                              type="textarea" 
+                          <div class="ipport-vertical">
+                            <div class="ipport-label">IP:PORT</div>
+                            <el-input
+                              v-model="currentGroup.ipport"
+                              type="textarea"
                               :rows="3"
                               placeholder="多个IP:Port请以','分隔"
                             />
-                          </el-form-item>
+                          </div>
                         </el-tab-pane>
                         <el-tab-pane label="加密" name="encrypt">
                           <div class="placeholder-content">
@@ -940,6 +942,17 @@ function clearBinaryFile() {
 .header-actions {
   display: flex;
   gap: 8px;
+}
+
+/* IPPort：label 在上、输入框在下 */
+.ipport-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ipport-label {
+  color: #606266;
+  line-height: 1.2;
 }
 
 /* 主容器 */
