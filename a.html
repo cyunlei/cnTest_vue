@@ -3,1160 +3,1106 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Body 格式化工具</title>
+    <title>Postman form-data 表格（最终完美版）</title>
     <style>
+        /* 全局样式重置 */
         * {
-            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
         }
-        .container {
-            width: 875px;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            overflow: hidden;
-            margin: 20px;
+
+        /* 外层容器 */
+        .outer-container {
+            width: 95%;
+            margin: 20px auto;
             position: relative;
         }
-        .tabs-header {
-            display: flex;
-            background-color: #f9fafb;
-            border-bottom: 1px solid #e5e7eb;
-        }
-        .tab-item {
-            padding: 12px 16px;
-            font-size: 14px;
-            color: #4b5563;
-            cursor: pointer;
-            border-bottom: 2px solid transparent;
-        }
-        .tab-item.active {
-            color: #2563eb;
-            border-bottom-color: #2563eb;
-            font-weight: 500;
-        }
-        .content-types {
-            display: flex;
-            padding: 12px;
-            border-bottom: 1px solid #e5e7eb;
-            background-color: #fff;
-            flex-wrap: wrap;
-            gap: 16px;
-            align-items: center;
-        }
-        .radio-group {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 13px;
-            color: #4b5563;
-            cursor: pointer;
-        }
-        .radio-group input[type="radio"] {
-            cursor: pointer;
-        }
-        .radio-group.active {
-            color: #2563eb;
-            font-weight: 500;
-        }
-        .format-select {
-            position: relative;
-            font-size: 13px;
-            color: #25aae2;
-            cursor: pointer;
-            padding: 4px 0;
-            user-select: none;
-            display: none;
-        }
-        .select-dropdown {
-            display: none;
-            position: absolute;
-            top: 24px;
-            left: 0;
-            background: #fff;
-            border: 1px solid #e5e7eb;
+
+        /* 表格容器 */
+        .table-container {
+            border: 1px solid #e0e0e0;
             border-radius: 4px;
-            width: 49px;
-            z-index: 9999;
-        }
-        .select-dropdown div {
-            padding: 6px 8px;
-            font-size: 12px;
-            color: #333;
-        }
-        .select-dropdown div:hover {
-            background-color: #f3f6f6;
-        }
-        .format-btn {
-            margin-left: auto;
-            font-size: 13px;
-            color: #2563eb;
-            cursor: pointer;
-            display: none;
-        }
-        .format-btn:hover {
-            text-decoration: underline;
-        }
-        .body-area {
-            position: relative;
-            padding: 0;
-        }
-        .nested-container {
-            width: 100%;
-            height: 200px;
-            border: none;
-            border-radius: 0;
-            padding: 0 16px;
-            margin-top: 8px;
-            background-color: #fff;
-            display: none;
-            overflow-y: auto;
-            overflow-x: hidden;
-        }
-        .editor {
-            width: 100%;
-            min-height: 180px;
-            height: 180px;
-            border: 1px solid #d1d5db;
-            border-radius: 0;
-            padding: 0;
-            font-size: 14px;
-            resize: vertical;
-            font-family: "Consolas", "Monaco", "Courier New", monospace;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            line-height: 1.5;
-            overflow-y: auto;
-            outline: none;
-        }
-        .editor.none {
-            display: none;
-            align-items: center;
-            justify-content: center;
-            color: #9ca3af;
-            background-color: #f9fafb;
-            cursor: not-allowed;
-            resize: none;
-        }
-
-        .form-data-table,
-        .urlencoded-table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-            border: 1px solid #e5e7eb;
-            border-radius: 6px;
-            overflow: visible !important;
-        }
-        .form-data-table th,
-        .urlencoded-table th {
-            background-color: #f8f9fa;
-            color: #374151;
-            font-size: 12px;
-            font-weight: 600;
-            height: 35px !important;
-            line-height: 35px !important;
-            padding: 0 8px;
-            text-align: center !important;
-            border-bottom: 1px solid #e5e7eb;
-            border-left: 1px solid #e5e7eb;
-            vertical-align: middle;
-            position: relative;
-            white-space: nowrap;
-        }
-        .form-data-table th:last-child,
-        .urlencoded-table th:last-child {
-            border-right: 1px solid #e5e7eb;
-        }
-
-        .col-bulk {
-            width: 70px !important;
-            padding: 0 4px !important;
-            min-width: 70px !important;
-            white-space: nowrap;
-        }
-        .header-bulk-wrapper {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 2px;
-        }
-        .header-bulk-edit {
-            font-size: 11px;
-            color: #2563eb;
-            cursor: pointer;
-        }
-        .header-more-btn {
-            font-size: 13px;
-            cursor: pointer;
-            color: #6b7280;
-            padding: 0 2px;
-        }
-        .global-dropdown {
-            display: none;
-            position: fixed;
-            background: #fff;
-            border: 1px solid #e5e7eb;
-            border-radius: 4px;
-            width: 130px;
-            padding: 8px;
-            z-index: 99999;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .global-dropdown .dropdown-item {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 0;
-            font-size: 12px;
-            color: #4b5563;
-            cursor: pointer;
-        }
-
-        .form-data-table td,
-        .urlencoded-table td {
-            height: 35px !important;
-            padding: 0;
-            font-size: 13px;
-            color: #4b5563;
-            text-align: center !important;
-            border-bottom: 1px solid #e5e7eb;
-            border-left: 1px solid #e5e7eb;
-            vertical-align: middle;
+            overflow: visible;
             position: relative;
         }
-        .form-data-table td:last-child,
-        .urlencoded-table td:last-child {
-            border-right: 1px solid #e5e7eb;
-        }
-        .form-data-table tbody tr:last-child td,
-        .urlencoded-table tbody tr:last-child td {
-            border-bottom: none;
-        }
 
-        .col-checkbox { width: 36px; padding: 0 8px !important; }
-        .col-key { width: 180px; }
-        .col-value { width: 140px; }
-        .col-content-type { width: 110px;}
-        .col-desc { width: 180px; }
-
-        .key-split-table {
+        /* 核心表格样式 */
+        .form-data-table {
             width: 100%;
-            height: 100%;
             border-collapse: collapse;
-            text-align: center !important;
+            font-size: 13px;
+            color: #333;
+            border: 1px solid #e0e0e0;
+            table-layout: fixed;
         }
-        .key-split-table td {
-            padding: 4px;
-            border: 1px solid #e5e7eb;
-            height: 27px;
-            margin: 0;
-            text-align: center !important;
+
+        /* 表头单元格 */
+        .form-data-table th {
+            background-color: #f5f5f5;
+            padding: 8px 8px;
+            text-align: center;
+            border: 1px solid #e0e0e0;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        /* 内容单元格 */
+        .form-data-table td {
+            padding: 8px 8px;
+            border: 1px solid #e0e0e0;
             vertical-align: middle;
-            position: static;
-        }
-        .key-input-cell { width: 92%; }
-        .type-select-cell { width: 8%; }
-        .key-input {
-            width: 90%;
-            border: 1px solid #d1d5db;
-            padding: 4px;
-            border-radius: 4px;
-            font-size: 13px;
-            text-align: center;
-            margin: 0 auto;
-            outline: none;
-            box-sizing: border-box;
+            position: relative;
+            transition: all 0.2s ease;
+            min-height: 30px;
         }
 
-        .table-input {
-            width: 90%;
-            border: 1px solid #d1d5db;
-            padding: 4px;
-            border-radius: 4px;
-            font-size: 13px;
-            text-align: center;
-            margin: 0 auto;
-            outline: none;
-            box-sizing: border-box;
+        /* 单元格高亮样式 */
+        .form-data-table td.cell-highlight {
+            background-color: #f0f7fc;
+            border-color: #007cbf;
         }
 
-        .desc-input-wrapper {
+        /* 行悬浮样式 */
+        .form-data-table .input-row:hover {
+            background-color: #f9f9f9;
+        }
+
+        /* 复选框样式 */
+        .form-data-table input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            margin: 0 auto;
+            display: block;
+        }
+
+        /* ========== 输入框交互样式 ========== */
+        .cell-wrapper {
+            position: relative;
+            width: 100%;
+            min-height: 24px;
+        }
+
+        /* Text类型输入框 */
+        .cell-input {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
             padding: 4px 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .row-value-type-select {
-            position: relative;
-            display: inline-block;
-            text-align: center;
-        }
-        .row-value-type-btn {
-            padding: 2px 4px;
-            font-size: 11px;
-            border: 1px solid #d1d5db;
-            border-radius: 4px;
-            background: #fff;
-            cursor: pointer;
-            text-align: center;
-            width: 40px;
-        }
-        .row-value-type-dropdown {
-            display: none;
-            position: fixed;
-            background: #fff;
-            border: 1px solid #e5e7eb;
-            border-radius: 4px;
-            width: 60px;
-            z-index: 99999;
-            text-align: center;
-        }
-        .row-value-type-dropdown div {
-            padding: 4px 6px;
-            font-size: 11px;
-            color: #333;
-            cursor: pointer;
-        }
-
-        .hide-column {
-            display: none !important;
-        }
-
-        .binary-file-area {
-            display: none;
-            resize: none;
-            padding: 16px;
-        }
-        .file-select-btn {
-            padding: 8px 16px;
-            border: 2px solid #2563eb;
-            border-radius: 4px;
-            background: #fff;
-            color: #2563eb;
-            cursor: pointer;
-            font-size: 14px;
-            width: 240px;
-            text-align: left;
-        }
-        .file-dropdown {
-            margin-top: 8px;
-            border: 1px solid #e5e7eb;
-            border-radius: 4px;
-            width: 240px;
-            background: #fff;
-        }
-        .file-dropdown div {
-            padding: 8px 16px;
+            border: 1px solid #007cbf;
+            border-radius: 3px;
             font-size: 13px;
-            color: #4b5563;
-            cursor: pointer;
-        }
-        .json-key { color: #92278f; }
-        .json-string { color: #3ab54a; }
-        .json-number { color: #25aae2; }
-        .json-boolean { color: #f98280; }
-        .json-null { color: #f1592a; }
-        .json-brace { color: #586e75; }
-
-        /* ============ 文件输入组件样式 ============ */
-        .file-input-component {
-            position: relative;
-            width: 100%;
-            height: 100%;
-        }
-        
-        /* 文件输入组件容器 */
-        .file-input-component {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        /* 普通输入框 */
-        .file-input-component .text-input {
-            width: 90%;
-            border: 1px solid #d1d5db;
-            padding: 4px;
-            border-radius: 4px;
-            font-size: 13px;
-            text-align: center;
+            background-color: #fff;
+            z-index: 2;
+            display: none;
             outline: none;
-            box-sizing: border-box;
         }
-        
-        /* 文件模式下的输入框 - 保持可输入 */
-        .file-input-component.file-mode .text-input {
-            background: #fff;
+
+        /* 只单独缩小 Description 列输入框宽度 */
+        .col-desc-actions-merge .cell-input {
+            width: 350px !important;
         }
-        
-        /* Text模式下隐藏文件相关元素 */
-        .file-input-component[data-mode="text"] .file-input-dropdown,
-        .file-input-component[data-mode="text"] .file-tags-overlay {
-            display: none !important;
+        .cell-input:focus {
+            display: block !important;
         }
-        
-        /* 下拉菜单 */
-        .file-input-dropdown {
-            display: none;
+
+        /* 内容展示区 */
+        .cell-content {
+            width: 100%;
+            min-height: 24px;
+            padding: 4px 8px;
+            display: block;
+            z-index: 1;
+            cursor: text;
+        }
+
+        /* ========== File类型专属样式 ========== */
+        .file-content-container {
+            width: 100%;
+            min-height: 24px;
+            position: relative;
+            border-radius: 3px;
+            padding: 2px 4px;
+            cursor: pointer;
+            z-index: 5;
+        }
+
+        /* Select files占位暗纹 */
+        .file-placeholder {
             position: absolute;
-            top: 100%;
-            left: 5%;
-            width: 90%;
-            background: #fff;
-            border: 1px solid #e5e7eb;
-            border-radius: 6px;
-            z-index: 1000;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            padding: 8px 0;
-            margin-top: 2px;
-        }
-        
-        .file-input-dropdown.show {
+            top: 50%;
+            left: 8px;
+            transform: translateY(-50%);
+            color: #999;
+            font-size: 13px;
+            pointer-events: none;
             display: block;
         }
-        
-        .file-input-dropdown .dropdown-item {
-            padding: 8px 16px;
-            cursor: pointer;
-            font-size: 13px;
-            text-align: left;
-            color: #4b5563;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .file-input-dropdown .dropdown-item:hover {
-            background-color: #f3f4f6;
-        }
-        
-        .file-input-dropdown .dropdown-item.new-file::before {
-            content: '+';
-            font-size: 16px;
-            color: #6b7280;
-        }
-        
-        .file-input-dropdown .dropdown-item.disabled {
-            color: #9ca3af;
-            cursor: default;
-        }
-        
-        .file-input-dropdown .dropdown-item.disabled:hover {
-            background-color: transparent;
-        }
-        
-        /* 展开的文件标签容器 - 放大输入框效果 */
-        .file-tags-overlay {
+
+        /* 文件统计Tag */
+        .file-count-tag {
             display: none;
-            position: absolute;
-            top: 2px;
-            left: 5%;
-            width: 90%;
-            min-height: 60px;
-            height: auto;
-            background: #fff;
-            border: 1px solid #2563eb;
-            border-radius: 4px;
-            z-index: 100;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            padding: 6px;
-        }
-        
-        .file-tags-overlay.show {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: flex-start;
+            align-items: center;
+            padding: 2px 8px;
+            background-color: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 3px;
+            font-size: 12px;
+            color: #333;
             gap: 4px;
         }
-        
-        /* 文件标签 */
+
+        /* 无文件时显示占位符 */
+        .file-content-container.empty .file-placeholder {
+            display: block;
+        }
+        .file-content-container.empty .file-count-tag {
+            display: none;
+        }
+
+        /* 有文件且失焦时显示统计Tag */
+        .file-content-container.has-files:not(.focused) .file-placeholder {
+            display: none;
+        }
+        .file-content-container.has-files:not(.focused) .file-count-tag {
+            display: flex;
+        }
+
+        /* File选择下拉框 */
+        .file-dropdown {
+            position: fixed;
+            z-index: 9999;
+            min-width: 180px;
+            max-width: 400px;
+            background-color: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            padding: 8px 0;
+            display: none;
+            margin-top: 2px;
+            box-sizing: border-box;
+        }
+
+        .file-dropdown-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .file-dropdown-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        .file-dropdown-item .icon {
+            margin-right: 8px;
+            font-size: 16px;
+            color: #666;
+        }
+
+        .file-dropdown-divider {
+            height: 1px;
+            background-color: #e0e0e0;
+            margin: 4px 0;
+        }
+
+        .file-dropdown-empty {
+            padding: 8px 12px;
+            font-size: 12px;
+            color: #999;
+        }
+
+        /* 隐藏原生文件选择框 */
+        .file-input-hidden {
+            display: none;
+        }
+
+        /* File浮层样式 */
+        .file-float-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100% !important;
+            height: 60px;
+            background-color: #f0f7fc;
+            border: 1px solid #007cbf;
+            border-radius: 4px;
+            box-shadow: 0 0 10px rgba(0, 124, 191, 0.2);
+            padding: 8px;
+            z-index: 999;
+            box-sizing: border-box;
+            overflow-y: auto;
+            display: none;
+        }
+
+        /* 浮层滚动条优化 */
+        .file-float-layer::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .file-float-layer::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 3px;
+        }
+        .file-float-layer::-webkit-scrollbar-track {
+            background: #f5f5f5;
+            border-radius: 3px;
+        }
+
+        /* 浮层内Tag容器 */
+        .float-tags-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 文件Tag样式 */
         .file-tag {
             display: inline-flex;
             align-items: center;
-            gap: 4px;
             padding: 2px 6px;
-            background: #fef3c7;
-            border: 1px solid #f59e0b;
-            border-radius: 4px;
-            font-size: 11px;
-            color: #92400e;
+            background-color: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 3px;
+            font-size: 12px;
+            color: #333;
+            gap: 4px;
             white-space: nowrap;
         }
-        
-        .file-tag-remove {
-            cursor: pointer;
-            color: #92400e;
+
+        /* Tag警告图标 */
+        .file-tag-warning {
+            color: #f5a623;
             font-size: 12px;
-            padding: 0 2px;
         }
-        
-        .file-tag-remove:hover {
-            color: #dc2626;
+
+        /* Tag关闭按钮 */
+        .file-tag-close {
+            color: #999;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 4px;
         }
-        
-        /* 添加文件按钮 */
-        .add-file-btn {
-            display: inline-flex;
+
+        .file-tag-close:hover {
+            color: #ff4444;
+        }
+
+        /* ========== 表头操作按钮 ========== */
+        .header-actions {
+            display: flex;
             align-items: center;
             justify-content: center;
-            padding: 2px 8px;
-            background: #dbeafe;
-            border: 1px solid #2563eb;
+        }
+
+        .column-toggle-btn {
+            color: #666;
+            border: none;
+            background: none;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 1px 2px;
+            border-radius: 3px;
+        }
+
+        .column-toggle-btn:hover {
+            background-color: #eee;
+        }
+
+        .bulk-edit-btn {
+            color: #007cbf;
+            text-decoration: none;
+            font-size: 12px;
+            cursor: pointer;
+            padding: 1px 3px;
+            border-radius: 3px;
+            border: none;
+            background: none;
+        }
+
+        .bulk-edit-btn:hover {
+            background-color: #eee;
+            text-decoration: underline;
+        }
+
+        /* ========== 列选择下拉框 ========== */
+        .column-dropdown {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 180px;
+            background-color: #fff;
+            border: 1px solid #e0e0e0;
             border-radius: 4px;
-            font-size: 11px;
-            color: #1e40af;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            padding: 8px 0;
+            display: none;
+            z-index: 9999;
+        }
+
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            padding: 6px 12px;
             cursor: pointer;
         }
+
+        .dropdown-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        .dropdown-checkbox {
+            margin-right: 8px;
+            width: 14px;
+            height: 14px;
+        }
+
+        /* 删除按钮样式 */
+        .delete-row-btn {
+            color: #ff4444;
+            border: none;
+            background: none;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 4px 6px;
+            border-radius: 3px;
+            display: none;
+            margin-left: auto; /* 靠右对齐 */
+            transition: all 0.2s;
+        }
+
+        .delete-row-btn:hover {
+            background-color: #ffebee;
+            color: #d32f2f;
+        }
+
+        .col-actions .delete-row-btn {
+            margin: 0 auto;
+        }
+
+        /* Description+删除按钮容器 */
+        .desc-delete-container {
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+
+        .desc-delete-container .cell-wrapper {
+            flex: 1;
+            max-width: 250px;
+        }
+
+        /* ========== 列宽分配 ========== */
+        .col-checkbox { width: 40px; }
+        .col-key-type-header { width: 190px; }
+        .col-key { width: 150px; }
+        .col-type { width: 50px; }
         
-        .add-file-btn:hover {
-            background: #bfdbfe;
+        .col-value { width: 180px; position: relative; }
+        .col-content-type { width: 100px; }
+        .col-description { width: 180px; }
+        .col-actions { width: 50px; }
+        .col-desc-actions-merge { width: 300px; }
+        /* ========== Bulk Edit 模式 ========== */
+        .bulk-edit-container {
+            width: 100%;
+            height: 100%;
+            min-height: 200px;
+            position: relative;
+            display: none;
+            box-sizing: border-box;
+        }
+
+        .bulk-edit-textarea {
+            width: 100%;
+            height: 100%;
+            min-height: 200px;
+            padding: 12px;
+            border: 1px solid #007cbf;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 13px;
+            resize: vertical;
+            outline: none;
+            white-space: pre;
+            overflow-wrap: normal;
+            overflow-x: auto;
+            box-sizing: border-box;
+        }
+
+        .bulk-edit-hint {
+            position: absolute;
+            bottom: 8px;
+            right: 12px;
+            font-size: 11px;
+            color: #999;
+        }
+
+        .bulk-edit-mode .form-data-table {
+            display: none;
+        }
+        .bulk-edit-mode .bulk-edit-container {
+            display: block;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="tabs-header">
-            <div class="tab-item">Params</div>
-            <div class="tab-item">Headers</div>
-            <div class="tab-item active">Body</div>
-            <div class="tab-item">IPPort</div>
-            <div class="tab-item">加密</div>
+    <div class="outer-container">
+        <!-- 列选择下拉菜单 -->
+        <div class="column-dropdown" id="columnDropdown">
+            <div class="dropdown-item">
+                <input type="checkbox" class="dropdown-checkbox" id="toggleValue" checked>
+                <label for="toggleValue">Value</label>
+            </div>
+            <div class="dropdown-item">
+                <input type="checkbox" class="dropdown-checkbox" id="toggleContentType">
+                <label for="toggleContentType">Content-Type</label>
+            </div>
+            <div class="dropdown-item">
+                <input type="checkbox" class="dropdown-checkbox" id="toggleDescription" checked>
+                <label for="toggleDescription">Description</label>
+            </div>
         </div>
-        <div class="content-types">
-            <label class="radio-group"><input type="radio" name="contentType" value="none"> none</label>
-            <label class="radio-group active"><input type="radio" name="contentType" value="form-data" checked> form-data</label>
-            <label class="radio-group"><input type="radio" name="contentType" value="x-www-form-urlencoded"> x-www-form-urlencoded</label>
-            <label class="radio-group"><input type="radio" name="contentType" value="raw"> raw</label>
-            <label class="radio-group"><input type="radio" name="contentType" value="binary"> binary</label>
-            <label class="radio-group"><input type="radio" name="contentType" value="graphql"> GraphQL</label>
 
-            <div class="format-select" id="typeText">
-                JSON
-                <div class="select-dropdown" id="dropdown">
-                    <div onclick="switchType('TEXT')">TEXT</div><div onclick="switchType('JSON')">JSON</div>
-                    <div onclick="switchType('XML')">XML</div><div onclick="switchType('HTML')">HTML</div>
-                </div>
+        <div class="table-container">
+            <table class="form-data-table" id="formDataTable">
+                <thead>
+                    <tr>
+                        <th class="col-checkbox"></th>
+                        <th class="col-key-type-header" colspan="2">Key</th>
+                        <th class="col-value">Value</th>
+                        <th class="col-content-type">Content-Type</th>
+                        <th class="col-description">Description</th>
+                        <th class="col-actions">
+                            <div class="header-actions">
+                                <button class="column-toggle-btn" id="columnToggleBtn">⋯</button>
+                                <button class="bulk-edit-btn" id="bulkEditBtn">Bulk Edit</button>
+                            </div>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody id="formDataBody">
+                    <tr class="input-row">
+                        <td class="col-checkbox"><input type="checkbox"></td>
+                        <td class="col-key">
+                            <div class="cell-wrapper">
+                                <span class="cell-content key-content" >Key</span>
+                                <input type="text" class="cell-input key-input" placeholder="Key" value="">
+                            </div>
+                        </td>
+                        <td class="col-type">
+                            <select class="type-select" style="width: 100%; padding: 4px; border: 1px solid #e0e0e0; border-radius: 3px;">
+                                <option selected>Text</option>
+                                <option>File</option>
+                            </select>
+                        </td>
+                        <td class="col-value">
+                            <div class="cell-wrapper">
+                                <span class="cell-content value-content text-content">Value</span>
+                                <input type="text" class="cell-input value-input" placeholder="Value" value="">
+                                <div class="file-content-container empty" style="display: none;">
+                                    <span class="file-placeholder">Select files</span>
+                                    <div class="file-count-tag">
+                                        <span class="file-tag-warning">⚠</span>
+                                        <span class="file-count-text">0 files</span>
+                                    </div>
+                                    <div class="file-dropdown">
+                                        <div class="file-dropdown-item local-file-btn">
+                                            <span class="icon">+</span>
+                                            <span>New file from local machine</span>
+                                        </div>
+                                        <div class="file-dropdown-divider"></div>
+                                        <div class="file-dropdown-item team-file-btn">
+                                            <span>Files uploaded to team</span>
+                                        </div>
+                                        <div class="file-dropdown-empty">No file found</div>
+                                    </div>
+                                    <input type="file" class="file-input-hidden" multiple>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="col-content-type">
+                            <div class="cell-wrapper">
+                                <span class="cell-content content-type-content">Auto</span>
+                                <input type="text" class="cell-input content-type-input" placeholder="Content-Type" value="Auto">
+                            </div>
+                        </td>
+                        <td class="col-desc-actions-merge" colspan="2">
+                            <div class="desc-delete-container">
+                                <div class="cell-wrapper">
+                                    <span class="cell-content description-content" >描述</span>
+                                    <input type="text" class="cell-input description-input" placeholder="描述" value="">
+                                </div>
+                                <button class="delete-row-btn" title="Delete this row">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                                  </svg>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="bulk-edit-container">
+                <textarea class="bulk-edit-textarea" id="bulkEditTextarea" placeholder="key:value&#10;key2:value2..."></textarea>
+                <div class="bulk-edit-hint">Press Enter or ESC to save and exit</div>
             </div>
-            <div class="format-btn" id="formatBtn" onclick="formatContent()">格式化</div>
         </div>
-        
-        <div class="body-area">
-            <div class="editor none" id="noneEditor">此请求没有请求体</div>
-
-            <div class="nested-container" id="formDataContainer">
-                <table class="form-data-table" id="formDataTable">
-                    <thead>
-                        <tr>
-                            <th class="col-checkbox"></th>
-                            <th class="col-key">Key</th>
-                            <th class="col-value">Value</th>
-                            <th class="col-content-type hide-column">Content-Type</th>
-                            <th class="col-desc">Description</th>
-                            <th class="col-bulk">
-                                <div class="header-bulk-wrapper">
-                                    <div class="header-more-container" id="moreContainer">
-                                        <div class="header-more-btn" id="moreBtn">⋯</div>
-                                    </div>
-                                    <span class="header-bulk-edit">Bulk Edit</span>
-                                </div>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody id="formDataBody">
-                        <tr data-file-mode="false">
-                            <td class="col-checkbox"><input type="checkbox"></td>
-                            <td class="col-key">
-                                <table class="key-split-table">
-                                    <tr>
-                                        <td class="key-input-cell"><input type="text" class="key-input" placeholder="Key"></td>
-                                        <td class="type-select-cell">
-                                            <div class="row-value-type-select">
-                                                <div class="row-value-type-btn">Text</div>
-                                                <div class="row-value-type-dropdown">
-                                                    <div>Text</div>
-                                                    <div>File</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                            <td class="col-value">
-                                <!-- 文件输入组件 -->
-                                <div class="file-input-component" data-mode="text">
-                                    <input type="text" class="text-input" placeholder="Value">
-                                    <div class="file-input-dropdown">
-                                        <div class="dropdown-item new-file">New file from local machine</div>
-                                        <div class="dropdown-item disabled">Files uploaded to team</div>
-                                        <div class="dropdown-item disabled">No file found</div>
-                                    </div>
-                                    <div class="file-tags-overlay"></div>
-                                </div>
-                            </td>
-                            <td class="col-content-type hide-column"><input type="text" class="table-input" placeholder="Auto" value="Auto"></td>
-                            <td class="col-desc">
-                                <div class="desc-input-wrapper"><input type="text" class="table-input" placeholder="Description"></div>
-                            </td>
-                            <td class="col-bulk"></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="nested-container" id="urlencodedContainer">
-                <table class="urlencoded-table" id="urlencodedTable">
-                    <thead>
-                        <tr>
-                            <th class="col-checkbox"></th>
-                            <th class="col-key">Key</th>
-                            <th class="col-value">Value</th>
-                            <th class="col-content-type hide-column">Content-Type</th>
-                            <th class="col-desc">Description</th>
-                            <th class="col-bulk">
-                                <div class="header-bulk-wrapper">
-                                    <div class="header-more-container">
-                                        <div class="header-more-btn" id="moreBtn2">⋯</div>
-                                    </div>
-                                    <span class="header-bulk-edit">Bulk Edit</span>
-                                </div>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody id="urlencodedBody">
-                        <tr data-file-mode="false">
-                            <td class="col-checkbox"><input type="checkbox"></td>
-                            <td class="col-key">
-                                <table class="key-split-table">
-                                    <tr>
-                                        <td class="key-input-cell"><input type="text" class="key-input" placeholder="Key"></td>
-                                        <td class="type-select-cell">
-                                            <div class="row-value-type-select">
-                                                <div class="row-value-type-btn">Text</div>
-                                                <div class="row-value-type-dropdown">
-                                                    <div>Text</div>
-                                                    <div>File</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                </table>
-                            </td>
-                            <td class="col-value">
-                                <!-- 文件输入组件 -->
-                                <div class="file-input-component" data-mode="text">
-                                    <input type="text" class="text-input" placeholder="Value">
-                                    <div class="file-input-dropdown">
-                                        <div class="dropdown-item new-file">New file from local machine</div>
-                                        <div class="dropdown-item disabled">Files uploaded to team</div>
-                                        <div class="dropdown-item disabled">No file found</div>
-                                    </div>
-                                    <div class="file-tags-overlay"></div>
-                                </div>
-                            </td>
-                            <td class="col-content-type hide-column"><input type="text" class="table-input" placeholder="Auto" value="Auto"></td>
-                            <td class="col-desc">
-                                <div class="desc-input-wrapper"><input type="text" class="table-input" placeholder="Description"></div>
-                            </td>
-                            <td class="col-bulk"></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="binary-file-area" id="binaryArea">
-                <div class="file-select-btn">Select file</div>
-                <div class="file-dropdown">
-                    <div class="new-file">+ New file from local machine</div>
-                    <div>Files uploaded to team</div>
-                    <div class="no-file">No file found</div>
-                </div>
-            </div>
-            <div class="editor" id="rawEditor" contenteditable="true" placeholder="请输入内容..."></div>
-        </div>
-    </div>
-
-    <div class="global-dropdown" id="tableDropdown">
-        <label class="dropdown-item">
-            <input type="checkbox" value="value" onchange="toggleColumn()" checked> value
-        </label>
-        <label class="dropdown-item">
-            <input type="checkbox" value="contentType" onchange="toggleColumn()"> Content-Type
-        </label>
-        <label class="dropdown-item">
-            <input type="checkbox" value="desc" onchange="toggleColumn()" checked> Description
-        </label>
     </div>
 
     <script>
-        let currentType = 'JSON';
-        const moreBtn = document.getElementById('moreBtn');
-        const moreBtn2 = document.getElementById('moreBtn2');
-        const tableDropdown = document.getElementById('tableDropdown');
-        let activeDropdown = null;
+        // ========== 核心变量 ==========
+        const outerContainer = document.querySelector('.outer-container');
+        const tableBody = document.getElementById('formDataBody');
+        const columnToggleBtn = document.getElementById('columnToggleBtn');
+        const columnDropdown = document.getElementById('columnDropdown');
+        const toggleValue = document.getElementById('toggleValue');
+        const toggleContentType = document.getElementById('toggleContentType');
+        const toggleDescription = document.getElementById('toggleDescription');
+        
+        let columnStates = {
+            value: toggleValue.checked,
+            contentType: toggleContentType.checked,
+            description: toggleDescription.checked
+        };
 
-        window.onload = function() {
-            hideAllAreas();
-            showFormData();
-            bindDropdownEvents(moreBtn, tableDropdown);
-            bindDropdownEvents(moreBtn2, tableDropdown);
-            initTableEvents();
-            initFileInputComponents();
-            toggleColumn();
-            bindDropdownEvents(document.getElementById('typeText'), document.getElementById('dropdown'));
-            
-            // 全局点击关闭下拉框
-            document.addEventListener('click', function(e) {
-                // 检查点击的是否是文件输入组件内的元素
-                const isInFileComponent = e.target.closest('.file-input-component');
-                if (isInFileComponent) return; // 不关闭，让组件自己处理
-                
-                if (activeDropdown && !activeDropdown.contains(e.target)) {
-                    closeAllDropdowns();
+        // ========== 自动勾选复选框（输入内容时） ==========
+        function autoCheckRow(row, input) {
+            input.addEventListener('input', function() {
+                const checkbox = row.querySelector('.col-checkbox input');
+                if (this.value.trim() !== '') {
+                    checkbox.checked = true;
                 }
             });
         }
 
-        function closeAllDropdowns() {
-            if (activeDropdown) {
-                activeDropdown.style.display = 'none';
-                activeDropdown = null;
-            }
-            document.querySelectorAll('.file-input-dropdown').forEach(d => {
-                d.classList.remove('show');
-            });
-        }
+        // ========== 通用输入框逻辑 ==========
+        function bindTextInputLogic(rowElement) {
+            const bindSingleInput = (inputSelector, contentSelector) => {
+                const input = rowElement.querySelector(inputSelector);
+                const content = rowElement.querySelector(contentSelector);
 
-        // ============ 文件输入组件 ============
-        function initFileInputComponents() {
-            document.querySelectorAll('.file-input-component').forEach(component => {
-                initFileInputComponent(component);
-            });
-        }
-        
-        function initFileInputComponent(component) {
-            // 避免重复初始化
-            if (component.dataset.initialized === 'true') return;
-            component.dataset.initialized = 'true';
-            
-            const input = component.querySelector('.text-input');
-            const dropdown = component.querySelector('.file-input-dropdown');
-            const tagsOverlay = component.querySelector('.file-tags-overlay');
-            const newFileItem = dropdown.querySelector('.new-file');
-            
-            // 存储文件列表
-            if (!component.selectedFiles) {
-                component.selectedFiles = [];
-            }
-            
-            // 点击输入框显示下拉菜单（只在File模式下）
-            input.addEventListener('click', function(e) {
-                // 通过 input 找到对应的 component
-                const comp = this.closest('.file-input-component');
-                const isFileMode = comp.getAttribute('data-mode') === 'file';
-                console.log('Input clicked, isFileMode:', isFileMode);
-                if (!isFileMode) return;
-                
-                e.stopPropagation();
-                
-                const dd = comp.querySelector('.file-input-dropdown');
-                console.log('Dropdown element:', dd);
-                
-                // 先关闭其他所有下拉菜单
-                document.querySelectorAll('.file-input-dropdown').forEach(d => d.classList.remove('show'));
-                dd.classList.add('show');
-            });
-            
-            // 聚焦时如果有文件则展开显示所有标签
-            input.addEventListener('focus', function(e) {
-                const comp = this.closest('.file-input-component');
-                const isFileMode = comp.getAttribute('data-mode') === 'file';
-                console.log('Input focused, isFileMode:', isFileMode, 'files:', comp.selectedFiles.length);
-                if (!isFileMode) return;
-                
-                // 有文件时展开显示所有标签（不显示下拉菜单，避免和click冲突）
-                if (comp.selectedFiles.length > 0) {
-                    showFileTags(comp);
-                }
-            });
-            
-            // 失焦时收起下拉菜单和标签，显示统计
-            input.addEventListener('blur', function(e) {
-                const comp = this.closest('.file-input-component');
-                const dd = comp.querySelector('.file-input-dropdown');
-                const overlay = comp.querySelector('.file-tags-overlay');
-                const inputEl = this;
-                
-                setTimeout(() => {
-                    const activeEl = document.activeElement;
-                    const isInDropdown = dd && dd.contains(activeEl);
-                    const isInOverlay = overlay && overlay.contains(activeEl);
-                    
-                    console.log('Blur check - inDropdown:', isInDropdown, 'inOverlay:', isInOverlay, 'activeEl:', activeEl);
-                    
-                    // 总是收起下拉菜单和标签弹窗
-                    if (dd) dd.classList.remove('show');
-                    hideFileTags(comp);
-                    
-                    // 更新输入框显示统计
-                    updateInputDisplay(comp);
-                }, 200);
-            });
-            
-            // 点击"New file from local machine"
-            newFileItem.addEventListener('click', function(e) {
-                e.stopPropagation();
-                openFileSelector(component);
-            });
-        }
-        
-        // 打开文件选择器
-        function openFileSelector(component) {
-            const fileInput = document.createElement('input');
-            fileInput.type = 'file';
-            fileInput.multiple = true;
-            fileInput.style.display = 'none';
-            document.body.appendChild(fileInput);
-            
-            fileInput.onchange = function(e) {
-                const files = Array.from(e.target.files || []);
-                if (files.length > 0) {
-                    files.forEach(file => {
-                        const exists = component.selectedFiles.some(f => f.name === file.name && f.size === file.size);
-                        if (!exists) {
-                            component.selectedFiles.push(file);
-                        }
-                    });
-                    
-                    // 选中checkbox
-                    const row = component.closest('tr');
-                    const checkbox = row.querySelector('.col-checkbox input');
-                    if (checkbox) checkbox.checked = true;
-                    
-                    // 显示文件标签
-                    showFileTags(component);
-                    
-                    // 检查是否需要添加新行
-                    const tbody = row.parentElement;
-                    if (tbody && row === tbody.lastElementChild) {
-                        addNewRow(tbody.id);
-                    }
-                }
-                
-                document.body.removeChild(fileInput);
-            };
-            
-            fileInput.click();
-        }
-        
-        // 显示文件标签
-        function showFileTags(component) {
-            const tagsOverlay = component.querySelector('.file-tags-overlay');
-            const input = component.querySelector('.text-input');
-            
-            tagsOverlay.innerHTML = '';
-            
-            component.selectedFiles.forEach((file, index) => {
-                const tag = document.createElement('div');
-                tag.className = 'file-tag';
-                tag.innerHTML = `
-                    <span>📎</span>
-                    <span>${file.name}</span>
-                    <span class="file-tag-remove" data-index="${index}">×</span>
-                `;
-                
-                tag.querySelector('.file-tag-remove').addEventListener('click', function(e) {
-                    e.stopPropagation();
-                    component.selectedFiles.splice(index, 1);
-                    showFileTags(component);
+                content.addEventListener('click', () => {
+                    input.style.display = 'block';
+                    input.focus();
+                    content.closest('td').classList.add('cell-highlight');
                 });
-                
-                tagsOverlay.appendChild(tag);
+
+                input.addEventListener('blur', () => {
+                    let displayText = input.value.trim() || 'Key';
+                    if (contentSelector === '.content-type-content') {
+                        displayText = input.value.trim() || 'Auto';
+                    }
+                    content.textContent = displayText;
+                    input.style.display = 'none';
+                    content.closest('td').classList.remove('cell-highlight');
+                });
+
+                input.addEventListener('input', () => {
+                    let displayText = input.value.trim() || '描述';
+                    if (contentSelector === '.content-type-content') {
+                        displayText = input.value.trim() || 'Auto';
+                    }
+                    content.textContent = displayText;
+                });
+
+                // 自动勾选
+                autoCheckRow(rowElement, input);
+            };
+
+            bindSingleInput('.key-input', '.key-content');
+            bindSingleInput('.content-type-input', '.content-type-content');
+            bindSingleInput('.description-input', '.description-content');
+
+            const valueInput = rowElement.querySelector('.value-input');
+            const valueTextContent = rowElement.querySelector('.text-content');
+            valueTextContent.addEventListener('click', () => {
+                valueInput.style.display = 'block';
+                valueInput.focus();
+                valueTextContent.closest('td').classList.add('cell-highlight');
             });
-            
-            // 添加按钮
-            const addBtn = document.createElement('div');
-            addBtn.className = 'add-file-btn';
-            addBtn.innerHTML = '<span>+</span>';
-            addBtn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                openFileSelector(component);
+
+            valueInput.addEventListener('blur', () => {
+                valueTextContent.textContent = valueInput.value.trim() || 'Value';
+                valueInput.style.display = 'none';
+                valueTextContent.closest('td').classList.remove('cell-highlight');
             });
-            tagsOverlay.appendChild(addBtn);
-            
-            tagsOverlay.classList.add('show');
+
+            valueInput.addEventListener('input', () => {
+                valueTextContent.textContent = valueInput.value.trim() || '-';
+            });
+
+            // 自动勾选
+            autoCheckRow(rowElement, valueInput);
         }
-        
-        // 隐藏文件标签
-        function hideFileTags(component) {
-            const tagsOverlay = component.querySelector('.file-tags-overlay');
-            tagsOverlay.classList.remove('show');
-        }
-        
-        // 更新输入框显示（显示统计）
-        function updateInputDisplay(component) {
-            const input = component.querySelector('.text-input');
-            const files = component.selectedFiles || [];
-            const isFileMode = component.getAttribute('data-mode') === 'file';
-            
-            if (!isFileMode) {
-                // Text模式，显示Value
-                input.value = '';
-                return;
-            }
-            
-            if (files.length === 0) {
-                input.value = '';
-            } else if (files.length === 1) {
-                input.value = files[0].name;
+
+        // ========== File类型交互逻辑 ==========
+        function bindFileLogic(rowElement) {
+          const typeSelect = rowElement.querySelector('.type-select');
+          const valueCell = rowElement.querySelector('.col-value');
+          const valueTextContent = rowElement.querySelector('.text-content');
+          const valueInput = rowElement.querySelector('.value-input');
+          const fileContentContainer = rowElement.querySelector('.file-content-container');
+          const fileCountText = rowElement.querySelector('.file-count-text');
+          const fileDropdown = rowElement.querySelector('.file-dropdown');
+          const localFileBtn = rowElement.querySelector('.local-file-btn');
+          const teamFileBtn = rowElement.querySelector('.team-file-btn');
+          const fileInput = rowElement.querySelector('.file-input-hidden');
+          const checkbox = rowElement.querySelector('.col-checkbox input');
+
+          let selectedFiles = [];
+          let floatLayer = null;
+          let isDropdownVisible = false;
+
+          // 初始化File显示
+          initFileTypeDisplay();
+          typeSelect.addEventListener('change', initFileTypeDisplay);
+
+          function initFileTypeDisplay() {
+            if (typeSelect.value === 'File') {
+              valueTextContent.style.display = 'none';
+              valueInput.style.display = 'none';
+              fileContentContainer.style.display = 'block';
+              valueCell.classList.remove('cell-highlight');
             } else {
-                input.value = `📎 ${files.length} files`;
+              fileContentContainer.style.display = 'none';
+              hideDropdown();
+              valueTextContent.style.display = 'block';
+              if (floatLayer) floatLayer.style.display = 'none';
+            }
+          }
+
+          // 创建浮层
+          function createFloatLayer() {
+            if (floatLayer) return floatLayer;
+            
+            floatLayer = document.createElement('div');
+            floatLayer.className = 'file-float-layer';
+            floatLayer.innerHTML = `<div class="float-tags-container"></div>`;
+            valueCell.appendChild(floatLayer);
+            return floatLayer;
+          }
+
+          // 定位下拉框
+          function positionDropdown() {
+            if (!floatLayer || floatLayer.style.display !== 'block') return;
+            
+            const floatRect = floatLayer.getBoundingClientRect();
+            fileDropdown.style.width = `${floatRect.width}px`;
+            fileDropdown.style.left = `${floatRect.left}px`;
+            fileDropdown.style.top = `${floatRect.bottom + 2}px`;
+            fileDropdown.style.display = 'block';
+            isDropdownVisible = true;
+          }
+
+          function showFloat() {
+            document.querySelectorAll('.file-float-layer').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.file-dropdown').forEach(el => el.style.display = 'none');
+            
+            const layer = createFloatLayer();
+            layer.style.display = 'block';
+            renderTags();
+            positionDropdown();
+          }
+
+          function hideDropdown() {
+            fileDropdown.style.display = 'none';
+            isDropdownVisible = false;
+          }
+
+          // 渲染文件标签
+          function renderTags() {
+            if (!floatLayer) return;
+            const box = floatLayer.querySelector('.float-tags-container');
+            box.innerHTML = '';
+            selectedFiles.forEach((f, i) => {
+              const t = document.createElement('div');
+              t.className = 'file-tag';
+              t.innerHTML = `<span class="file-tag-warning">⚠</span>${f.name}<span class="file-tag-close" data-i="${i}">×</span>`;
+              t.querySelector('.file-tag-close').onclick = (e) => {
+                e.stopPropagation();
+                selectedFiles.splice(i, 1);
+                renderTags();
+                fileCountText.textContent = `${selectedFiles.length} files`;
+                if (selectedFiles.length === 0) {
+                  fileContentContainer.classList.add('empty');
+                  fileContentContainer.classList.remove('has-files');
+                  floatLayer.style.display = 'none';
+                  hideDropdown();
+                }
+              };
+              box.appendChild(t);
+            });
+          }
+
+          // 窗口缩放监听
+          window.addEventListener('resize', () => {
+            if (isDropdownVisible && floatLayer) {
+              positionDropdown();
+            }
+          });
+
+          // 点击事件
+          fileContentContainer.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (typeSelect.value !== 'File') return;
+            showFloat();
+          });
+
+          // 点击外部关闭
+          document.addEventListener('click', (e) => {
+            if (!e.target.closest('.file-float-layer') && 
+                !e.target.closest('.file-dropdown') && 
+                !e.target.closest('.file-content-container')) {
+              if (floatLayer) floatLayer.style.display = 'none';
+              hideDropdown();
+            }
+          });
+
+          // 文件选择
+          localFileBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            fileInput.click();
+          });
+          teamFileBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            fileInput.click();
+          });
+
+          fileInput.addEventListener('change', () => {
+            const arr = Array.from(fileInput.files);
+            if (!arr.length) return;
+            selectedFiles = [...selectedFiles, ...arr];
+            fileContentContainer.classList.remove('empty');
+            fileContentContainer.classList.add('has-files');
+            fileCountText.textContent = `${selectedFiles.length} files`;
+            checkbox.checked = true; // 选择文件自动勾选
+            renderTags();
+            hideDropdown();
+          });
+        }
+
+        // ========== 列选择下拉框定位 ==========
+        function bindDropdownPosition() {
+            columnToggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const btnRect = columnToggleBtn.getBoundingClientRect();
+                const outerRect = outerContainer.getBoundingClientRect();
+                
+                columnDropdown.style.top = `${btnRect.top - outerRect.top + 30}px`;
+                columnDropdown.style.left = `${btnRect.left - outerRect.left - 150}px`;
+                columnDropdown.style.display = columnDropdown.style.display === 'block' ? 'none' : 'block';
+            });
+
+            document.addEventListener('click', () => {
+                columnDropdown.style.display = 'none';
+            });
+        }
+
+        // ========== 列显示/隐藏逻辑 ==========
+        function updateColumnVisibility() {
+            document.querySelector('.col-value').style.display = columnStates.value ? '' : 'none';
+            document.querySelector('.col-content-type').style.display = columnStates.contentType ? '' : 'none';
+            document.querySelector('.col-description').style.display = columnStates.description ? '' : 'none';
+            document.querySelector('.col-actions').style.display = '';
+
+            const rows = document.querySelectorAll('.input-row');
+            rows.forEach(row => {
+                row.querySelector('.col-value').style.display = columnStates.value ? '' : 'none';
+                row.querySelector('.col-content-type').style.display = columnStates.contentType ? '' : 'none';
+                row.querySelector('.col-desc-actions-merge').style.display = columnStates.description ? '' : 'none';
+            });
+        }
+
+        function bindColumnToggleEvents() {
+            toggleValue.addEventListener('change', () => {
+                columnStates.value = toggleValue.checked;
+                updateColumnVisibility();
+            });
+
+            toggleContentType.addEventListener('change', () => {
+                columnStates.contentType = toggleContentType.checked;
+                updateColumnVisibility();
+            });
+
+            toggleDescription.addEventListener('change', () => {
+                columnStates.description = toggleDescription.checked;
+                updateColumnVisibility();
+            });
+        }
+
+        // ========== 删除按钮逻辑（原版：悬浮 / 聚焦 显示，最后一行不显示） ==========
+        function updateDeleteButtons() {
+            const rows = document.querySelectorAll('.input-row');
+            const hoveredRow = document.querySelector('.input-row.hovered');
+            const focusedRow = document.querySelector('.input-row:focus-within');
+
+            rows.forEach(row => {
+                row.querySelector('.delete-row-btn').style.display = 'none';
+            });
+
+            let targetRow = hoveredRow || focusedRow;
+            if (targetRow && targetRow !== rows[rows.length - 1] && rows.length > 1) {
+                targetRow.querySelector('.delete-row-btn').style.display = 'block';
             }
         }
 
-        function initTableEvents() {
-            initTable('formDataTable');
-            initTable('urlencodedTable');
+        function bindRowEvents(rowElement) {
+            rowElement.addEventListener('mouseenter', () => {
+                rowElement.classList.add('hovered');
+                updateDeleteButtons();
+            });
+            rowElement.addEventListener('mouseleave', () => {
+                rowElement.classList.remove('hovered');
+                updateDeleteButtons();
+            });
+
+            rowElement.addEventListener('focusin', updateDeleteButtons);
+            rowElement.addEventListener('focusout', updateDeleteButtons);
         }
 
-        function initTable(tableId) {
-            const table = document.getElementById(tableId);
-            if (!table) return;
-            
-            table.addEventListener('click', function(e) {
-                const target = e.target;
-                
-                // 处理类型按钮点击
-                if (target.classList.contains('row-value-type-btn')) {
-                    e.stopPropagation();
-                    const dropdown = target.nextElementSibling;
-                    if (dropdown) {
-                        closeAllDropdowns();
-                        const rect = target.getBoundingClientRect();
-                        dropdown.style.left = rect.left + 'px';
-                        dropdown.style.top = (rect.bottom + 2) + 'px';
-                        dropdown.style.display = 'block';
-                        activeDropdown = dropdown;
-                    }
-                    return;
-                }
-                
-                // 处理选择 Text 或 File
-                if (target.parentElement && target.parentElement.classList.contains('row-value-type-dropdown')) {
-                    const btn = target.parentElement.previousElementSibling;
-                    const selectedType = target.textContent.trim();
-                    
-                    console.log('=== SELECT TYPE ===', selectedType);
-                    
-                    // 获取外层表格行
-                    let row = target.closest('tr');
-                    console.log('First tr:', row);
-                    while (row && !row.hasAttribute('data-file-mode')) {
-                        row = row.parentElement ? row.parentElement.closest('tr') : null;
-                        console.log('Next tr:', row);
-                    }
-                    
-                    if (!btn || !row) {
-                        console.log('No btn or row found');
-                        return;
-                    }
-                    
-                    console.log('Found row:', row);
-                    
-                    // 更新按钮文字
-                    btn.textContent = selectedType;
-                    closeAllDropdowns();
-                    
-                    // 更新行状态
-                    const isFileMode = selectedType === 'File';
-                    row.setAttribute('data-file-mode', isFileMode ? 'true' : 'false');
-                    console.log('Set data-file-mode:', isFileMode);
-                    
-                    // 更新文件输入组件
-                    const fileComponent = row.querySelector('.file-input-component');
-                    console.log('File component:', fileComponent);
-                    if (fileComponent) {
-                        fileComponent.setAttribute('data-mode', isFileMode ? 'file' : 'text');
-                        const input = fileComponent.querySelector('.text-input');
-                        const dropdown = fileComponent.querySelector('.file-input-dropdown');
-                        const overlay = fileComponent.querySelector('.file-tags-overlay');
-                        
-                        if (isFileMode) {
-                            input.placeholder = '选择文件';
-                            updateInputDisplay(fileComponent);
-                        } else {
-                            // 切换为Text模式，清理所有文件相关UI
-                            input.placeholder = 'Value';
-                            input.value = '';
-                            fileComponent.selectedFiles = [];
-                            // 隐藏下拉菜单和标签弹窗
-                            if (dropdown) dropdown.classList.remove('show');
-                            if (overlay) overlay.classList.remove('show');
-                        }
-                    }
-                    return;
+        // ========== 自动新增行 ==========
+        function setupInputListener(inputElement) {
+            inputElement.addEventListener('input', function() {
+                if (this.value.trim() !== '' && this.closest('.input-row') === tableBody.lastElementChild) {
+                    addNewInputRow();
                 }
             });
         }
 
-        function addNewRow(tbodyId) {
-            const tbody = document.getElementById(tbodyId);
-            if (!tbody) return;
-            
+        function addNewInputRow() {
             const newRow = document.createElement('tr');
-            newRow.setAttribute('data-file-mode', 'false');
+            newRow.className = 'input-row';
+            
             newRow.innerHTML = `
                 <td class="col-checkbox"><input type="checkbox"></td>
                 <td class="col-key">
-                    <table class="key-split-table">
-                        <tr>
-                            <td class="key-input-cell"><input type="text" class="key-input" placeholder="Key"></td>
-                            <td class="type-select-cell">
-                                <div class="row-value-type-select">
-                                    <div class="row-value-type-btn">Text</div>
-                                    <div class="row-value-type-dropdown">
-                                        <div>Text</div>
-                                        <div>File</div>
-                                    </div>
-                                </div>
-                            </td>
-                        </tr>
-                    </table>
-                </td>
-                <td class="col-value">
-                    <div class="file-input-component" data-mode="text">
-                        <input type="text" class="text-input" placeholder="Value">
-                        <div class="file-input-dropdown">
-                            <div class="dropdown-item new-file">New file from local machine</div>
-                            <div class="dropdown-item disabled">Files uploaded to team</div>
-                            <div class="dropdown-item disabled">No file found</div>
-                        </div>
-                        <div class="file-tags-overlay"></div>
+                    <div class="cell-wrapper">
+                        <span class="cell-content key-content">Key</span>
+                        <input type="text" class="cell-input key-input" placeholder="Key" value="">
                     </div>
                 </td>
-                <td class="col-content-type hide-column"><input type="text" class="table-input" placeholder="Auto" value="Auto"></td>
-                <td class="col-desc">
-                    <div class="desc-input-wrapper"><input type="text" class="table-input" placeholder="Description"></div>
+                <td class="col-type">
+                    <select class="type-select" style="width: 100%; padding: 4px; border: 1px solid #e0e0e0; border-radius: 3px;">
+                        <option selected>Text</option>
+                        <option>File</option>
+                    </select>
                 </td>
-                <td class="col-bulk"></td>
+                <td class="col-value">
+                    <div class="cell-wrapper">
+                        <span class="cell-content value-content text-content">Value</span>
+                        <input type="text" class="cell-input value-input" placeholder="Value" value="">
+                        <div class="file-content-container empty" style="display: none;">
+                            <span class="file-placeholder">Select files</span>
+                            <div class="file-count-tag">
+                                <span class="file-tag-warning">⚠</span>
+                                <span class="file-count-text">0 files</span>
+                            </div>
+                            <div class="file-dropdown">
+                                <div class="file-dropdown-item local-file-btn">
+                                    <span class="icon">+</span>
+                                    <span>New file from local machine</span>
+                                </div>
+                                <div class="file-dropdown-divider"></div>
+                                <div class="file-dropdown-item team-file-btn">
+                                    <span>Files uploaded to team</span>
+                                </div>
+                                <div class="file-dropdown-empty">No file found</div>
+                            </div>
+                            <input type="file" class="file-input-hidden" multiple>
+                        </div>
+                    </div>
+                </td>
+                <td class="col-content-type">
+                    <div class="cell-wrapper">
+                        <span class="cell-content content-type-content">Auto</span>
+                        <input type="text" class="cell-input content-type-input" placeholder="Content-Type" value="Auto">
+                    </div>
+                </td>
+                <td class="col-desc-actions-merge" colspan="2">
+                    <div class="desc-delete-container">
+                        <div class="cell-wrapper">
+                            <span class="cell-content description-content">描述</span>
+                            <input type="text" class="cell-input description-input" placeholder="描述" value="">
+                        </div>
+                        <button class="delete-row-btn" title="删除该行">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                          </svg>
+                        </button>
+                    </div>
+                </td>
             `;
-            tbody.appendChild(newRow);
             
-            // 初始化新行的文件输入组件
-            const newComponent = newRow.querySelector('.file-input-component');
-            initFileInputComponent(newComponent);
+            tableBody.appendChild(newRow);
+
+            bindTextInputLogic(newRow);
+            bindFileLogic(newRow);
+            bindRowEvents(newRow);
+
+            const newKeyInput = newRow.querySelector('.key-input');
+            const newValueInput = newRow.querySelector('.value-input');
+            setupInputListener(newKeyInput);
+            setupInputListener(newValueInput);
+
+            const deleteBtn = newRow.querySelector('.delete-row-btn');
+            deleteBtn.addEventListener('click', () => deleteRow(newRow));
+
+            updateColumnVisibility();
+            updateDeleteButtons();
         }
 
-        function bindDropdownEvents(trigger, dropdown) {
-            if(!trigger || !dropdown) return;
-            
-            trigger.addEventListener('click', function(e) {
-                e.stopPropagation();
-                closeAllDropdowns();
-                
-                const rect = this.getBoundingClientRect();
-                dropdown.style.left = rect.left + 'px';
-                dropdown.style.top = (rect.bottom + 2) + 'px';
-                dropdown.style.display = 'block';
-                activeDropdown = dropdown;
-            });
-
-            dropdown.addEventListener('mouseleave', function() {
-                closeAllDropdowns();
-            });
-
-            dropdown.addEventListener('click', function(e) {
-                e.stopPropagation();
-            });
-        }
-
-        function toggleColumn() {
-            const showValue = document.querySelector('input[value="value"]')?.checked;
-            const showCt = document.querySelector('input[value="contentType"]')?.checked;
-            const showDesc = document.querySelector('input[value="desc"]')?.checked;
-
-            document.querySelectorAll('.col-value').forEach(el => el.classList.toggle('hide-column', !showValue));
-            document.querySelectorAll('.col-content-type').forEach(el => el.classList.toggle('hide-column', !showCt));
-            document.querySelectorAll('.col-desc').forEach(el => el.classList.toggle('hide-column', !showDesc));
-        }
-
-        const radioGroups = document.querySelectorAll('.radio-group');
-        radioGroups.forEach(label => {
-            label.addEventListener('click', () => {
-                radioGroups.forEach(l => l.classList.remove('active'));
-                label.classList.add('active');
-                hideAllAreas();
-                const v = label.querySelector('input')?.value;
-                switch(v) {
-                    case 'none': showNone(); break;
-                    case 'form-data': showFormData(); break;
-                    case 'x-www-form-urlencoded': showUrlencoded(); break;
-                    case 'raw': showRaw(); break;
-                    case 'binary': showBinary(); break;
-                    case 'graphql': showGraphQL(); break;
-                }
-            });
-        });
-
-        function hideAllAreas() {
-            document.getElementById('noneEditor').style.display = 'none';
-            document.getElementById('formDataContainer').style.display = 'none';
-            document.getElementById('urlencodedContainer').style.display = 'none';
-            document.getElementById('binaryArea').style.display = 'none';
-            document.getElementById('rawEditor').style.display = 'none';
-            document.getElementById('typeText').style.display = 'none';
-            document.getElementById('formatBtn').style.display = 'none';
-        }
-        function showNone(){ document.getElementById('noneEditor').style.display = 'flex'; }
-        function showFormData(){ document.getElementById('formDataContainer').style.display = 'block'; }
-        function showUrlencoded(){ document.getElementById('urlencodedContainer').style.display = 'block'; }
-        function showRaw(){
-            document.getElementById('typeText').style.display = 'block';
-            document.getElementById('formatBtn').style.display = 'block';
-            document.getElementById('rawEditor').style.display = 'block';
-        }
-        function showBinary(){ document.getElementById('binaryArea').style.display = 'block'; }
-        function showGraphQL(){
-            alert('GraphQL模式开发中');
-        }
-
-        function switchType(type){
-            currentType = type;
-            const typeText = document.getElementById('typeText');
-            if (typeText) typeText.firstChild.textContent = type;
-            closeAllDropdowns();
-            const formatBtn = document.getElementById('formatBtn');
-            if (formatBtn) formatBtn.display = type === 'TEXT' ? 'none' : 'block';
+        // ========== 删除行 ==========
+        function deleteRow(rowElement) {
+            const rows = document.querySelectorAll('.input-row');
+            if (rows.length <= 1) return;
+            rowElement.remove();
+            updateDeleteButtons();
         }
         
-        function formatContent(){
-            let content = document.getElementById('rawEditor')?.innerText?.trim();
-            if(!content) return;
-            try {
-                if(currentType === 'JSON'){
-                    const jsonObj = JSON.parse(content);
-                    const formatted = JSON.stringify(jsonObj, null, 2);
-                    const rawEditor = document.getElementById('rawEditor');
-                    if (rawEditor) {
-                        rawEditor.innerHTML = formatted
-                            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                            .replace(/"([^"\\]*(\\.[^"\\]*)*)"\s*:/g, '<span class="json-key">"$1"</span>:')
-                            .replace(/: "([^"\\]*(\\.[^"\\]*)*)"/g, ': <span class="json-string">"$1"</span>')
-                            .replace(/: (\d+(\.\d+)?)/g, ': <span class="json-number">$1</span>')
-                            .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
-                            .replace(/: null/g, ': <span class="json-null">null</span>')
-                            .replace(/([{}[\]])/g, '<span class="json-brace">$1</span>');
-                    }
-                }
-            } catch(e) { alert('JSON格式错误！'); }
+        // ========== Bulk Edit 功能 ==========
+        let isBulkEditMode = false;
+        const bulkEditTextarea = document.getElementById('bulkEditTextarea');
+        const tableContainer = document.querySelector('.table-container');
+        const bulkEditBtn = document.getElementById('bulkEditBtn');
+
+        // 切换 Bulk Edit 模式
+        function toggleBulkEditMode() {
+            isBulkEditMode = !isBulkEditMode;
+            tableContainer.classList.toggle('bulk-edit-mode', isBulkEditMode);
+
+            if (isBulkEditMode) {
+                // 进入 Bulk Edit：从表格生成文本
+                const text = generateBulkEditText();
+                bulkEditTextarea.value = text;
+                bulkEditTextarea.focus();
+            } else {
+                // 退出 Bulk Edit：从文本解析回表格
+                parseBulkEditText(bulkEditTextarea.value);
+            }
         }
+
+        // 从表格生成 Bulk Edit 文本（只包含 Text 类型）
+        function generateBulkEditText() {
+            const rows = document.querySelectorAll('.input-row');
+            const lines = [];
+
+            rows.forEach(row => {
+                const typeSelect = row.querySelector('.type-select');
+                if (typeSelect.value !== 'Text') return;
+
+                const key = row.querySelector('.key-content').textContent.trim();
+                const value = row.querySelector('.text-content').textContent.trim();
+
+                if (key !== '-' && key !== '') {
+                    const displayValue = value === '-' ? '' : value;
+                    lines.push(`${key}:${displayValue}`);
+                }
+            });
+
+            return lines.join('\n');
+        }
+
+        // 从 Bulk Edit 文本解析回表格
+        function parseBulkEditText(text) {
+            const lines = text.split('\n').map(line => line.trim()).filter(line => line !== '');
+            const rows = Array.from(document.querySelectorAll('.input-row'));
+
+            // 清空所有 Text 行的 Key/Value
+            rows.forEach(row => {
+                const typeSelect = row.querySelector('.type-select');
+                if (typeSelect.value === 'Text') {
+                    const keyInput = row.querySelector('.key-input');
+                    const valueInput = row.querySelector('.value-input');
+                    keyInput.value = '';
+                    valueInput.value = '';
+                    keyInput.dispatchEvent(new Event('blur'));
+                    valueInput.dispatchEvent(new Event('blur'));
+                }
+            });
+
+            // 按行依次填充
+            lines.forEach((line, idx) => {
+                const [keyPart, ...valueParts] = line.split(':');
+                const key = keyPart.trim();
+                const value = valueParts.join(':').trim();
+
+                if (key === '') return;
+
+                let targetRow = rows[idx];
+                if (!targetRow) {
+                    addNewInputRow();
+                    targetRow = document.querySelector('.input-row:last-child');
+                }
+
+                const typeSelect = targetRow.querySelector('.type-select');
+                if (typeSelect.value !== 'Text') {
+                    typeSelect.value = 'Text';
+                    typeSelect.dispatchEvent(new Event('change'));
+                }
+
+                const keyInput = targetRow.querySelector('.key-input');
+                const valueInput = targetRow.querySelector('.value-input');
+                keyInput.value = key;
+                valueInput.value = value;
+                keyInput.dispatchEvent(new Event('blur'));
+                valueInput.dispatchEvent(new Event('blur'));
+            });
+        }
+
+        // 绑定 Bulk Edit 点击事件
+        function bindBulkEdit() {
+            bulkEditBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                toggleBulkEditMode();
+            });
+
+            // 按 Enter / ESC 退出 Bulk Edit
+            bulkEditTextarea.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    toggleBulkEditMode();
+                }
+                if (e.key === 'Escape') {
+                    toggleBulkEditMode();
+                }
+            });
+        }
+
+        
+        // ========== 初始化 ==========
+        function init() {
+            bindDropdownPosition();
+            bindColumnToggleEvents();
+            updateColumnVisibility();
+
+            const initialRow = document.querySelector('.input-row');
+            bindTextInputLogic(initialRow);
+            bindFileLogic(initialRow);
+            bindRowEvents(initialRow);
+
+            const initialKeyInput = document.querySelector('.key-input');
+            const initialValueInput = document.querySelector('.value-input');
+            setupInputListener(initialKeyInput);
+            setupInputListener(initialValueInput);
+
+            const initialDeleteBtn = document.querySelector('.delete-row-btn');
+            initialDeleteBtn.addEventListener('click', () => deleteRow(initialDeleteBtn.closest('.input-row')));
+
+            bindBulkEdit();
+            
+            updateDeleteButtons();
+        }
+
+        init();
     </script>
 </body>
-</html>   
+</html>

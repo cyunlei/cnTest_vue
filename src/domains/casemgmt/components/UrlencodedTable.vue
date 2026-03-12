@@ -62,7 +62,6 @@
 export default {
   name: 'UrlencodedTable',
   mounted() {
-    console.log('UrlencodedTable mounted, table ref:', this.$refs.table)
     this.initTableEvents()
     this.updateDeleteButtons()
   },

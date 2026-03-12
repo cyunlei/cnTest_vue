@@ -218,7 +218,7 @@ function closeNodeTypeSubmenu() {
 }
 
 function handleNav(path) {
-  console.log('Navigate to:', path)
+  void path
 }
 
 // 打开新增用例弹窗
@@ -249,14 +249,14 @@ function resetAddCaseForm() {
 
 // 保存用例
 function saveCase() {
-  console.log('保存用例:', addCaseForm.value)
+  void addCaseForm.value
   // TODO: 调用API保存用例
   closeAddCaseModal()
 }
 
 // 保存并前往
 function saveAndGo() {
-  console.log('保存并前往:', addCaseForm.value)
+  void addCaseForm.value
   // TODO: 调用API保存用例并跳转
   closeAddCaseModal()
 }
@@ -276,7 +276,7 @@ function closeSyncCaseModal() {
 
 // 提交同步用例
 function submitSyncCase() {
-  console.log('同步用例:', syncCaseForm.value)
+  void syncCaseForm.value
   closeSyncCaseModal()
 }
 
@@ -292,7 +292,7 @@ function closeBatchExecModal() {
 
 // 确认执行
 function confirmBatchExec() {
-  console.log('批量执行:', batchExecForm.value)
+  void batchExecForm.value
   closeBatchExecModal()
 }
 
@@ -318,19 +318,19 @@ function closeBatchOperation() {
 
 // 批量操作
 function batchDelete() {
-  console.log('批量删除:', selectedCases.value)
+  void selectedCases.value
   closeBatchOperation()
 }
 function batchMove() {
-  console.log('批量移动:', selectedCases.value)
+  void selectedCases.value
   closeBatchOperation()
 }
 function batchEdit() {
-  console.log('批量编辑:', selectedCases.value)
+  void selectedCases.value
   closeBatchOperation()
 }
 function batchCopy() {
-  console.log('批量复制:', selectedCases.value)
+  void selectedCases.value
   closeBatchOperation()
 }
 
@@ -346,7 +346,7 @@ function closeCustomHeaderModal() {
 
 // 确认自定义表头
 function confirmCustomHeader() {
-  console.log('自定义表头:', customHeaders.value)
+  void customHeaders.value
   closeCustomHeaderModal()
 }
 

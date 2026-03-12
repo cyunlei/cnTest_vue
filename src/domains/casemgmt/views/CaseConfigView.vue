@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/shared/ui/organisms/AppHeader.vue'
@@ -34,7 +34,7 @@ const execStrategy = ref('immediate')
 const showHttpStepDrawer = ref(false)
 
 function handleNav(path) {
-  console.log('Navigate to:', path)
+  void path
 }
 
 function goBack() {
@@ -50,7 +50,7 @@ function closeHttpStepDrawer() {
 }
 
 function saveHttpStep(stepData) {
-  console.log('保存HTTP步骤:', stepData)
+  void stepData
   stepList.value.push({
     id: Date.now().toString(),
     name: stepData.name,

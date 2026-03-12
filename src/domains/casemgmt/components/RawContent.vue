@@ -17,11 +17,32 @@ export default {
     contentType: {
       type: String,
       default: 'JSON'
+    },
+    modelValue: {
+      type: String,
+      default: ''
     }
   },
   data() {
     return {
       content: ''
+    }
+  },
+  watch: {
+    modelValue: {
+      handler(val) {
+        if (val !== this.content && this.$refs.rawEditor) {
+          this.$refs.rawEditor.innerText = val || ''
+          this.content = val || ''
+        }
+      },
+      immediate: true
+    }
+  },
+  mounted() {
+    if (this.modelValue && this.$refs.rawEditor) {
+      this.$refs.rawEditor.innerText = this.modelValue
+      this.content = this.modelValue
     }
   },
   methods: {

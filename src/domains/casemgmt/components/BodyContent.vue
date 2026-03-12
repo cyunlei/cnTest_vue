@@ -30,25 +30,26 @@
         </div>
       </div>
       <div class="format-btn" id="formatBtn" ref="formatBtn" @click="formatContent" v-show="contentType === 'raw' && currentType !== 'TEXT'">格式化</div>
+
     </div>
 
     <div class="body-area">
-      <div class="editor none" v-show="contentType === 'none'">此请求没有请求体</div>
-
-      <form-data-table v-if="contentType === 'form-data'" ref="formDataTable" />
-
-      <urlencoded-table v-if="contentType === 'x-www-form-urlencoded'" ref="urlencodedTable" />
-
-      <div class="binary-file-area" v-if="contentType === 'binary'">
-        <div class="file-select-btn">Select file</div>
-        <div class="file-dropdown">
-          <div class="new-file">+ New file from local machine</div>
-          <div>Files uploaded to team</div>
-          <div class="no-file">No file found</div>
-        </div>
-      </div>
-
-      <raw-content v-if="contentType === 'raw'" ref="rawContent" :content-type="currentType" @input="onRawInput" />
+      <body-none v-if="contentType === 'none'" />
+      <body-form-data
+        v-if="contentType === 'form-data'"
+        ref="bodyFormDataRef"
+        v-model="formData"
+      />
+      <body-urlencoded v-if="contentType === 'x-www-form-urlencoded'" />
+      <body-binary v-if="contentType === 'binary'" />
+      <body-raw
+        v-if="contentType === 'raw'"
+        ref="rawContentRef"
+        :content-type="currentType"
+        :model-value="rawContent"
+        @update:model-value="updateBodyData('raw', $event)"
+      />
+      <body-graphql v-if="contentType === 'graphql'" />
     </div>
 
     <div class="global-dropdown" id="tableDropdown" ref="tableDropdown">
@@ -66,23 +67,76 @@
 </template>
 
 <script>
-import FormDataTable from './FormDataTable.vue'
-import UrlencodedTable from './UrlencodedTable.vue'
-import RawContent from './RawContent.vue'
+import BodyNone from './body/BodyNone.vue'
+import BodyFormData from './body/BodyFormData.vue'
+import BodyUrlencoded from './body/BodyUrlencoded.vue'
+import BodyBinary from './body/BodyBinary.vue'
+import BodyRaw from './body/BodyRaw.vue'
+import BodyGraphql from './body/BodyGraphql.vue'
 
 export default {
   name: 'BodyContent',
   components: {
-    FormDataTable,
-    UrlencodedTable,
-    RawContent
+    BodyNone,
+    BodyFormData,
+    BodyUrlencoded,
+    BodyBinary,
+    BodyRaw,
+    BodyGraphql
   },
+  props: {
+    modelValue: {
+      type: Object,
+      default: () => ({
+        contentType: 'form-data',
+        formData: [],
+        urlencoded: [],
+        raw: '',
+        rawType: 'json',
+        binary: null
+      })
+    }
+  },
+  emits: ['update:modelValue'],
   data() {
     return {
-      contentType: 'form-data',
-      currentType: 'JSON',
-      activeDropdown: null,
-      rawContent: ''
+      activeDropdown: null
+    }
+  },
+  computed: {
+    contentType: {
+      get() {
+        const ct = this.modelValue?.contentType || 'form-data'
+        return ct === 'formData' ? 'form-data' : ct
+      },
+      set(val) {
+        const mapped = val === 'form-data' ? 'formData' : val
+        this.updateBodyData('contentType', mapped)
+      }
+    },
+    currentType: {
+      get() {
+        return (this.modelValue?.rawType || 'json').toUpperCase()
+      },
+      set(val) {
+        this.updateBodyData('rawType', val.toLowerCase())
+      }
+    },
+    formData: {
+      get() {
+        return this.modelValue?.formData || []
+      },
+      set(val) {
+        this.updateBodyData('formData', val)
+      }
+    },
+    rawContent: {
+      get() {
+        return this.modelValue?.raw || ''
+      },
+      set(val) {
+        this.updateBodyData('raw', val)
+      }
     }
   },
   mounted() {
@@ -94,6 +148,10 @@ export default {
     })
   },
   methods: {
+    updateBodyData(key, val) {
+      const newVal = { ...this.modelValue, [key]: val }
+      this.$emit('update:modelValue', newVal)
+    },
     init() {
       this.bindDropdownEvents(this.$refs.typeText, this.$refs.dropdown)
     },
@@ -151,13 +209,7 @@ export default {
     },
 
     formatContent() {
-      if (this.$refs.rawContent) {
-        this.$refs.rawContent.formatContent()
-      }
-    },
-
-    onRawInput(content) {
-      this.rawContent = content
+      this.$refs.rawContentRef?.formatContent()
     }
   }
 }
@@ -238,9 +290,56 @@ export default {
   text-decoration: underline;
 }
 
+.form-data-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.column-toggle-btn {
+  color: #666;
+  border: none;
+  background: none;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.column-toggle-btn:hover {
+  background-color: #eee;
+}
+
+.bulk-edit-btn {
+  color: #007cbf;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  border: none;
+  background: none;
+}
+
+.bulk-edit-btn:hover {
+  background-color: #eee;
+  text-decoration: underline;
+}
+
 .body-area {
   position: relative;
   padding: 0;
+  overflow: visible;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.body-area :deep(.body-form-data),
+.body-area :deep(.outer-container),
+.body-area :deep(.table-container) {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .editor {

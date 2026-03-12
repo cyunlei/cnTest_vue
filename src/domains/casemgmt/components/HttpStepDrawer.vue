@@ -29,8 +29,6 @@ const activeDetailTab = ref('input')
 // 入参/断言子Tab
 const activeInputTab = ref('params')
 
-// Body 数据使用 RequestBodyTabs 组件内部管理
-
 // 响应Tab
 const activeResponseTab = ref('body')
 
@@ -665,7 +663,7 @@ function clearBinaryFile() {
                           </div>
                         </el-tab-pane>
                         <el-tab-pane label="Body" name="body">
-                          <body-content />
+                          <body-content v-model="currentGroup.bodyData" />
                         </el-tab-pane>
                         <el-tab-pane label="IPPort" name="ipport">
                           <el-form-item label="IP:PORT">
@@ -690,8 +688,8 @@ function clearBinaryFile() {
                         <!-- 比对方式 -->
                         <el-form-item label="比对方式：">
                           <el-radio-group v-model="assertForm.compareType">
-                            <el-radio label="1">普通</el-radio>
-                            <el-radio label="2">A/B</el-radio>
+                            <el-radio value="1">普通</el-radio>
+                            <el-radio value="2">A/B</el-radio>
                           </el-radio-group>
                         </el-form-item>
                         
@@ -703,8 +701,8 @@ function clearBinaryFile() {
                             <span>：</span>
                           </template>
                           <el-radio-group v-model="assertForm.compareRule">
-                            <el-radio label="1">整体</el-radio>
-                            <el-radio label="0">键值</el-radio>
+                            <el-radio value="1">整体</el-radio>
+                            <el-radio value="0">键值</el-radio>
                           </el-radio-group>
                           <el-checkbox v-model="assertForm.isCustomScript" class="ml-16">自定义脚本</el-checkbox>
                         </el-form-item>
@@ -712,8 +710,8 @@ function clearBinaryFile() {
                         <!-- 规则形式 -->
                         <el-form-item label="规则形式：">
                           <el-radio-group v-model="assertForm.ruleFormat">
-                            <el-radio-button label="text">文本</el-radio-button>
-                            <el-radio-button label="jsonpath">JSONPath</el-radio-button>
+                            <el-radio-button value="text">文本</el-radio-button>
+                            <el-radio-button value="jsonpath">JSONPath</el-radio-button>
                           </el-radio-group>
                         </el-form-item>
                         
@@ -722,16 +720,16 @@ function clearBinaryFile() {
                           <el-col :span="12">
                             <el-form-item label="排除空值：">
                               <el-radio-group v-model="assertForm.ignoreNull">
-                                <el-radio label="1">需要</el-radio>
-                                <el-radio label="0">不需要</el-radio>
+                                <el-radio value="1">需要</el-radio>
+                                <el-radio value="0">不需要</el-radio>
                               </el-radio-group>
                             </el-form-item>
                           </el-col>
                           <el-col :span="12">
                             <el-form-item label="忽略顺序：">
                               <el-radio-group v-model="assertForm.ignoreOrder">
-                                <el-radio label="1">需要</el-radio>
-                                <el-radio label="0">不需要</el-radio>
+                                <el-radio value="1">需要</el-radio>
+                                <el-radio value="0">不需要</el-radio>
                               </el-radio-group>
                             </el-form-item>
                           </el-col>
@@ -1223,11 +1221,6 @@ function clearBinaryFile() {
 
 .params-tabs :deep(.el-tabs__content) {
   padding: 0;
-}
-
-/* ==================== Request Body Tabs 样式 ==================== */
-.request-body-tabs {
-  width: 100%;
 }
 
 /* 键值表格 */
