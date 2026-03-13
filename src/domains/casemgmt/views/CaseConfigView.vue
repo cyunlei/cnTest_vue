@@ -1,8 +1,25 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import AppHeader from '@/shared/ui/organisms/AppHeader.vue'
 import HttpStepDrawer from '../components/HttpStepDrawer.vue'
+
+// 更多步骤类型组件
+import HttpStepType from '../components/step-types/HttpStepType.vue'
+import MysqlStepType from '../components/step-types/MysqlStepType.vue'
+import RedisStepType from '../components/step-types/RedisStepType.vue'
+import JmqStepType from '../components/step-types/JmqStepType.vue'
+import DubboStepType from '../components/step-types/DubboStepType.vue'
+import KafkaStepType from '../components/step-types/KafkaStepType.vue'
+import R2mStepType from '../components/step-types/R2mStepType.vue'
+import FmqStepType from '../components/step-types/FmqStepType.vue'
+import JarStepType from '../components/step-types/JarStepType.vue'
+import ShellStepType from '../components/step-types/ShellStepType.vue'
+import LoopStepType from '../components/step-types/LoopStepType.vue'
+import ConditionStepType from '../components/step-types/ConditionStepType.vue'
+import StardbStepType from '../components/step-types/StardbStepType.vue'
+import ScheduleJobStepType from '../components/step-types/ScheduleJobStepType.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -33,6 +50,44 @@ const stepList = ref([
 const execStrategy = ref('immediate')
 const showHttpStepDrawer = ref(false)
 const editingHttpStep = ref(null)
+const showStepTypeDialog = ref(false)
+const selectedStepType = ref(null)
+
+// 更多类型下拉选项（1=MySQL, 2=Redis, 3=JMQ, 4=DUBBO, 5=KAFKA, 6=R2M, 7=FMQ, 8=JAR, 9=SHELL, 10=循环, 11=条件, 12=STARDB, 13=SCHEDULEJOB）
+// 注意：HTTP(0)已在外部单独展示，不在下拉框中显示
+const stepTypeOptions = [
+  { label: 'MySQL', value: 1, type: 'MySQL', component: 'MysqlStepType', desc: 'MySQL查询' },
+  { label: 'Redis', value: 2, type: 'Redis', component: 'RedisStepType', desc: 'Redis操作' },
+  { label: 'JMQ', value: 3, type: 'JMQ', component: 'JmqStepType', desc: 'JMQ消息' },
+  { label: 'DUBBO', value: 4, type: 'DUBBO', component: 'DubboStepType', desc: 'Dubbo调用' },
+  { label: 'KAFKA', value: 5, type: 'KAFKA', component: 'KafkaStepType', desc: 'Kafka消息' },
+  { label: 'R2M', value: 6, type: 'R2M', component: 'R2mStepType', desc: 'R2M缓存' },
+  { label: 'FMQ', value: 7, type: 'FMQ', component: 'FmqStepType', desc: 'FMQ消息' },
+  { label: 'JAR', value: 8, type: 'JAR', component: 'JarStepType', desc: 'JAR包执行' },
+  { label: 'SHELL', value: 9, type: 'SHELL', component: 'ShellStepType', desc: 'Shell脚本' },
+  { label: '循环', value: 10, type: '循环', component: 'LoopStepType', desc: '循环控制' },
+  { label: '条件', value: 11, type: '条件', component: 'ConditionStepType', desc: '条件判断' },
+  { label: 'STARDB', value: 12, type: 'STARDB', component: 'StardbStepType', desc: 'STARDB数据库' },
+  { label: 'SCHEDULEJOB', value: 13, type: 'SCHEDULEJOB', component: 'ScheduleJobStepType', desc: '调度任务' }
+]
+
+// 步骤类型映射到组件
+const stepTypeComponentMap = {
+  'HttpStepType': HttpStepType,
+  'MysqlStepType': MysqlStepType,
+  'RedisStepType': RedisStepType,
+  'JmqStepType': JmqStepType,
+  'DubboStepType': DubboStepType,
+  'KafkaStepType': KafkaStepType,
+  'R2mStepType': R2mStepType,
+  'FmqStepType': FmqStepType,
+  'JarStepType': JarStepType,
+  'ShellStepType': ShellStepType,
+  'LoopStepType': LoopStepType,
+  'ConditionStepType': ConditionStepType,
+  'StardbStepType': StardbStepType,
+  'ScheduleJobStepType': ScheduleJobStepType
+}
 
 function handleNav(path) {
   void path
@@ -74,6 +129,37 @@ function openStepDrawer(step) {
     detail: step.detail
   }
   showHttpStepDrawer.value = true
+}
+
+// 处理更多类型选择
+function handleStepTypeSelect(stepType) {
+  const typeOption = stepTypeOptions.find(opt => opt.value === stepType)
+  if (!typeOption) return
+
+  // 添加到步骤列表并显示类型对话框
+  selectedStepType.value = typeOption
+  const newStep = {
+    id: Date.now().toString(),
+    name: typeOption.label + '步骤',
+    detail: typeOption.desc,
+    type: typeOption.type,
+    inputGroup: '1/1',
+    order: stepList.value.length + 1,
+    stepData: { type: typeOption.value, component: typeOption.component }
+  }
+  stepList.value.push(newStep)
+  ElMessage.success(`已添加 ${typeOption.label} 步骤`)
+}
+
+// 打开步骤类型配置对话框
+function openStepTypeDialog(step) {
+  selectedStepType.value = stepTypeOptions.find(opt => opt.type === step.type) || null
+  showStepTypeDialog.value = true
+}
+
+function closeStepTypeDialog() {
+  showStepTypeDialog.value = false
+  selectedStepType.value = null
 }
 </script>
 <template>
@@ -131,7 +217,22 @@ function openStepDrawer(step) {
             <span class="toolbar-label">添加:</span>
             <button class="tool-btn">JSF</button>
             <button class="tool-btn primary" @click="openHttpStepDrawer">HTTP</button>
-            <button class="tool-btn">更多类型</button>
+            <el-dropdown trigger="hover" @command="handleStepTypeSelect">
+              <button class="tool-btn">更多类型</button>
+              <template #dropdown>
+                <el-dropdown-menu class="step-type-dropdown">
+                  <el-dropdown-item
+                    v-for="opt in stepTypeOptions"
+                    :key="opt.value"
+                    :command="opt.value"
+                    class="step-type-item"
+                  >
+                    <span class="step-type-label">{{ opt.label }}</span>
+                    <span class="step-type-desc">{{ opt.desc }}</span>
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
             <button class="tool-btn">导入</button>
             <button class="tool-btn">测试物料</button>
             <button class="tool-btn">接口录制</button>
@@ -183,6 +284,30 @@ function openStepDrawer(step) {
       </main>
     </div>
     <HttpStepDrawer :visible="showHttpStepDrawer" :step="editingHttpStep" @close="closeHttpStepDrawer" @save="saveHttpStep" />
+
+    <!-- 步骤类型配置对话框 -->
+    <el-dialog
+      v-model="showStepTypeDialog"
+      :title="selectedStepType?.label + ' 步骤配置'"
+      width="80%"
+      :close-on-click-modal="false"
+      destroy-on-close
+      @close="closeStepTypeDialog"
+    >
+      <div class="step-type-dialog-content">
+        <component
+          v-if="selectedStepType"
+          :is="stepTypeComponentMap[selectedStepType.component]"
+          :title="selectedStepType.label + ' 步骤'"
+        />
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="closeStepTypeDialog">取消</el-button>
+          <el-button type="primary" @click="closeStepTypeDialog">确定</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 <style scoped>
@@ -222,8 +347,9 @@ function openStepDrawer(step) {
 .toolbar-section { display: flex; align-items: center; justify-content: space-between; background: #e6f7ff; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; }
 .toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 8px; }
 .toolbar-label { font-size: 14px; color: #333; }
-.tool-btn { padding: 6px 16px; border: 1px solid #d9d9d9; background: #fff; border-radius: 4px; font-size: 14px; cursor: pointer; color: #333; }
+.tool-btn { padding: 6px 16px; border: 1px solid #d9d9d9; background: #fff; border-radius: 4px; font-size: 14px; cursor: pointer; color: #333; outline: none; }
 .tool-btn:hover { border-color: #1890ff; color: #1890ff; }
+.tool-btn:focus { outline: none; }
 .tool-btn.primary { background: #1890ff; color: #fff; border-color: #1890ff; }
 .step-table { background: #fff; border-radius: 8px; overflow: auto; margin-bottom: 16px; }
 .step-table table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -231,10 +357,74 @@ function openStepDrawer(step) {
 .step-table th { background: #fafafa; font-weight: 500; color: #666; }
 .type-tag { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
 .type-tag.jsf { background: #f6ffed; color: #52c41a; }
+.type-tag.HTTP { background: #e6f7ff; color: #1890ff; }
+.type-tag.MySQL { background: #fff7e6; color: #fa8c16; }
+.type-tag.Redis { background: #fff1f0; color: #ff4d4f; }
+.type-tag.JMQ { background: #f6ffed; color: #52c41a; }
+.type-tag.DUBBO { background: #e6fffb; color: #13c2c2; }
+.type-tag.KAFKA { background: #f9f0ff; color: #722ed1; }
+.type-tag.R2M { background: #fff0f6; color: #eb2f96; }
+.type-tag.FMQ { background: #f0f5ff; color: #2f54eb; }
+.type-tag.JAR { background: #e6f7ff; color: #096dd9; }
+.type-tag.SHELL { background: #f0f0f0; color: #595959; }
+.type-tag.循环 { background: #fff2e8; color: #fa541c; }
+.type-tag.条件 { background: #e6fffb; color: #08979c; }
+.type-tag.STARDB { background: #f0f5ff; color: #1d39c4; }
+.type-tag.SCHEDULEJOB { background: #fff7e6; color: #d48806; }
 .action-icon { padding: 4px 8px; border: none; background: transparent; color: #1890ff; cursor: pointer; font-size: 13px; }
 .exec-strategy { background: #fff; border-radius: 8px; padding: 16px; }
 .strategy-title { font-size: 14px; font-weight: 500; color: #333; margin: 0 0 12px 0; }
 .strategy-form { display: flex; align-items: center; gap: 12px; }
 .strategy-form .required { color: #f5222d; }
 .radio-item { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 14px; }
+
+/* 步骤类型下拉菜单样式 */
+.step-type-dropdown {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.step-type-dropdown :deep(.el-dropdown-menu__list) {
+  padding: 4px;
+}
+
+.step-type-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  min-width: 180px;
+}
+
+.step-type-item:hover {
+  background-color: #f5f7fa;
+}
+
+.step-type-label {
+  font-weight: 500;
+  color: #303133;
+  min-width: 60px;
+}
+
+.step-type-desc {
+  font-size: 12px;
+  color: #909399;
+}
+
+/* 步骤类型对话框内容 */
+.step-type-dialog-content {
+  padding: 20px;
+  min-height: 300px;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* Element Plus 下拉菜单覆盖样式 */
+:deep(.el-dropdown) {
+  vertical-align: middle;
+}
 </style>

@@ -151,9 +151,9 @@ export default {
       // 参考 json.cn 的常见配色：key 紫、string 绿、number 蓝、boolean 粉、null 橙、括号灰
       let s = escaped
       // key: "xxx":
-      s = s.replace(/&quot;([^&\\]*(?:\\.[^&\\]*)*)&quot;(?=\s*:)/g, '<span class="json-key">&quot;$1&quot;</span>')
+      s = s.replace(/&quot;([^&\\]*(?:\.[^&\\]*)*)&quot;(?=\s*:)/g, '<span class="json-key">&quot;$1&quot;</span>')
       // string value: : "xxx"
-      s = s.replace(/:\s*&quot;([^&\\]*(?:\\.[^&\\]*)*)&quot;/g, ': <span class="json-string">&quot;$1&quot;</span>')
+      s = s.replace(/:\s*&quot;([^&\\]*(?:\.[^&\\]*)*)&quot;/g, ': <span class="json-string">&quot;$1&quot;</span>')
       // number
       s = s.replace(/:\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g, ': <span class="json-number">$1</span>')
       // boolean

@@ -76,8 +76,8 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { Plus, QuestionFilled } from '@element-plus/icons-vue'
-import { usePresetVariablesStore } from '../stores/usePresetVariablesStore'
-import { usePresetTemplateStore } from '../stores/usePresetTemplateStore'
+import { usePresetVariablesStore } from '../../stores/usePresetVariablesStore'
+import { usePresetTemplateStore } from '../../stores/usePresetTemplateStore'
 import PresetVarTableCore from './PresetVarTableCore.vue'
 
 // 类型映射：
@@ -429,4 +429,3 @@ const handleGoModuleSettings = () => {
   margin-right: 4px;
 }
 </style>
-

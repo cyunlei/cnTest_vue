@@ -7,7 +7,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import PostmanFormData from '../PostmanFormData.vue'
+import PostmanFormData from '../form/PostmanFormData.vue'
 
 defineOptions({ name: 'BodyFormData' })
 

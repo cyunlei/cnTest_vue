@@ -3,7 +3,7 @@
  * JSON 添加对话框组件
  */
 import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { useJsonCacheStore } from '../stores/useJsonCacheStore'
+import { useJsonCacheStore } from '../../stores/useJsonCacheStore'
 import InputDialog from './InputDialog.vue'
 
 const props = defineProps({

@@ -6,7 +6,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import UrlencodedTable from '../UrlencodedTable.vue'
+import UrlencodedTable from '../form/UrlencodedTable.vue'
 
 defineOptions({ name: 'BodyUrlencoded' })
 

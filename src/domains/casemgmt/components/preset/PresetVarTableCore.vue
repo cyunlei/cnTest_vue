@@ -251,7 +251,7 @@ const handleNameInput = (row: PresetVarRow) => {
 }
 
 const addRow = () => {
-  // 新增前必须先“保存”上一行：变量名必填且不重复
+  // 新增前必须先"保存"上一行：变量名必填且不重复
   const last = rows.value[rows.value.length - 1]
   if (last) {
     if (!validateRow(last)) {
@@ -433,4 +433,3 @@ defineExpose({
   margin-right: 4px;
 }
 </style>
-

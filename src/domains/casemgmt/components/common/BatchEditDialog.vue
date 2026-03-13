@@ -122,7 +122,7 @@ export const ParamSelectDialog = {
  * <batch-edit-dialog v-model="visible" @save="handleSave" />
  */
 import { ref, computed } from 'vue'
-import { useBatchEditStore } from '../stores/useBatchEditStore'
+import { useBatchEditStore } from '../../stores/useBatchEditStore'
 import InputDialog from './InputDialog.vue'
 
 const props = defineProps({

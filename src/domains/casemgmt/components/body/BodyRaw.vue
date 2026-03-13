@@ -11,7 +11,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import RawContent from '../RawContent.vue'
+import RawContent from '../common/RawContent.vue'
 
 defineOptions({ name: 'BodyRaw' })
 

@@ -11,6 +11,15 @@ import 'element-plus/dist/index.css'
 import App from './App.vue'
 import router from './app/router'
 
+// 配置 Monaco Editor Web Worker (在导入 monaco-editor 之前)
+self.MonacoEnvironment = {
+  getWorkerUrl: function (moduleId, label) {
+    // 返回空字符串禁用 web worker，使用主线程模式
+    // 这样可以避免 worker 加载错误
+    return ''
+  }
+}
+
 // 创建应用实例
 const app = createApp(App)
 

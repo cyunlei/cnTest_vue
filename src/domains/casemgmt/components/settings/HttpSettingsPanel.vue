@@ -181,4 +181,3 @@ const settingsForm = reactive({
   word-break: break-all;
 }
 </style>
-
