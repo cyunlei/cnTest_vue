@@ -32,6 +32,7 @@ const stepList = ref([
 
 const execStrategy = ref('immediate')
 const showHttpStepDrawer = ref(false)
+const editingHttpStep = ref(null)
 
 function handleNav(path) {
   void path
@@ -42,6 +43,7 @@ function goBack() {
 }
 
 function openHttpStepDrawer() {
+  editingHttpStep.value = null
   showHttpStepDrawer.value = true
 }
 
@@ -57,9 +59,21 @@ function saveHttpStep(stepData) {
     detail: stepData.method + ' | ' + stepData.url,
     type: 'HTTP',
     inputGroup: '1/1',
-    order: stepList.value.length + 1
+    order: stepList.value.length + 1,
+    httpData: stepData
   })
   closeHttpStepDrawer()
+}
+
+function openStepDrawer(step) {
+  // 点击任意步骤名称，都打开 HTTP 步骤抽屉
+  // 如果是已保存的 HTTP 步骤，优先使用 httpData 回填
+  // 否则至少回填步骤名称和 detail（方法 / URL 由用户再补）
+  editingHttpStep.value = step.httpData || {
+    name: step.name,
+    detail: step.detail
+  }
+  showHttpStepDrawer.value = true
 }
 </script>
 <template>
@@ -147,7 +161,7 @@ function saveHttpStep(stepData) {
               <tr v-for="step in stepList" :key="step.id">
                 <td class="col-checkbox"><input type="checkbox" /></td>
                 <td class="col-id">{{ step.id }}</td>
-                <td class="col-name"><a class="link">{{ step.name }}</a></td>
+                <td class="col-name"><a class="link" @click="openStepDrawer(step)">{{ step.name }}</a></td>
                 <td class="col-detail">{{ step.detail }}</td>
                 <td class="col-type"><span class="type-tag jsf">{{ step.type }}</span></td>
                 <td class="col-group">{{ step.inputGroup }}</td>
@@ -168,7 +182,7 @@ function saveHttpStep(stepData) {
         </div>
       </main>
     </div>
-    <HttpStepDrawer :visible="showHttpStepDrawer" @close="closeHttpStepDrawer" @save="saveHttpStep" />
+    <HttpStepDrawer :visible="showHttpStepDrawer" :step="editingHttpStep" @close="closeHttpStepDrawer" @save="saveHttpStep" />
   </div>
 </template>
 <style scoped>

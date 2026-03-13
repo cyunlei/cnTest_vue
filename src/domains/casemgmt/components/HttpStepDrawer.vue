@@ -2,7 +2,7 @@
 /**
  * HTTP 测试步骤抽屉 - 参考界面重构版
  */
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Close, Plus, Delete, ArrowRight, More, ArrowDown, ArrowUp, QuestionFilled, Link, EditPen, Right, CopyDocument } from '@element-plus/icons-vue'
 import JsonAddDialog from './JsonAddDialog.vue'
 import BatchEditDialog from './BatchEditDialog.vue'
@@ -21,11 +21,16 @@ import RedisStepDrawer from './steps/RedisStepDrawer.vue'
 import ScriptStepDrawer from './steps/ScriptStepDrawer.vue'
 import DelayStepDrawer from './steps/DelayStepDrawer.vue'
 import ExtractVarStepDrawer from './steps/ExtractVarStepDrawer.vue'
+import ResponseBodyView from './response/ResponseBodyView.vue'
+import ResponseHeaderView from './response/ResponseHeaderView.vue'
+import ResponseExpectedView from './response/ResponseExpectedView.vue'
+import ResponseActualInputView from './response/ResponseActualInputView.vue'
 import { usePresetVariablesStore } from '../stores/usePresetVariablesStore'
 import { usePresetTemplateStore } from '../stores/usePresetTemplateStore'
 
 const props = defineProps({
-  visible: { type: Boolean, default: false }
+  visible: { type: Boolean, default: false },
+  step: { type: Object, default: null }
 })
 
 const emit = defineEmits(['close', 'save', 'update:visible'])
@@ -35,6 +40,25 @@ const innerVisible = computed({
   set: (v) => emit('update:visible', v)
 })
 
+watch(
+  () => props.step,
+  (val) => {
+    if (!val) return
+    // 回填基础信息
+    basicForm.value.name = val.name || ''
+    if (val.detail && typeof val.detail === 'string') {
+      const parts = val.detail.split('|')
+      if (parts[0]) {
+        basicForm.value.method = parts[0].trim()
+      }
+      if (parts[1]) {
+        basicForm.value.url = parts[1].trim()
+      }
+    }
+  },
+  { immediate: true }
+)
+
 // 折叠面板状态
 const basicExpanded = ref(true) // 基础信息整体展开/收起
 const showMoreInfo = ref(false) // 更多信息展开/收起（控制第二排后两个和第三排）
@@ -42,6 +66,21 @@ const detailExpanded = ref(true)
 
 // 响应区域显示状态
 const showResponse = ref(false)
+
+// 响应区域数据
+const responseBody = ref('')
+const responseHeaders = ref([])
+const responseExpected = ref('')
+const responseActualInput = ref('')
+const responseSuccess = ref(true)
+const responseTimeMs = ref(0)
+const responseStatusCode = ref(0)
+const assertSuccessCount = ref(0)
+const assertTotalCount = ref(0)
+const responseSummary = ref('')          // 断言结果等汇总文案
+const responseSummaryDetail = ref('')    // 展开后详细信息（断言 / 预设变量 / 前置后置等）
+const responseSummaryType = ref('success') // success / error
+const responseSummaryExpanded = ref(false)
 
 // 详细信息Tab
 const activeDetailTab = ref('input')
@@ -422,7 +461,12 @@ function handleClose() {
 
 // 保存
 function handleSave() {
-  emit('save')
+  const payload = {
+    name: basicForm.value.name,
+    method: basicForm.value.method,
+    url: basicForm.value.url
+  }
+  emit('save', payload)
 }
 
 // 切换基础信息展开/收起
@@ -440,8 +484,82 @@ function toggleDetail() {
   detailExpanded.value = !detailExpanded.value
 }
 
+const responseTimeClass = computed(() => {
+  if (responseTimeMs.value > 3000) {
+    return 'meta-item--time-danger'
+  }
+  if (responseTimeMs.value > 1000) {
+    return 'meta-item--time-warn'
+  }
+  return 'meta-item--time-normal'
+})
+
+const responseStatusClass = computed(() => {
+  const code = responseStatusCode.value
+  if (code >= 200 && code < 300) return 'meta-item--status-2xx'
+  if (code >= 300 && code < 400) return 'meta-item--status-3xx'
+  if (code >= 400 && code < 500) return 'meta-item--status-4xx'
+  if (code >= 500 && code < 600) return 'meta-item--status-5xx'
+  return ''
+})
+
+const assertRateText = computed(() => {
+  if (!assertTotalCount.value) return '0/0'
+  return `${assertSuccessCount.value}/${assertTotalCount.value}`
+})
+
+const assertRateClass = computed(() => {
+  if (assertTotalCount.value && assertSuccessCount.value === assertTotalCount.value) {
+    return 'meta-tag--ok'
+  }
+  return 'meta-tag--partial'
+})
+
 // 测试一下
 function handleTest() {
+  // 这里先模拟一次接口调用，把返回结果挂到响应区域四个字段上
+  // 实际接后端时，只需要在请求成功回调里替换下面的 mock 数据即可
+  const mockBody = {
+    code: 0,
+    msg: 'ok',
+    data: {
+      orderId: '202603120001',
+      status: 'SUCCESS'
+    }
+  }
+
+  const mockHeaders = [
+    { key: 'Content-Type', value: 'application/json; charset=utf-8' },
+    { key: 'Date', value: new Date().toUTCString() }
+  ]
+
+  const group = currentGroup.value
+  const mockActualInput = group && group.bodyData && group.bodyData.raw
+    ? group.bodyData.raw
+    : ''
+
+  responseBody.value = JSON.stringify(mockBody, null, 4)
+  responseHeaders.value = mockHeaders
+  responseExpected.value = ''
+  responseActualInput.value = mockActualInput
+  responseSuccess.value = mockBody.code === 0
+  responseTimeMs.value = 435
+  responseStatusCode.value = 200
+  assertSuccessCount.value = 5
+  assertTotalCount.value = 5
+
+  if (responseSuccess.value) {
+    responseSummaryType.value = 'success'
+    responseSummary.value = '断言全部通过，预设变量与前置/后置步骤执行正常'
+    responseSummaryDetail.value = '断言结果：全部通过\n预设变量：写入成功\n前置步骤：执行成功\n后置步骤：执行成功'
+  } else {
+    responseSummaryType.value = 'error'
+    responseSummary.value = '断言失败，详情请展开查看'
+    responseSummaryDetail.value = '断言结果：存在失败项\n预设变量：部分写入失败\n前置/后置步骤：请检查执行日志'
+  }
+
+  responseSummaryExpanded.value = false
+
   showResponse.value = true
 }
 
@@ -1138,6 +1256,27 @@ function clearBinaryFile() {
         <div class="section-header">
           <span class="section-title">响应信息区域</span>
         </div>
+        <!-- 断言 / 预设变量 / 前置后置 等结果汇总，可展开 -->
+        <div
+          v-if="responseSummary"
+          class="response-summary"
+          :class="responseSummaryType === 'success' ? 'response-summary--success' : 'response-summary--error'"
+        >
+          <div class="response-summary-main" @click="responseSummaryExpanded = !responseSummaryExpanded">
+            <span class="response-summary-icon">
+              <!-- 简单状态圆点 -->
+              <span class="status-dot" />
+            </span>
+            <span class="response-summary-text">{{ responseSummary }}</span>
+            <span class="response-summary-toggle">
+              {{ responseSummaryExpanded ? '收起' : '展开' }}
+            </span>
+          </div>
+          <div v-if="responseSummaryExpanded" class="response-summary-detail">
+            <pre class="response-summary-detail-text">{{ responseSummaryDetail }}</pre>
+          </div>
+        </div>
+
         <div class="response-tabs">
           <el-tabs v-model="activeResponseTab">
             <el-tab-pane label="响应体" name="body">
@@ -1147,43 +1286,36 @@ function clearBinaryFile() {
                   <div class="sub-header">
                     <span class="sub-title">响应值</span>
                   </div>
-                  <div class="placeholder-content code-placeholder">
-                    <span>实际响应结果展示区域</span>
-                  </div>
+                  <ResponseBodyView v-model="responseBody" />
                 </div>
                 <!-- 期望值 -->
                 <div class="response-item">
                   <div class="sub-header">
                     <span class="sub-title">期望值</span>
                   </div>
-                  <div class="placeholder-content code-placeholder">
-                    <span>期望响应结果展示区域</span>
-                  </div>
+                  <ResponseExpectedView v-model="responseExpected" />
                 </div>
                 <!-- 实际入参 -->
                 <div class="response-item">
                   <div class="sub-header">
                     <span class="sub-title">实际入参</span>
                   </div>
-                  <div class="placeholder-content code-placeholder">
-                    <span>实际请求参数展示区域</span>
-                  </div>
+                  <ResponseActualInputView v-model="responseActualInput" />
                 </div>
               </div>
             </el-tab-pane>
             <el-tab-pane label="响应头" name="headers">
-              <div class="placeholder-content">
-                <span>响应头信息展示区域</span>
-              </div>
+              <ResponseHeaderView v-model="responseHeaders" />
             </el-tab-pane>
           </el-tabs>
         </div>
         <!-- 响应元信息 -->
-        <div class="response-meta">
+        <div class="response-meta" :class="responseSuccess ? 'response-meta--success' : 'response-meta--error'">
           <span class="meta-item">测试站</span>
-          <span class="meta-item">键值</span>
-          <span class="meta-item">状态码: 200</span>
-          <span class="meta-item">响应时间: 435ms</span>
+          <span class="meta-item meta-tag meta-tag--mode">键值</span>
+          <span class="meta-item meta-tag" :class="assertRateClass">{{ assertRateText }}</span>
+          <span class="meta-item" :class="responseStatusClass">状态码: {{ responseStatusCode }}</span>
+          <span class="meta-item" :class="responseTimeClass">响应时间: {{ responseTimeMs }}ms</span>
         </div>
       </div>
     </div>
@@ -1726,10 +1858,121 @@ function clearBinaryFile() {
 
 .response-meta .meta-item {
   font-size: 12px;
-  color: #606266;
   padding: 2px 8px;
-  background: #f0f2f5;
   border-radius: 4px;
+}
+
+.response-meta--success {
+  color: inherit;
+}
+
+.response-meta--error {
+  color: inherit;
+}
+
+.meta-item--time-normal {
+  color: #909399;
+}
+
+.meta-item--time-warn {
+  color: #fa8c16;
+}
+
+.meta-item--time-danger {
+  color: #f5222d;
+}
+
+.meta-item--status-2xx {
+  color: #52c41a;
+}
+
+.meta-item--status-3xx {
+  color: #fa8c16;
+}
+
+.meta-item--status-4xx {
+  color: #722ed1;
+}
+
+.meta-item--status-5xx {
+  color: #f5222d;
+}
+
+.meta-tag {
+  padding: 2px 10px;
+  border-radius: 4px;
+  color: #fff;
+}
+
+.meta-tag--mode {
+  background-color: #ff7a45; /* 橙色，表示键值模式 */
+}
+
+.meta-tag--ok {
+  background-color: #52c41a; /* 绿色，表示完全正确 */
+}
+
+.meta-tag--partial {
+  background-color: #fa8c16; /* 橙色，表示部分正确 */
+}
+
+/* 响应结果汇总行（断言结果 / 预设变量 / 前置后置等） */
+.response-summary {
+  margin-top: 8px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.response-summary-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.response-summary-icon .status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.response-summary-text {
+  flex: 1;
+}
+
+.response-summary-toggle {
+  color: #1890ff;
+}
+
+.response-summary-detail {
+  margin-top: 4px;
+}
+
+.response-summary-detail-text {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+.response-summary--success {
+  background-color: #e4ffe4;
+  color: #52c41a;
+}
+
+.response-summary--success .status-dot {
+  background-color: #52c41a;
+}
+
+.response-summary--error {
+  background-color: #ffeaea;
+  color: #ff4d4f;
+}
+
+.response-summary--error .status-dot {
+  background-color: #ff4d4f;
 }
 
 /* 底部操作栏 */
