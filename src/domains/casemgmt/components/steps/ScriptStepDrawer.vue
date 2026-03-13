@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick } from 'vue'
+import { ElMessage } from 'element-plus'
 import { EditPen, Delete, CopyDocument, ArrowDown } from '@element-plus/icons-vue'
 import MonacoEditor from './MonacoEditor.vue'
 import CodeMirrorEditor from './CodeMirrorEditor.vue'
@@ -9,12 +10,15 @@ const props = defineProps<{
   collapsed?: boolean
   index?: number
   name?: string
+  modelValue?: string
+  useTemplateMode?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'copy'): void
   (e: 'delete'): void
   (e: 'update:name', value: string): void
+  (e: 'update:modelValue', value: string): void
 }>()
 
 const stepName = ref(props.name || '操作步骤1')
@@ -24,7 +28,7 @@ const nameInputRef = ref()
 
 // 自定义脚本字段
 const language = ref<'beanshell' | 'python' | 'groovy' | 'javascript' | 'qlexpress'>('beanshell')
-const code = ref('')
+const code = ref(props.modelValue || '')
 const scriptError = ref('')
 
 const monacoLanguage = computed(() => {
@@ -47,6 +51,16 @@ watch(
   (val) => {
     if (typeof val === 'string') {
       stepName.value = val
+    }
+  }
+)
+
+// 外部传入脚本变更时，同步到内部 code
+watch(
+  () => props.modelValue,
+  (val) => {
+    if (typeof val === 'string' && val !== code.value) {
+      code.value = val
     }
   }
 )
@@ -119,6 +133,27 @@ const handleMonacoValidate = (errors: string[]) => {
 
 const handleCmValidate = (errors: string[]) => {
   scriptError.value = errors[0] || ''
+}
+
+// 内部编辑脚本时向外同步
+watch(
+  () => code.value,
+  (val) => {
+    emit('update:modelValue', val)
+  }
+)
+
+// 占位：导入脚本模板（后续替换为真实接口调用）
+const handleImportTemplate = async () => {
+  try {
+    // TODO: 调用后端脚本模板接口，按当前 language 选择合适模板
+    // 例如：const tpl = await fetchScriptTemplate(language.value)
+    const tpl = `// TODO: 替换为真实脚本模板\n// language: ${language.value}\n`
+    code.value = tpl
+    ElMessage.success('已导入脚本模板（示例，占位实现）')
+  } catch (e) {
+    ElMessage.error('导入脚本模板失败，请稍后重试')
+  }
 }
 </script>
 
@@ -197,7 +232,7 @@ const handleCmValidate = (errors: string[]) => {
           </div>
         </div>
 
-        <!-- 右侧脚本语言 + 变量操作 -->
+        <!-- 右侧脚本语言 + 变量操作 / 模板导入 -->
         <div class="script-side-panel">
           <div class="side-row">
             <el-select v-model="language" size="small" class="lang-select-inner">
@@ -208,15 +243,27 @@ const handleCmValidate = (errors: string[]) => {
               <el-option label="qlexpress" value="qlexpress" />
             </el-select>
           </div>
-          <div class="side-row side-row--label">
-            <span class="side-label">自定义变量</span>
-          </div>
-          <div class="side-row">
-            <el-button link type="primary" @click="handleInsertGetVar">获取变量</el-button>
-          </div>
-          <div class="side-row">
-            <el-button link type="primary" @click="handleInsertSetVar">设置变量</el-button>
-          </div>
+          <template v-if="!props.useTemplateMode">
+            <div class="side-row side-row--label">
+              <span class="side-label">自定义变量</span>
+            </div>
+            <div class="side-row">
+              <el-button link type="primary" @click="handleInsertGetVar">获取变量</el-button>
+            </div>
+            <div class="side-row">
+              <el-button link type="primary" @click="handleInsertSetVar">设置变量</el-button>
+            </div>
+          </template>
+          <template v-else>
+            <div class="side-row side-row--label">
+              <span class="side-label">脚本模板</span>
+            </div>
+            <div class="side-row">
+              <el-button link type="primary" @click="handleImportTemplate">
+                导入脚本模板
+              </el-button>
+            </div>
+          </template>
         </div>
       </div>
     </div>

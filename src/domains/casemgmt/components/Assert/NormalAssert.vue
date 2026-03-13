@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import ScriptStepDrawer from '../steps/ScriptStepDrawer.vue'
 import { ElMessageBox } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 
 interface AssertForm {
   compareType: string
@@ -45,11 +47,42 @@ const isOverall = computed(() => String(form.value.compareRule) === 'overall')
 const isKeyValue = computed(() => String(form.value.compareRule) === 'key')
 const isScript = computed(() => String(form.value.compareRule) === 'script')
 
+// 自定义脚本复选框状态
+const scriptEnabled = computed({
+  get: () => isScript.value,
+  set: (val: boolean) => {
+    if (val) {
+      form.value = { ...form.value, compareRule: 'script' }
+    } else if (form.value.compareRule === 'script') {
+      // 取消勾选脚本时，回退到整体
+      form.value = { ...form.value, compareRule: 'overall' }
+    }
+  }
+})
+
+// 自定义脚本编辑块列表（支持多个脚本）
+interface ScriptBlock {
+  id: number
+  code: string
+}
+
+const scriptBlocks = ref<ScriptBlock[]>([])
+
+watch(
+  () => scriptEnabled.value,
+  (val) => {
+    if (!val) {
+      scriptBlocks.value = []
+    }
+  }
+)
+
 const showRuleFormat = computed(() => isNormal.value && isKeyValue.value)
 const showTextInput = computed(() => {
   if (!isNormal.value) return true
   if (isOverall.value) return true
-  if (isScript.value) return true
+  // 自定义脚本不使用普通文本框，而是使用 ScriptStepDrawer
+  if (isScript.value) return false
   // 键值模式：仅当规则形式=文本时展示文本输入
   return isKeyValue.value && String(localRuleFormat.value) === 'text'
 })
@@ -157,11 +190,19 @@ function handleCompareTypeChange(val: string) {
         </el-tooltip>
         <span>：</span>
       </template>
-      <el-radio-group v-model="form.compareRule">
-        <el-radio value="overall">整体</el-radio>
-        <el-radio value="key">键值</el-radio>
-        <el-radio v-if="isNormal" value="script">自定义脚本</el-radio>
-      </el-radio-group>
+      <div class="rule-row">
+        <el-radio-group v-model="form.compareRule">
+          <el-radio value="overall">整体</el-radio>
+          <el-radio value="key">键值</el-radio>
+        </el-radio-group>
+        <el-checkbox
+          v-if="isNormal"
+          v-model="scriptEnabled"
+          class="script-checkbox"
+        >
+          自定义脚本
+        </el-checkbox>
+      </div>
     </el-form-item>
 
     <!-- 规则形式 -->
@@ -172,7 +213,7 @@ function handleCompareTypeChange(val: string) {
       </el-radio-group>
     </el-form-item>
 
-    <!-- 文本输入区（整体 / 键值-文本 / 自定义脚本） -->
+    <!-- 文本输入区（整体 / 键值-文本） -->
     <div v-if="showTextInput" class="assert-text-area">
       <el-input
         v-model="form.textContent"
@@ -181,6 +222,64 @@ function handleCompareTypeChange(val: string) {
         resize="none"
         placeholder="请输入内容"
       />
+    </div>
+
+    <!-- 自定义脚本：使用 ScriptStepDrawer 作为脚本编辑器 -->
+    <div v-if="isScript" class="assert-script-wrapper">
+      <el-button
+        type="primary"
+        size="small"
+        class="add-script-btn"
+        @click="scriptBlocks.push({ id: Date.now(), code: '' })"
+      >
+        <el-icon><Plus /></el-icon>
+        <span>添加脚本</span>
+      </el-button>
+      <div
+        v-for="(block, idx) in scriptBlocks"
+        :key="block.id"
+        class="script-block"
+      >
+        <div class="script-block-header">
+          <span class="script-block-title">自定义脚本{{ idx + 1 }}</span>
+          <div class="script-block-actions">
+            <!-- 复制脚本 -->
+            <svg
+              viewBox="64 64 896 896"
+              class="script-action-icon copy"
+              focusable="false"
+              width="1em"
+              height="1em"
+              fill="currentColor"
+              aria-hidden="true"
+              @click.stop="scriptBlocks.splice(idx + 1, 0, { id: Date.now(), code: block.code })"
+            >
+              <path d="M832 64H296c-17.7 0-32 14.3-32 32v64h-72c-30.9 0-56 25.1-56 56v632c0 30.9 25.1 56 56 56h472c30.9 0 56-25.1 56-56v-64h80c17.7 0 32-14.3 32-32V120c0-30.9-25.1-56-56-56zM664 848H216V248h448v600zm112-120h-56V200c0-30.9-25.1-56-56-56H328v-40h448v624z" />
+            </svg>
+            <!-- 删除脚本 -->
+            <svg
+              viewBox="64 64 896 896"
+              class="script-action-icon delete"
+              focusable="false"
+              width="1em"
+              height="1em"
+              fill="currentColor"
+              aria-hidden="true"
+              @click.stop="scriptBlocks.splice(idx, 1)"
+            >
+              <path d="M696 480H328c-4.4 0-8 3.6-8 8v48c0 4.4 3.6 8 8 8h368c4.4 0 8-3.6 8-8v-48c0-4.4-3.6-8-8-8z" />
+              <path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm0 820c-205.4 0-372-166.6-372-372s166.6-372 372-372 372 166.6 372 372-166.6 372-372 372z" />
+            </svg>
+          </div>
+        </div>
+        <ScriptStepDrawer
+          v-model="block.code"
+          :collapsed="false"
+          :index="idx + 1"
+          :name="`自定义脚本${idx + 1}`"
+          :use-template-mode="true"
+        />
+      </div>
     </div>
 
     <!-- 排除空值 & 忽略顺序 -->
@@ -210,6 +309,16 @@ function handleCompareTypeChange(val: string) {
   padding-top: 4px;
 }
 
+.rule-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.script-checkbox {
+  margin-left: 8px;
+}
+
 .row-inline {
   display: flex;
   align-items: center;
@@ -223,6 +332,54 @@ function handleCompareTypeChange(val: string) {
 
 .assert-text-area {
   margin: 8px 0 10px;
+}
+
+.assert-script-wrapper {
+  margin: 8px 0 10px;
+}
+
+.assert-script-wrapper :deep(.script-step__header),
+.assert-script-wrapper :deep(.script-step__toolbar) {
+  display: none;
+}
+
+.assert-script-wrapper :deep(.script-step__body) {
+  padding-top: 0;
+}
+
+.script-block {
+  margin-bottom: 12px;
+}
+
+.script-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.script-block-title {
+  font-size: 13px;
+  color: #606266;
+}
+
+.script-block-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.script-action-icon {
+  cursor: pointer;
+  font-size: 14px;
+  color: #1890ff;
+}
+
+.script-action-icon.delete {
+  color: #ff4d4f;
+}
+
+.add-script-btn {
+  margin-bottom: 8px;
 }
 
 .assert-tooltip-text {
