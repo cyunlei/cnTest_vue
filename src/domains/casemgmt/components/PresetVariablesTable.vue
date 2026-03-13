@@ -5,7 +5,6 @@
         <div class="field">
           <div class="label">
             <span>变量选择</span>
-            <el-icon class="q"><QuestionFilled /></el-icon>
           </div>
           <el-select v-model="selectedModule" class="select" placeholder="请选择" size="small" clearable>
             <el-option v-for="opt in moduleOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
@@ -15,7 +14,25 @@
         <div class="field">
           <div class="label">
             <el-checkbox v-model="multiTemplateEnabled" class="label-checkbox" @change="onMultiTemplateToggle">多选模板</el-checkbox>
-            <el-icon class="q"><QuestionFilled /></el-icon>
+            <el-tooltip placement="top">
+              <template #content>
+                <div class="preset-tooltip-text">
+                  更改当前生效变量模板，需要更改当前引用的变量模板并点保存之后查看
+                </div>
+              </template>
+              <svg
+                viewBox="64 64 896 896"
+                class="q"
+                focusable="false"
+                width="1em"
+                height="1em"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm0 820c-205.4 0-372-166.6-372-372s166.6-372 372-372 372 166.6 372 372-166.6 372-372 372z" />
+                <path d="M623.6 316.7C593.6 290.4 554 276 512 276s-81.6 14.5-111.6 40.7C369.2 344.3 352 380.7 352 420v7.6c0 4.3 3.6 8 8 8h48c4.4 0 8-3.6 8-8V420c0-24.3 19.7-44 44-44h7.6c22.5 0 39.6 6.5 52.1 18.8 9.8 9.6 15.3 22.7 15.3 36.7 0 14-5.4 27.3-15.3 37.1L527.7 474c-24.5 24.3-40.5 56-44.2 90.1l-3.1 29.2c-.4 4.2 2.9 7.9 7.1 7.9h48.2c4 0 7.4-3 7.9-7l2.5-23.8c2.2-20.7 11.2-40.3 25.4-54.6l39.6-39.2C632.7 353.3 640 334 640 305.4c0-31.7-12.3-61.7-34.4-83.7zM472 664a48 48 0 1096 0 48 48 0 10-96 0z" />
+              </svg>
+            </el-tooltip>
           </div>
           <el-select
             v-model="templateSelectValue"
@@ -288,7 +305,7 @@ const handleGoModuleSettings = () => {
 }
 
 .field .q {
-  color: #909399;
+  color: #1890ff;
   font-size: 12px;
   border: 1px solid #dcdfe6;
   border-radius: 50%;
@@ -297,6 +314,12 @@ const handleGoModuleSettings = () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.preset-tooltip-text {
+  max-width: 220px;
+  white-space: normal;
+  word-break: break-all;
 }
 
 .select,

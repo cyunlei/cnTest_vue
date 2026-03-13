@@ -10,6 +10,11 @@ import CurlParser from './CurlParser.vue'
 import BodyContent from './BodyContent.vue'
 import PresetVariablesTable from './PresetVariablesTable.vue'
 import PresetTemplateDialog from './PresetTemplateDialog.vue'
+import HttpSettingsPanel from './HttpSettingsPanel.vue'
+import GatewayLoginPanel from './GatewayLoginPanel.vue'
+import NormalAssert from './Assert/NormalAssert.vue'
+import JsonPathAssert from './Assert/JsonPathAssert.vue'
+import CompareGroupSettings from './Assert/CompareGroupSettings.vue'
 import MysqlStepDrawer from './steps/MysqlStepDrawer.vue'
 import DuccStepDrawer from './steps/DuccStepDrawer.vue'
 import RedisStepDrawer from './steps/RedisStepDrawer.vue'
@@ -75,12 +80,31 @@ const methodOptions = [
 // 断言表单数据
 const assertForm = ref({
   compareType: '1', // 比对方式：1-普通，2-A/B
-  compareRule: '0', // 对比规则：0-键值，1-整体
-  ruleFormat: 'jsonpath', // 规则形式：text-文本，jsonpath-JSONPath
-  isCustomScript: false, // 是否自定义脚本
+  compareRule: 'key', // 对比规则：overall-整体，key-键值，script-自定义脚本
+  ruleFormat: 'jsonpath', // 规则形式：text-文本，jsonpath-JSONPath（仅键值模式可切换）
+  textContent: '',
   ignoreNull: '0', // 排除空值：0-不需要，1-需要
   ignoreOrder: '0' // 忽略顺序：0-不需要，1-需要
 })
+
+// 断言表格数据（JSONPath 断言列表）
+const assertTableData = ref([])
+
+// A/B 对比组设置
+const compareGroupVisible = ref(false)
+const compareGroups = ref([
+  { id: 1, name: '对比组1', enabled: true }
+])
+
+function openAssertJsonAdd() {
+  // 可在此打开 JSON 添加弹窗，与入参 JSON 添加类似
+  openJsonDialog('params')
+}
+
+function handleAssertBatchDelete() {
+  // 批量删除：可结合表格多选状态实现
+  assertTableData.value = []
+}
 
 // 多组参数
 const paramGroups = ref([
@@ -829,96 +853,16 @@ function clearBinaryFile() {
                     <!-- 右侧：断言模块 -->
                     <el-col :span="13" class="assert-col">
                       <div class="assert-wrapper">
-                        <!-- 比对方式 -->
-                        <el-form-item label="比对方式：">
-                          <el-radio-group v-model="assertForm.compareType">
-                            <el-radio value="1">普通</el-radio>
-                            <el-radio value="2">A/B</el-radio>
-                          </el-radio-group>
-                        </el-form-item>
-                        
-                        <!-- 对比规则 -->
-                        <el-form-item>
-                          <template #label>
-                            <span>对比规则</span>
-                            <el-icon class="label-icon"><QuestionFilled /></el-icon>
-                            <span>：</span>
-                          </template>
-                          <el-radio-group v-model="assertForm.compareRule">
-                            <el-radio value="1">整体</el-radio>
-                            <el-radio value="0">键值</el-radio>
-                          </el-radio-group>
-                          <el-checkbox v-model="assertForm.isCustomScript" class="ml-16">自定义脚本</el-checkbox>
-                        </el-form-item>
-                        
-                        <!-- 规则形式 -->
-                        <el-form-item label="规则形式：">
-                          <el-radio-group v-model="assertForm.ruleFormat">
-                            <el-radio-button value="text">文本</el-radio-button>
-                            <el-radio-button value="jsonpath">JSONPath</el-radio-button>
-                          </el-radio-group>
-                        </el-form-item>
-                        
-                        <!-- 排除空值 & 忽略顺序 -->
-                        <el-row :gutter="16">
-                          <el-col :span="12">
-                            <el-form-item label="排除空值：">
-                              <el-radio-group v-model="assertForm.ignoreNull">
-                                <el-radio value="1">需要</el-radio>
-                                <el-radio value="0">不需要</el-radio>
-                              </el-radio-group>
-                            </el-form-item>
-                          </el-col>
-                          <el-col :span="12">
-                            <el-form-item label="忽略顺序：">
-                              <el-radio-group v-model="assertForm.ignoreOrder">
-                                <el-radio value="1">需要</el-radio>
-                                <el-radio value="0">不需要</el-radio>
-                              </el-radio-group>
-                            </el-form-item>
-                          </el-col>
-                        </el-row>
-                        
-                        <!-- 断言表格 -->
-                        <div class="assert-table">
-                          <el-table :data="[]" size="small" border>
-                            <el-table-column type="selection" width="40" />
-                            <el-table-column label="类型" width="100">
-                              <template #header>
-                                <span>类型</span>
-                                <el-icon class="label-icon"><QuestionFilled /></el-icon>
-                              </template>
-                            </el-table-column>
-                            <el-table-column label="字段">
-                              <template #header>
-                                <span>字段</span>
-                                <el-icon class="label-icon"><QuestionFilled /></el-icon>
-                              </template>
-                            </el-table-column>
-                            <el-table-column label="规则" width="120">
-                              <template #header>
-                                <span>规则</span>
-                                <el-icon class="label-icon"><QuestionFilled /></el-icon>
-                              </template>
-                            </el-table-column>
-                            <el-table-column label="期望值" min-width="100" show-overflow-tooltip>
-                              <template #header>
-                                <span>期望值</span>
-                                <el-icon class="label-icon"><QuestionFilled /></el-icon>
-                              </template>
-                            </el-table-column>
-                            <el-table-column label="备注" width="80" />
-                            <el-table-column label="提取变量" width="90" />
-                            <el-table-column label="操作" width="120" align="center">
-                              <template #header>
-                                <el-icon class="add-icon"><Plus /></el-icon>
-                                <el-button size="small" class="ml-4">JSON添加</el-button>
-                                <el-button size="small" disabled>批量删除</el-button>
-                              </template>
-                            </el-table-column>
-                          </el-table>
-                          <el-empty v-if="true" description="暂无数据" :image-size="64" />
-                        </div>
+                        <NormalAssert
+                          v-model="assertForm"
+                          @open-group-settings="compareGroupVisible = true"
+                        />
+                        <JsonPathAssert
+                          v-if="assertForm.compareType === '1' && assertForm.compareRule === 'key' && assertForm.ruleFormat === 'jsonpath'"
+                          v-model="assertTableData"
+                          @json-add="openAssertJsonAdd"
+                          @batch-delete="handleAssertBatchDelete"
+                        />
                       </div>
                     </el-col>
                   </el-row>
@@ -1111,14 +1055,10 @@ function clearBinaryFile() {
                 </div>
               </el-tab-pane>
               <el-tab-pane label="设置" name="settings">
-                <div class="placeholder-content">
-                  <span>设置配置区域</span>
-                </div>
+                <HttpSettingsPanel />
               </el-tab-pane>
               <el-tab-pane label="网关/登陆" name="gateway">
-                <div class="placeholder-content">
-                  <span>网关/登陆配置区域</span>
-                </div>
+                <GatewayLoginPanel />
               </el-tab-pane>
             </el-tabs>
           </div>
@@ -1158,6 +1098,13 @@ function clearBinaryFile() {
         </template>
       </el-dialog>
 
+      <!-- A/B 对比组设置弹窗 -->
+      <CompareGroupSettings
+        v-model:modelValue="compareGroups"
+        v-model:visible="compareGroupVisible"
+        :base-method="basicForm.method"
+        :base-url="basicForm.url"
+      />
       <!-- 第二个容器：响应信息（测试后才显示） -->
       <div v-if="showResponse" class="response-container">
         <div class="section-header">
@@ -1657,17 +1604,6 @@ function clearBinaryFile() {
 .assert-wrapper :deep(.el-form-item__label) {
   font-size: 13px;
   color: #606266;
-}
-
-/* 断言表格 */
-.assert-table {
-  margin-top: 16px;
-}
-
-.add-icon {
-  color: #1890ff;
-  cursor: pointer;
-  font-size: 14px;
 }
 
 /* 空状态 */
