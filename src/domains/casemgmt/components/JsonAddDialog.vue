@@ -45,7 +45,8 @@ watch(() => props.modelValue, (val) => {
     treeData.value = []
     selectedKeys.value = []
     hasSaved.value = false
-    currentInput.value = jsonCacheStore.content || ''
+    // 只有入参场景需要记住上次输入内容，其它场景默认空
+    currentInput.value = props.type === 'params' ? jsonCacheStore.content || '' : ''
   }
 })
 
@@ -126,7 +127,9 @@ function jsonToTree(obj, parentKey = '', parentPath = '', options = {}) {
 async function parseJson(input) {
   try {
     currentInput.value = input
-    jsonCacheStore.setContent(input)
+    if (props.type === 'params') {
+      jsonCacheStore.setContent(input)
+    }
     
     const parsed = JSON.parse(input.trim())
     
@@ -229,6 +232,10 @@ function handleSave() {
   selectedKeys.value.forEach(path => {
     const value = getValueByPath(parsedData.value, path)
     if (value !== undefined) {
+      // 如果是空对象 {}，视为无实际 value，不生成条目
+      if (value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0) {
+        return
+      }
       result.push({
         key: path,
         value: typeof value === 'object' ? JSON.stringify(value) : String(value)
@@ -261,7 +268,9 @@ function handleInputClose() {
 
 function handlePersistedContentUpdate(content) {
   currentInput.value = content
-  jsonCacheStore.setContent(content)
+  if (props.type === 'params') {
+    jsonCacheStore.setContent(content)
+  }
 }
 
 function getValueByPath(obj, path) {
@@ -301,7 +310,7 @@ function getValueByPath(obj, path) {
       placeholder="请在此填写 JSON 格式数据，然后点击弹层下方左侧生成按钮"
       action-button-text="生成"
       :parse-function="parseJson"
-      :persisted-content="jsonCacheStore.content"
+      :persisted-content="props.type === 'params' ? jsonCacheStore.content : ''"
       @update:persisted-content="handlePersistedContentUpdate"
       @close="handleInputClose"
     />
@@ -368,6 +377,16 @@ const JsonTreeNode = {
     
     const isSelected = (node) => props.selectedKeys.includes(node.path)
     
+    // 当前节点是否允许被选择（用于控制复选框和级联逻辑）
+    const isSelectableNode = (node) => {
+      if (!node) return false
+      const hasKey = node.displayKey !== null && node.displayKey !== undefined
+      // 虚拟根节点没有 displayKey，不可选
+      if (!hasKey) return false
+      // 对象 / 数组 / 叶子（primitive）都有意义，可以作为一条断言来源
+      return node.type === 'object' || node.type === 'array' || node.type === 'primitive'
+    }
+    
     // 展开/收起当前节点（仅对象和数组有效）
     const expanded = ref(true)
     
@@ -375,9 +394,11 @@ const JsonTreeNode = {
       expanded.value = !expanded.value
     }
     
-    // 递归收集当前节点及其所有子节点的 path，用于级联选择
+    // 递归收集当前节点及其所有「可选」子节点的 path，用于级联选择
     const collectDescendantPaths = (node, result = []) => {
-      result.push(node.path)
+      if (isSelectableNode(node) && node.path) {
+        result.push(node.path)
+      }
       if (node.children && node.children.length > 0) {
         node.children.forEach(child => collectDescendantPaths(child, result))
       }
@@ -435,14 +456,14 @@ const JsonTreeNode = {
       return '#333'
     }
     
-    return { isSelected, onSelectChange, formatValue, getValueColor, expanded, toggleExpand }
+    return { isSelected, onSelectChange, formatValue, getValueColor, expanded, toggleExpand, isSelectableNode }
   },
   render() {
     const node = this.node
     const level = this.level || 0
     const isLast = this.isLast
     
-    const { isSelected, onSelectChange, formatValue, getValueColor, expanded, toggleExpand } = this
+    const { isSelected, onSelectChange, formatValue, getValueColor, expanded, toggleExpand, isSelectableNode } = this
     
     const baseIndent = level * 20
     
@@ -450,7 +471,7 @@ const JsonTreeNode = {
     
     // 创建三列布局的辅助函数
     // col1: 折叠图标列 (固定18px)
-    // col2: 复选框列 (固定22px)
+    // col2: 复选框列 (固定22px，有内容时才占宽度)
     // col3: 内容列
     const createThreeColumnLine = (toggleContent, checkboxContent, contentChildren, extraStyle = {}) => {
       return h('div', { 
@@ -461,7 +482,10 @@ const JsonTreeNode = {
         }
       }, [
         h('span', { class: 'json-col-toggle' }, toggleContent),
-        h('span', { class: 'json-col-checkbox' }, checkboxContent),
+        h('span', { 
+          class: 'json-col-checkbox', 
+          style: checkboxContent ? {} : { width: '0', padding: 0 }
+        }, checkboxContent),
         h('span', { class: 'json-col-content' }, contentChildren)
       ])
     }
@@ -479,7 +503,8 @@ const JsonTreeNode = {
           })
         : null
       
-      const showCheckbox = !node.isArrayItemRoot
+      // 只有有 key 的对象节点才展示复选框（虚拟根节点没有 displayKey，因此不会出现）
+      const showCheckbox = isSelectableNode(node)
       const checkboxEl = showCheckbox
         ? h('input', {
             type: 'checkbox',
@@ -547,7 +572,8 @@ const JsonTreeNode = {
           })
         : null
       
-      const showCheckbox = !node.isArrayItemRoot
+      // 只有有 key 的数组节点才展示复选框（无 key 的纯数组元素不显示）
+      const showCheckbox = isSelectableNode(node)
       const checkboxEl = showCheckbox
         ? h('input', {
             type: 'checkbox',
@@ -606,12 +632,14 @@ const JsonTreeNode = {
     // 基本类型 - 使用三列布局
     const valueColor = getValueColor(node.value)
     
-    const primitiveCheckbox = h('input', {
-      type: 'checkbox',
-      class: 'json-checkbox',
-      checked: isSelected(node),
-      onChange: (e) => onSelectChange(node, e.target.checked)
-    })
+    const primitiveCheckbox = node.displayKey
+      ? h('input', {
+          type: 'checkbox',
+          class: 'json-checkbox',
+          checked: isSelected(node),
+          onChange: (e) => onSelectChange(node, e.target.checked)
+        })
+      : null
     
     const primitiveContent = [
       node.displayKey ? h('span', { class: 'json-key' }, `"${node.displayKey}"`) : null,

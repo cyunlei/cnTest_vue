@@ -28,7 +28,12 @@ const props = defineProps({
   visible: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['close', 'save'])
+const emit = defineEmits(['close', 'save', 'update:visible'])
+
+const innerVisible = computed({
+  get: () => props.visible,
+  set: (v) => emit('update:visible', v)
+})
 
 // 折叠面板状态
 const basicExpanded = ref(true) // 基础信息整体展开/收起
@@ -97,8 +102,8 @@ const compareGroups = ref([
 ])
 
 function openAssertJsonAdd() {
-  // 可在此打开 JSON 添加弹窗，与入参 JSON 添加类似
-  openJsonDialog('params')
+  // JSON 添加用于断言时，使用专用类型，避免误加到入参
+  openJsonDialog('assert-jsonpath')
 }
 
 function handleAssertBatchDelete() {
@@ -265,7 +270,10 @@ const extractStepRefs = ref({})
 // 打开 JSON 添加弹窗
 function openJsonDialog(type = 'params') {
   jsonDialogType.value = type
-  jsonDialogTitle.value = type === 'jsonpath' ? '快捷添加 JSONPATH' : 'Json添加Param'
+  jsonDialogTitle.value =
+    type === 'jsonpath' || type === 'assert-jsonpath'
+      ? '快捷添加 JSONPATH'
+      : 'Json添加Param'
   jsonDialogVisible.value = true
 }
 
@@ -279,6 +287,25 @@ function handleJsonSave(selectedItems) {
       const paths = (selectedItems || []).map((item) => item.key)
       comp.addRowsFromJsonpaths(paths)
     }
+    jsonDialogVisible.value = false
+    return
+  }
+
+  if (jsonDialogType.value === 'assert-jsonpath') {
+    // 将选中的 JSON 字段快速添加为 JSONPath 断言行
+    const rows = (selectedItems || []).map((item) => ({
+      // JSON 添加后默认：类型=JSON，规则=等于
+      type: 'JSON',
+      field: item.key?.startsWith('$.') ? item.key : `$.${item.key || ''}`,
+      rule: '等于',
+      expected: item.value,
+      remark: '',
+      extractVar: ''
+    }))
+    if (!Array.isArray(assertTableData.value)) {
+      assertTableData.value = []
+    }
+    assertTableData.value = assertTableData.value.concat(rows)
     jsonDialogVisible.value = false
     return
   }
@@ -389,6 +416,7 @@ function deleteGroup(groupId) {
 
 // 关闭抽屉
 function handleClose() {
+  emit('update:visible', false)
   emit('close')
 }
 
@@ -536,7 +564,7 @@ function clearBinaryFile() {
 
 <template>
   <el-drawer
-    v-model="props.visible"
+  v-model="innerVisible"
     size="95%"
     :close-on-click-modal="true"
     :destroy-on-close="true"

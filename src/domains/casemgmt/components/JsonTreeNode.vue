@@ -60,26 +60,27 @@ function getValueColorClass(value) {
 <template>
   <div class="json-tree-node" :style="{ marginLeft: level * 20 + 'px' }">
     <div class="json-node-content">
-      <!-- 复选框 -->
-      <el-checkbox v-model="isSelected" class="json-checkbox">
-        <!-- 有 displayKey 时显示 key: value 格式 -->
-        <template v-if="node.displayKey || node.displayKey === ''">
-          <span v-if="node.displayKey" class="json-key">"{{ node.displayKey }}"</span>
-          <span v-if="node.displayKey" class="json-colon">: </span>
-          <span v-if="node.type === 'primitive'" :class="['json-value', getValueColorClass(node.value)]">
-            {{ formatValue(node.value) }}
-          </span>
-          <span v-else class="json-bracket">
-            {{ node.value }}
-          </span>
-        </template>
-        <!-- 没有 displayKey 时只显示 value -->
-        <template v-else>
+      <!-- 只有有 key 且为 primitive 的节点才有复选框（如 "msg": "执行成功"），对象/数组 key 不可选 -->
+      <template v-if="node.displayKey && node.type === 'primitive'">
+        <el-checkbox v-model="isSelected" class="json-checkbox">
+          <span class="json-key">"{{ node.displayKey }}"</span>
+          <span class="json-colon">: </span>
           <span :class="['json-value', getValueColorClass(node.value)]">
             {{ formatValue(node.value) }}
           </span>
-        </template>
-      </el-checkbox>
+        </el-checkbox>
+      </template>
+      <!-- 其他节点（无 key 或非 primitive）只展示值 / 结构，不可勾选 -->
+      <template v-else>
+        <span v-if="node.displayKey" class="json-key">"{{ node.displayKey }}"</span>
+        <span v-if="node.displayKey" class="json-colon">: </span>
+        <span v-if="node.type === 'primitive'" :class="['json-value', getValueColorClass(node.value)]">
+          {{ formatValue(node.value) }}
+        </span>
+        <span v-else class="json-bracket">
+          {{ node.value }}
+        </span>
+      </template>
     </div>
     
     <!-- 子节点 - 默认全部展开 -->
