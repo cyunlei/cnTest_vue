@@ -183,6 +183,17 @@ async function handleSaveCase(payload) {
     showAddCaseModal.value = false
     // 新增/编辑成功后刷新当前用例列表
     await loadTestcases()
+
+    // 保存并前往：新增成功后进入用例明细页
+    if (!isEdit && payload.action === 'saveAndGo') {
+      const createdId =
+        resp?.data?.data?.id ??
+        resp?.data?.data?.testcase_id ??
+        resp?.data?.data?.testcaseId
+      if (createdId) {
+        goToCaseConfig(String(createdId))
+      }
+    }
   } catch (error) {
     void error
     ElMessage.error('保存用例异常')
@@ -475,7 +486,12 @@ function toggleSelectAll(event) {
 
 // 跳转到用例配置页面
 function goToCaseConfig(id) {
-  router.push(`/case-config/${id}`)
+  router.push({
+    path: `/case-config/${id}`,
+    query: {
+      project_id: projectStore.currentProjectId ? String(projectStore.currentProjectId) : undefined
+    }
+  })
 }
 </script>
 
