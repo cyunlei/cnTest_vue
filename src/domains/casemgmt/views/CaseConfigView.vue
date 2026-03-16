@@ -1,9 +1,13 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import AppHeader from '@/shared/ui/organisms/AppHeader.vue'
 import HttpStepDrawer from '../components/HttpStepDrawer.vue'
+import CaseSidebar from '../components/CaseSidebar.vue'
+import { createStep } from '../api'
+import { STEP_TYPE, ENV_CODE, HTTP_METHOD } from '../types'
+import { fetchProjectList } from '@/domains/project/api'
 
 // 更多步骤类型组件
 import HttpStepType from '../components/step-types/HttpStepType.vue'
@@ -24,6 +28,11 @@ import ScheduleJobStepType from '../components/step-types/ScheduleJobStepType.vu
 const route = useRoute()
 const router = useRouter()
 const caseId = computed(() => route.params.id)
+const projectId = computed(() => {
+  const raw = route.query.project_id
+  const num = typeof raw === 'string' ? Number(raw) : Number.NaN
+  return Number.isNaN(num) ? 0 : num
+})
 
 const activeTab = ref('scenario')
 const caseDetail = ref({
@@ -52,6 +61,58 @@ const showHttpStepDrawer = ref(false)
 const editingHttpStep = ref(null)
 const showStepTypeDialog = ref(false)
 const selectedStepType = ref(null)
+
+// 项目下拉（module-select-trigger 使用）
+const projectOptions = ref([])
+const projectLoading = ref(false)
+const selectedProjectId = ref(projectId.value || null)
+
+const selectedProjectName = computed(() => {
+  const found = projectOptions.value.find(item => item.id === selectedProjectId.value)
+  return found ? found.name : '请选择项目'
+})
+
+async function loadProjects() {
+  if (projectLoading.value) return
+  projectLoading.value = true
+  try {
+    const resp = await fetchProjectList({
+      project_id: '',
+      page: 1,
+      page_size: 100
+    })
+    const list = resp?.data?.data?.list || []
+    projectOptions.value = list
+
+    if (!selectedProjectId.value && list.length > 0) {
+      selectedProjectId.value = list[0].id
+      router.replace({
+        query: {
+          ...route.query,
+          project_id: String(list[0].id)
+        }
+      })
+    }
+  } catch (error) {
+    void error
+  } finally {
+    projectLoading.value = false
+  }
+}
+
+function handleProjectSelect(id) {
+  selectedProjectId.value = id
+  router.replace({
+    query: {
+      ...route.query,
+      project_id: String(id)
+    }
+  })
+}
+
+onMounted(() => {
+  void loadProjects()
+})
 
 // 更多类型下拉选项（1=MySQL, 2=Redis, 3=JMQ, 4=DUBBO, 5=KAFKA, 6=R2M, 7=FMQ, 8=JAR, 9=SHELL, 10=循环, 11=条件, 12=STARDB, 13=SCHEDULEJOB）
 // 注意：HTTP(0)已在外部单独展示，不在下拉框中显示
@@ -106,18 +167,52 @@ function closeHttpStepDrawer() {
   showHttpStepDrawer.value = false
 }
 
-function saveHttpStep(stepData) {
-  void stepData
-  stepList.value.push({
-    id: Date.now().toString(),
-    name: stepData.name,
-    detail: stepData.method + ' | ' + stepData.url,
-    type: 'HTTP',
-    inputGroup: '1/1',
-    order: stepList.value.length + 1,
-    httpData: stepData
-  })
-  closeHttpStepDrawer()
+async function saveHttpStep(stepData) {
+  try {
+    const dto = {
+      name: stepData.name,
+      step_type: STEP_TYPE.HTTP,
+      project_id: stepData.projectId || projectId.value,
+      testcase_id: Number(caseDetail.value.id),
+      env_code: ENV_CODE.TEST,
+      api_url: stepData.url,
+      method: HTTP_METHOD[stepData.method] ?? HTTP_METHOD.GET,
+      expected_result: stepData.expectedResult || '',
+      paramsAndAssert: {},
+      type_config: {},
+      preset_variables: {},
+      max_wait_time: 30,
+      retry_count: 0,
+      sort_order: stepList.value.length + 1
+    }
+
+    const resp = await createStep(dto)
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+
+    // 按后端约定：code === 0 才表示成功，其它（如 24001）都视为业务错误
+    if (code !== 0) {
+      ElMessage.error(msg || '保存步骤失败')
+      return
+    }
+
+    const backendId = resp.data?.data?.id
+    stepList.value.push({
+      id: backendId ? String(backendId) : Date.now().toString(),
+      name: stepData.name,
+      detail: stepData.method + ' | ' + stepData.url,
+      type: 'HTTP',
+      inputGroup: '1/1',
+      order: stepList.value.length + 1,
+      httpData: stepData
+    })
+
+    ElMessage.success('保存步骤成功')
+    closeHttpStepDrawer()
+  } catch (error) {
+    void error
+    ElMessage.error('保存步骤异常')
+  }
 }
 
 function openStepDrawer(step) {
@@ -166,19 +261,7 @@ function closeStepTypeDialog() {
   <div class="case-config-page">
     <AppHeader @navigate="handleNav" />
     <div class="page-container">
-      <aside class="sidebar">
-        <div class="module-select-wrapper">
-          <div class="module-select-trigger">
-            <span class="selected-text">商家开放</span>
-          </div>
-        </div>
-        <div class="filter-bar">
-          <label class="checkbox-label">
-            <input type="checkbox" />
-            <span>只看自己</span>
-          </label>
-        </div>
-      </aside>
+      <CaseSidebar />
       <main class="main-content">
         <div class="title-bar">
           <div class="content-tabs">

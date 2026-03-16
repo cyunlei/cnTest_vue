@@ -3,6 +3,7 @@
  * HTTP 测试步骤抽屉 - 参考界面重构版
  */
 import { ref, computed, watch } from 'vue'
+import { fetchProjectList } from '@/domains/project/api'
 import { Close, Plus, Delete, ArrowRight, More, ArrowDown, ArrowUp, QuestionFilled, Link, EditPen, Right, CopyDocument } from '@element-plus/icons-vue'
 import JsonAddDialog from './common/JsonAddDialog.vue'
 import BatchEditDialog from './common/BatchEditDialog.vue'
@@ -94,7 +95,7 @@ const activeResponseTab = ref('body')
 // 基础信息表单数据
 const basicForm = ref({
   name: '',
-  module: '商家开放',
+  projectId: null,
   method: 'GET',
   url: '',
   env: '',
@@ -105,12 +106,43 @@ const basicForm = ref({
   forcebotEnabled: false
 })
 
-// 模块选项
-const moduleOptions = [
-  { label: '商家开放', value: '商家开放' },
-  { label: '开放平台', value: '开放平台' },
-  { label: '内部平台', value: '内部平台' }
-]
+// 模块选项（接口所属模块 = 项目列表）
+const moduleOptions = ref([])
+const moduleLoading = ref(false)
+
+async function loadProjectOptions() {
+  if (moduleLoading.value) return
+  moduleLoading.value = true
+  try {
+    const resp = await fetchProjectList({
+      project_id: '',
+      page: 1,
+      page_size: 100
+    })
+    const list = resp?.data?.data?.list || []
+    moduleOptions.value = list.map(item => ({
+      label: item.name,
+      value: item.id
+    }))
+    // 如果还没选过项目，默认选第一个
+    if (basicForm.value.projectId == null && moduleOptions.value.length > 0) {
+      basicForm.value.projectId = moduleOptions.value[0].value
+    }
+  } catch (error) {
+    void error
+  } finally {
+    moduleLoading.value = false
+  }
+}
+
+watch(
+  () => innerVisible.value,
+  (visible) => {
+    if (visible) {
+      void loadProjectOptions()
+    }
+  }
+)
 
 // HTTP方法选项
 const methodOptions = [
@@ -463,8 +495,10 @@ function handleClose() {
 function handleSave() {
   const payload = {
     name: basicForm.value.name,
+    projectId: basicForm.value.projectId,
     method: basicForm.value.method,
-    url: basicForm.value.url
+    url: basicForm.value.url,
+    expectedResult: basicForm.value.expectedResult
   }
   emit('save', payload)
 }
@@ -726,7 +760,12 @@ function clearBinaryFile() {
                 </el-col>
                 <el-col :span="6">
                   <el-form-item label="接口所属模块" required>
-                    <el-select v-model="basicForm.module" class="w-100">
+                    <el-select
+                      v-model="basicForm.projectId"
+                      class="w-100"
+                      :loading="moduleLoading"
+                      placeholder="请选择项目"
+                    >
                       <el-option
                         v-for="opt in moduleOptions"
                         :key="opt.value"

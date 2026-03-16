@@ -1,4 +1,50 @@
-﻿# Kimi Code CLI 执行日志
+# Kimi Code CLI 执行日志
+
+## 2026-03-16: 测试步骤 API 层与类型定义（按 AiExecytionManual 规范）
+
+### 任务
+根据 AiExecytionManual.md 规则，实现测试步骤相关 5 个后端 API 的前端对接：
+1. POST `/api/v1/testcases/step/create` - 创建测试步骤（application/json）
+2. GET `/api/v1/testcases/step/list` - 查询步骤列表（query）
+3. GET `/api/v1/testcases/step/detail` - 查询步骤详情（query）
+4. POST `/api/v1/testcases/step/update` - 更新测试步骤（application/json）
+5. POST `/api/v1/testcases/step/delete` - 删除测试步骤（application/json）
+
+### 执行内容
+
+#### 1. 创建 CaseMgmt 领域类型定义
+**新建文件:** `src/domains/casemgmt/types/index.js`
+
+- 步骤相关 DTO：`CreateStepDTO`、`UpdateStepDTO`、`DeleteStepDTO`
+- 查询参数：`FetchStepListParams`、`FetchStepDetailParams`
+- 实体与响应：`StepEntity`、`StepListResponse`、`StepDetailResponse`、`StepMutationResponse`
+- 枚举：`STEP_TYPE`（步骤类型常量）
+
+#### 2. 创建 CaseMgmt 领域 API 层
+**新建文件:** `src/domains/casemgmt/api/index.js`
+
+- `createStep(data)`：POST step/create，application/json
+- `fetchStepList(params)`：GET step/list，query 参数
+- `fetchStepDetail(params)`：GET step/detail，query 参数
+- `updateStep(data)`：POST step/update，application/json
+- `deleteStep(data)`：POST step/delete，application/json
+
+命名遵循手册：createXxx、fetchXxxList、updateXxx、deleteXxx；使用 `@core/http` 的 `create`、`fetch`。
+
+### 文件变更汇总
+
+```
+新建: src/domains/casemgmt/types/index.js
+新建: src/domains/casemgmt/api/index.js
+```
+
+### 验证结果
+✅ 类型定义符合领域驱动类型规范（六.类型系统）
+✅ API 层符合统一协议与命名规范（五.API 层）
+✅ 无 Lint 报错
+✅ 与 project、environment 领域 API 风格一致
+
+---
 
 ## 2026-03-06: 项目重构 - Element Plus 组件化
 
@@ -648,6 +694,96 @@ export function getCaptcha(params = {}) {
 ✅ 新增用例弹窗功能完整
 
 ---
+
+## 2026-03-16: 新增用例弹窗无法输入问题排查与修复
+
+### 问题
+在重构 `AddEditCaseModal.vue`（新增/编辑用例弹窗，参照 Ant Design 风格）过程中，用户反馈：
+
+1. 弹窗打开后，**所有输入框和下拉框无法点击、无法输入**，鼠标点击没有任何反应；
+2. 点击“用例名称”输入框时，会意外切换“编排方式”为“代码编排”，说明点击事件被错误地命中了单选按钮区域；
+3. 浏览器控制台无报错，但在 DevTools 的 `Event Listeners` 中看到 `click` 事件始终落在 `div.modal-overlay`，而不是具体的 `input` 元素。
+
+### 原因分析
+
+1. **遮罩层拦截点击事件**
+   - 初始实现中，外层使用了 AntD 模态结构（`ant-modal-root / ant-modal-mask / ant-modal-wrap / ant-modal-content`），后来改为自定义 `modal-overlay + modal-container`。
+   - 遮罩层和内容层多次叠加 `pointer-events`、`@click.self` 等逻辑，导致点击事件始终被 `modal-overlay` 拦截，内部表单控件无法收到点击。
+
+2. **单选按钮行高度溢出，覆盖后续行**
+   - “编排方式”一行使用 `ant-radio-group` + 自定义样式，没有限制高度。
+   - 该行内容实际高度超过 32px，又与下方“用例类型 / 所属用例集 / 优先级”等行共享同一父级 `.ant-row` 布局，造成**单选区域的不可见部分覆盖了后续多行**。
+   - 现象：点击“用例名称”时事件落在“编排方式”区域（自动切换为“代码编排”），其他行输入框也因为被覆盖而无法点击。
+
+3. **全局 CSS 误作用**
+   - 尝试用以下样式全局限制 `.ant-row`、`.ant-radio-group`、`.ant-radio-wrapper` 后，只修复了第一行（用例名称），但仍然导致其它行被覆盖：
+     ```css
+     .ant-radio-group {
+       height: 32px;
+       line-height: 32px;
+       overflow: hidden;
+     }
+     .ant-row {
+       position: relative;
+       min-height: 32px;
+     }
+     .ant-radio-wrapper {
+       position: relative;
+       display: inline-flex;
+       align-items: center;
+     }
+     ```
+   - 问题在于上述规则作用于**所有** `.ant-row`，带来不可预期的布局影响。
+
+### 解决方案
+
+1. **彻底简化弹窗壳子结构，参照 `AddSuiteModal`**
+   - 放弃 AntD 模态层级结构，采用与 `AddSuiteModal.vue` 相同的简单实现：
+     ```vue
+     <template>
+       <div v-if="visible" class="modal-overlay" @click.self="handleClose">
+         <div class="modal-container">
+           <div class="modal-header">...</div>
+           <div class="modal-body">... 表单 ...</div>
+           <div class="modal-footer">... 按钮 ...</div>
+         </div>
+       </div>
+     </template>
+     ```
+   - `modal-overlay` 只负责灰色背景和居中，`modal-container` 承载全部交互逻辑，避免多层 `pointer-events` 干扰。
+
+2. **仅对“编排方式”这一行单独约束高度，避免覆盖后续行**
+   - 在模板中为“编排方式”行增加单独类名：
+     ```vue
+     <div class="ant-row ant-legacy-form-item arrange-row">
+       <!-- 编排方式单选组 -->
+     </div>
+     ```
+   - 配套样式只作用于该行的 radio group，而不影响其他 `.ant-row`：
+     ```css
+     /* 编排方式这一行单独控制高度和对齐，避免遮挡其他行 */
+     .arrange-row .ant-radio-group-middle {
+       height: 32px;
+       align-items: center;
+     }
+     ```
+   - 这样“编排方式”行的实际渲染高度被限制在 32px 内，不再向下“溢出”，后续“用例类型 / 所属用例集 / 优先级 / 前置条件 / 用例描述 / 标签”等行都可以正常获得点击和输入焦点。
+
+3. **保留表单布局与视觉复刻**
+   - 其余表单布局仍然使用 Ant 风格的 `ant-row / ant-col` 结构和已有样式，只针对问题行做了局部约束，确保：
+     - 用例名称输入框、前置条件、用例描述等都可正常输入；
+     - 单选按钮尺寸和颜色仍然符合参考截图（选中为蓝色圆圈+中心点，未选为灰色圆圈）。
+
+### 最终结果
+
+- 新增/编辑用例弹窗 `AddEditCaseModal.vue`：
+  - 所有输入框和单选按钮可以正常点击和输入；
+  - “点击用例名称导致编排方式自动切换”的问题消失；
+  - 弹窗壳子结构与 `AddSuiteModal` 保持一致，后续维护成本更低。
+- 经验总结：
+  - 类似 AntD/Element 这种复杂模态结构，如果不是直接使用组件库，**不建议手写整套 DOM + 事件模型**，容易引入 `pointer-events` / 遮罩拦截等隐性问题；
+  - 当出现“某一行点击影响另一行”的怪问题时，优先检查该行的实际高度与层叠覆盖情况，对单行做精确约束通常比全局 CSS 修补更安全。
+
 
 ## 2026-03-03: 用例管理页面UI优化（第五次迭代 - 完整版）
 

@@ -3,27 +3,41 @@
  * 用例管理页面
  * 位置: domains/casemgmt/views/
  */
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AppHeader from '@/shared/ui/organisms/AppHeader.vue'
+import CaseSidebar from '../components/CaseSidebar.vue'
+import AddSuiteModal from '../components/suite/AddSuiteModal.vue'
+import AddEditCaseModal from '../components/case/AddEditCaseModal.vue'
+import {
+  createSuite,
+  updateSuite,
+  deleteSuite,
+  fetchTestcaseList,
+  createTestcase,
+  updateTestcase
+} from '../api'
+import { ElMessage } from 'element-plus'
+import { useProjectStore } from '@/domains/project/stores/useProjectStore'
 
 const router = useRouter()
+const projectStore = useProjectStore()
 
 const activeTab = ref('scenario')
-const selectedModule = ref('商家开放')
 const searchKeyword = ref('')
-const onlyMine = ref(false)
-const showModuleDropdown = ref(false)
-const showActionMenu = ref(false)
-const showAddStepSubmenu = ref(false)
-const showNodeTypeSubmenu = ref(false)
 const showAddCaseModal = ref(false)
+const caseModalMode = ref('create')
+const editingCase = ref(null)
+const showAddSuiteModal = ref(false)
 
 // 工具栏弹窗/抽屉状态
 const showSyncCaseModal = ref(false)
 const showBatchExecModal = ref(false)
 const showExecResultDrawer = ref(false)
 const showBatchOperationDropdown = ref(false)
+const batchOpTriggerRef = ref(null)
+const batchOpDropdownStyle = ref({})
+const hoveringBatchOpDropdown = ref(false)
 const showCustomHeaderModal = ref(false)
 
 // 选中的用例
@@ -113,152 +127,142 @@ const caseSetOptions = [
   { label: '回归', value: 'regression' }
 ]
 
-const modules = [
-  { name: '海外pop项目', count: '' },
-  { name: '京东全球售', count: '' },
-  { name: 'ext.chenyunlei1的模块', count: '' },
-  { name: '品类场景自动化', count: '' },
-  { name: '商家开放', count: '' },
-  { name: '侯海佳的默认空间', count: '' },
-  { name: '用户测试组', count: '' },
-  { name: '公共模块', count: '' }
-]
-
-const treeData = [
-  {
-    name: '服务市场',
-    count: '(182/187)',
-    children: [
-      { name: '【POP订单】-BF', count: '(2689/4269)' },
-      { name: 'POP订单中台', count: '(2946/3716)', children: [
-        { name: 'open-rest-api', count: '(115/123)' },
-        { name: '回归', count: '(65/076)' }
-      ]}
-    ]
-  }
-]
-
-const caseData = ref([
-  { id: '5212175', name: '发布页面监控执行任务', type: '冒烟用例', caseSet: 'product-jos-...', app: 'omni-product-b', steps: 3, tasks: 2, execCount: 54150, result: '正确', creator: 'chenhaod...', createTime: '2024-09-27', updateTime: '2026-03-02', priority: 'P0' },
-  { id: '5212296', name: '列表页面执行相关业务', type: '冒烟用例', caseSet: 'product-jos-...', app: 'omni-product-b', steps: 12, tasks: 3, execCount: 54094, result: '正确', creator: 'chenhaod...', createTime: '2024-09-27', updateTime: '2026-03-02', priority: 'P0' },
-  { id: '6337469', name: '【已通1】绑定api权...', type: '回归用例', caseSet: 'JosAuthPack...', app: 'joswatchman', steps: 2, tasks: 0, execCount: 0, result: '-', creator: 'ext.lijinlan...', createTime: '2026-01-12', updateTime: '2026-03-02', priority: 'P2' },
-  { id: '5576269', name: 'center端查询接口', type: '功能用例', caseSet: 'product-jos-...', app: 'float-layer-cent', steps: 12, tasks: 0, execCount: 62764, result: '正确', creator: 'licuixia1', createTime: '2024-12-17', updateTime: '2026-03-02', priority: 'P1' },
-  { id: '4844737', name: '自营发品链路监控', type: '功能用例', caseSet: 'product-jos-...', app: 'itemvcpserv', steps: 6, tasks: 1, execCount: 44655, result: '正确', creator: 'licuixia1', createTime: '2024-12-25', updateTime: '2026-03-02', priority: 'P4' }
-])
-
-const expandedKeys = ref([])
-
-function toggleExpand(node) {
-  const index = expandedKeys.value.indexOf(node.name)
-  if (index > -1) {
-    expandedKeys.value.splice(index, 1)
-  } else {
-    expandedKeys.value.push(node.name)
-  }
-}
-
-function isExpanded(node) {
-  return expandedKeys.value.includes(node.name)
-}
-
-function selectModule(module) {
-  selectedModule.value = module.name
-  showModuleDropdown.value = false
-}
-
-function toggleModuleDropdown() {
-  showModuleDropdown.value = !showModuleDropdown.value
-}
-
-function openModuleDropdown() {
-  showModuleDropdown.value = true
-}
-
-function closeModuleDropdown() {
-  setTimeout(() => {
-    showModuleDropdown.value = false
-  }, 100)
-}
-
-function toggleActionMenu() {
-  showActionMenu.value = !showActionMenu.value
-}
-
-function openActionMenu() {
-  showActionMenu.value = true
-}
-
-function closeActionMenu() {
-  // 延迟关闭，以便能够点击子菜单
-  setTimeout(() => {
-    if (!showAddStepSubmenu.value && !showNodeTypeSubmenu.value) {
-      showActionMenu.value = false
-    }
-  }, 100)
-}
-
-function openAddStepSubmenu() {
-  showAddStepSubmenu.value = true
-}
-
-function closeAddStepSubmenu() {
-  setTimeout(() => {
-    showAddStepSubmenu.value = false
-  }, 100)
-}
-
-function openNodeTypeSubmenu() {
-  showNodeTypeSubmenu.value = true
-}
-
-function closeNodeTypeSubmenu() {
-  setTimeout(() => {
-    showNodeTypeSubmenu.value = false
-  }, 100)
-}
+const caseData = ref([])
+const caseTotal = ref(0)
+const casePage = ref(1)
+const casePageSize = ref(50)
 
 function handleNav(path) {
   void path
 }
 
-// 打开新增用例弹窗
-function openAddCaseModal() {
+// 打开新增用例弹窗（可从左侧树或工具栏触发）
+function openAddCaseModal(targetSuite = null) {
+  caseModalMode.value = 'create'
+  // 记录当前选中的用例集，后续可用于默认所属用例集
+  if (targetSuite) {
+    currentSuite.value = targetSuite
+  }
+  editingCase.value = null
   showAddCaseModal.value = true
-  showActionMenu.value = false
 }
 
-// 关闭新增用例弹窗
 function closeAddCaseModal() {
   showAddCaseModal.value = false
-  resetAddCaseForm()
 }
 
-// 重置表单
-function resetAddCaseForm() {
-  addCaseForm.value = {
-    name: '',
-    arrangeMode: 'list',
-    type: '',
-    caseSet: '',
-    priority: '',
-    preCondition: '',
-    description: '',
-    tags: []
+async function handleSaveCase(payload) {
+  try {
+    const isEdit = caseModalMode.value === 'edit' && editingCase.value?.id
+
+    const baseData = {
+      name: payload.name,
+      case_type: Number(payload.caseType ?? 0),
+      parent_id: currentSuite.value?.id ?? null,
+      priority: Number(payload.priority ?? 0),
+      precondition: payload.precondition || '',
+      description: payload.note || '',
+      tags: '', // 标签区域暂未真正实现输入，这里先传空字符串
+      project_id: projectStore.currentProjectId
+    }
+
+    const apiData = isEdit
+      ? { ...baseData, testcase_id: editingCase.value.id }
+      : baseData
+
+    const resp = isEdit ? await updateTestcase(apiData) : await createTestcase(apiData)
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+
+    if (code !== 0 && code !== 200) {
+      ElMessage.error(msg || (isEdit ? '编辑用例失败' : '新增用例失败'))
+      return
+    }
+
+    ElMessage.success(msg || (isEdit ? '编辑用例成功' : '新增用例成功'))
+    showAddCaseModal.value = false
+    // 新增/编辑成功后刷新当前用例列表
+    await loadTestcases()
+  } catch (error) {
+    void error
+    ElMessage.error('保存用例异常')
   }
 }
 
-// 保存用例
-function saveCase() {
-  void addCaseForm.value
-  // TODO: 调用API保存用例
-  closeAddCaseModal()
+const currentProjectId = ref(null)
+const suiteModalMode = ref('create') // 'create' | 'edit'
+const editingSuite = ref(null)
+const defaultParentSuiteId = ref(null)
+const defaultParentSuite = ref(null)
+const currentSuite = ref(null)
+
+// 新增用例集弹窗
+function openAddSuiteModal(parentSuite) {
+  suiteModalMode.value = 'create'
+  editingSuite.value = null
+  defaultParentSuiteId.value = parentSuite?.id ?? null
+  defaultParentSuite.value = parentSuite ?? null
+  currentProjectId.value = projectStore.currentProjectId
+  showAddSuiteModal.value = true
 }
 
-// 保存并前往
-function saveAndGo() {
-  void addCaseForm.value
-  // TODO: 调用API保存用例并跳转
-  closeAddCaseModal()
+// 编辑用例集弹窗
+function openEditSuiteModal(suite) {
+  suiteModalMode.value = 'edit'
+  editingSuite.value = suite
+  defaultParentSuiteId.value = null
+  defaultParentSuite.value = null
+  currentProjectId.value = projectStore.currentProjectId
+  showAddSuiteModal.value = true
+}
+
+function closeAddSuiteModal() {
+  showAddSuiteModal.value = false
+}
+
+async function createSuiteFromModal(payload) {
+  try {
+    const isEdit = Boolean(payload.suite_id)
+    // 乐观更新：编辑时先改本地节点，再调接口
+    if (isEdit && editingSuite.value) {
+      editingSuite.value.name = payload.name
+      editingSuite.value.parent_id = payload.parent_id
+      editingSuite.value.remark = payload.remark
+      editingSuite.value.tags = payload.tags
+      editingSuite.value.group = payload.group
+    }
+
+    const resp = isEdit ? await updateSuite(payload) : await createSuite(payload)
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+    if (code !== 0 && code !== 200) {
+      ElMessage.error(msg || (isEdit ? '编辑用例集失败' : '新增用例集失败'))
+      return
+    }
+    ElMessage.success(msg || (isEdit ? '编辑用例集成功' : '新增用例集成功'))
+    closeAddSuiteModal()
+  } catch (error) {
+    void error
+    ElMessage.error('新增用例集异常')
+  }
+}
+
+// 删除用例集
+async function deleteSuiteFromSidebar(suite) {
+  try {
+    const resp = await deleteSuite({ suite_id: suite.id })
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+    if (code !== 0 && code !== 200) {
+      ElMessage.error(msg || '删除用例集失败')
+      return
+    }
+    ElMessage.success(msg || '删除用例集成功')
+    // TODO: 可根据需要让左侧树刷新一次
+  } catch (error) {
+    void error
+    ElMessage.error('删除用例集异常')
+  }
 }
 
 // ========== 工具栏功能 ==========
@@ -313,8 +317,41 @@ function toggleBatchOperation() {
 
 // 关闭批量操作下拉框
 function closeBatchOperation() {
+  if (hoveringBatchOpDropdown.value) return
   showBatchOperationDropdown.value = false
 }
+
+function openBatchOperation() {
+  showBatchOperationDropdown.value = true
+}
+
+function onBatchOpDropdownEnter() {
+  hoveringBatchOpDropdown.value = true
+  openBatchOperation()
+}
+
+function onBatchOpDropdownLeave() {
+  hoveringBatchOpDropdown.value = false
+  closeBatchOperation()
+}
+
+function updateBatchOpDropdownPosition() {
+  const trigger = batchOpTriggerRef.value
+  if (!trigger) return
+  const rect = trigger.getBoundingClientRect()
+  batchOpDropdownStyle.value = {
+    top: `${rect.bottom + 4}px`,
+    left: `${rect.left}px`,
+    minWidth: `${rect.width}px`,
+    zIndex: 99999
+  }
+}
+
+watch(showBatchOperationDropdown, (val) => {
+  if (val) {
+    nextTick(() => updateBatchOpDropdownPosition())
+  }
+})
 
 // 批量操作
 function batchDelete() {
@@ -348,6 +385,47 @@ function closeCustomHeaderModal() {
 function confirmCustomHeader() {
   void customHeaders.value
   closeCustomHeaderModal()
+}
+
+// ========= 测试用例列表加载 =========
+
+async function loadTestcases() {
+  if (!currentSuite.value) return
+  try {
+    const resp = await fetchTestcaseList({
+      // 按后端约定：parent_id 传当前选中用例集 ID
+      parent_id: currentSuite.value.id,
+      page: casePage.value,
+      page_size: casePageSize.value
+    })
+    const data = resp?.data?.data
+    const list = data?.list || []
+    caseTotal.value = data?.total || 0
+    caseData.value = list.map(item => ({
+      id: String(item.id),
+      name: item.name,
+      type: item.type || '',
+      caseSet: currentSuite.value.name || '',
+      app: item.app_code || '',
+      steps: item.step_count || 0,
+      tasks: item.task_count || 0,
+      execCount: item.exec_count || 0,
+      result: item.last_result || '-',
+      creator: item.creator || '',
+      createTime: item.created_at || '',
+      updateTime: item.updated_at || '',
+      priority: item.priority || ''
+    }))
+  } catch (error) {
+    void error
+    caseData.value = []
+  }
+}
+
+async function handleSelectSuite(suite) {
+  currentSuite.value = suite
+  casePage.value = 1
+  await loadTestcases()
 }
 
 // 全选/取消全选某组
@@ -407,243 +485,13 @@ function goToCaseConfig(id) {
     
     <div class="page-container">
       <!-- 左侧树 -->
-      <aside class="sidebar">
-        <!-- 模块选择下拉 - 自定义圆角下拉 -->
-        <div 
-          class="module-select-wrapper"
-          @mouseenter="openModuleDropdown"
-          @mouseleave="closeModuleDropdown"
-        >
-          <div 
-            class="module-select-trigger"
-            @click="toggleModuleDropdown"
-          >
-            <svg class="module-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
-            </svg>
-            <span class="selected-text">{{ selectedModule }}</span>
-            <svg class="arrow-icon" :class="{ open: showModuleDropdown }" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-              <path d="M7 10l5 5 5-5z"/>
-            </svg>
-          </div>
-          
-          <!-- 下拉菜单 -->
-          <div 
-            v-if="showModuleDropdown" 
-            class="module-dropdown"
-            @mouseenter="openModuleDropdown"
-            @mouseleave="closeModuleDropdown"
-          >
-            <!-- 站点切换标签 -->
-            <div class="site-tabs">
-              <button class="site-tab active">主站</button>
-              <button class="site-tab">测试站</button>
-            </div>
-            <!-- 搜索框 -->
-            <div class="dropdown-search">
-              <input type="text" placeholder="请输入" />
-              <button class="search-btn">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                  <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-                </svg>
-              </button>
-              <button class="filter-btn">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                  <path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"/>
-                </svg>
-              </button>
-            </div>
-            <!-- 模块列表 -->
-            <div class="module-list">
-              <div 
-                v-for="m in modules" 
-                :key="m.name"
-                :class="['module-item', { active: selectedModule === m.name }]"
-                @click="selectModule(m)"
-              >
-                <svg class="expand-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                  <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
-                </svg>
-                <span class="module-name">{{ m.name }}</span>
-              </div>
-            </div>
-            <div class="dropdown-footer">没有更多数据了</div>
-          </div>
-        </div>
-
-        <!-- 筛选栏 - 只看自己 + 菜单按钮 -->
-        <div class="filter-bar">
-          <label class="checkbox-label">
-            <input v-model="onlyMine" type="checkbox" />
-            <span>只看自己</span>
-          </label>
-          
-          <!-- 三个横杠菜单按钮 - 悬停和点击都能展示下拉框 -->
-          <div 
-            class="action-menu-wrapper"
-            @mouseenter="openActionMenu"
-            @mouseleave="closeActionMenu"
-          >
-            <button class="menu-trigger-btn" @click="toggleActionMenu">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
-              </svg>
-            </button>
-            
-            <!-- 下拉菜单 -->
-            <div 
-              v-if="showActionMenu" 
-              class="action-dropdown"
-              @mouseenter="openActionMenu"
-              @mouseleave="closeActionMenu"
-            >
-              <div class="dropdown-header">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                  <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
-                </svg>
-                <span>用例列表</span>
-              </div>
-              <div class="dropdown-divider"></div>
-              <div class="menu-item">
-                <span class="icon">+</span>
-                <span>添加用例集</span>
-                <svg class="arrow" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                  <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
-                </svg>
-              </div>
-              <div class="menu-item" @click="openAddCaseModal">
-                <span class="icon">+</span>
-                <span>添加用例</span>
-              </div>
-              <div 
-                class="menu-item has-submenu"
-                @mouseenter="openAddStepSubmenu"
-                @mouseleave="closeAddStepSubmenu"
-              >
-                <span class="icon">+</span>
-                <span>添加用例步骤</span>
-                <svg class="arrow" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                  <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
-                </svg>
-                
-                <!-- 子菜单 -->
-                <div 
-                  v-if="showAddStepSubmenu" 
-                  class="submenu"
-                  @mouseenter="openAddStepSubmenu"
-                  @mouseleave="closeAddStepSubmenu"
-                >
-                  <div class="submenu-item">新增JSF步骤</div>
-                  <div class="submenu-item">新增HTTP步骤</div>
-                  <div class="submenu-item">新增JIMDB步骤</div>
-                  <div class="submenu-item">新增JMQ步骤</div>
-                  <div class="submenu-item">新增JAR步骤</div>
-                  <div class="submenu-item">新增KAFKA步骤</div>
-                  <div class="submenu-item">新增MYSQL步骤</div>
-                  <div class="submenu-item">新增STARDB步骤</div>
-                  <div class="submenu-item">新增SHELL步骤</div>
-                </div>
-              </div>
-              <div class="menu-item">
-                <svg class="icon-svg" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                  <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
-                </svg>
-                <span>用例集数据同步</span>
-                <svg class="help-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
-                </svg>
-              </div>
-              <div class="menu-item">
-                <svg class="icon-svg" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                  <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-                </svg>
-                <span>刷新用例树</span>
-              </div>
-              <div class="menu-item">
-                <svg class="icon-svg" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                  <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                </svg>
-                <span>回收站</span>
-              </div>
-              <div 
-                class="menu-item has-submenu"
-                @mouseenter="openNodeTypeSubmenu"
-                @mouseleave="closeNodeTypeSubmenu"
-              >
-                <svg class="icon-svg" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                  <path d="M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10z"/>
-                </svg>
-                <span>切换叶子节点类型</span>
-                <svg class="arrow" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                  <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
-                </svg>
-                
-                <!-- 子菜单 -->
-                <div 
-                  v-if="showNodeTypeSubmenu" 
-                  class="submenu"
-                  @mouseenter="openNodeTypeSubmenu"
-                  @mouseleave="closeNodeTypeSubmenu"
-                >
-                  <div class="submenu-item">
-                    <span>用例集</span>
-                    <svg class="check-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                      <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                    </svg>
-                  </div>
-                  <div class="submenu-item">
-                    <span>用例</span>
-                  </div>
-                  <div class="submenu-item">
-                    <span>步骤</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- 搜索框 - 带重置和筛选按钮 -->
-        <div class="search-box">
-          <input v-model="searchKeyword" type="text" placeholder="请输入搜索关键字..." />
-          <button class="search-btn">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-              <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-            </svg>
-          </button>
-          <button class="reset-link" @click="searchKeyword = ''">重置</button>
-          <button class="filter-icon-btn">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-              <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/>
-            </svg>
-          </button>
-        </div>
-        <!-- 树形菜单 -->
-        <div class="tree-menu">
-          <div v-for="node in treeData" :key="node.name" class="tree-node">
-            <div class="tree-item" @click="toggleExpand(node)">
-              <svg v-if="node.children" class="tree-arrow" :class="{ expanded: isExpanded(node) }" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
-              </svg>
-              <span class="tree-icon">📁</span>
-              <span class="tree-label">{{ node.name }}</span>
-              <span class="tree-count">{{ node.count }}</span>
-            </div>
-            <div v-if="node.children && isExpanded(node)" class="tree-children">
-              <div v-for="child in node.children" :key="child.name" class="tree-node">
-                <div class="tree-item child" @click="toggleExpand(child)">
-                  <svg v-if="child.children" class="tree-arrow" :class="{ expanded: isExpanded(child) }" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                    <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
-                  </svg>
-                  <span class="tree-icon">📄</span>
-                  <span class="tree-label">{{ child.name }}</span>
-                  <span class="tree-count">{{ child.count }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </aside>
+      <CaseSidebar
+        @openAddSuiteModal="openAddSuiteModal"
+        @openAddCaseModal="openAddCaseModal"
+        @editSuite="openEditSuiteModal"
+        @deleteSuite="deleteSuiteFromSidebar"
+        @selectSuite="handleSelectSuite"
+      />
 
       <!-- 主内容 -->
       <main class="main-content">
@@ -718,10 +566,16 @@ function goToCaseConfig(id) {
             执行结果
           </button>
           <!-- 批量操作带下拉 -->
-          <div class="tool-btn-wrapper" style="position: relative;">
+          <div
+            class="tool-btn-wrapper"
+            style="position: relative;"
+            @mouseenter="openBatchOperation"
+            @mouseleave="() => setTimeout(closeBatchOperation, 80)"
+          >
             <button 
               class="tool-btn" 
               :class="{ disabled: selectedCases.length === 0 }"
+              ref="batchOpTriggerRef"
               @click="toggleBatchOperation"
             >
               <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
@@ -729,33 +583,41 @@ function goToCaseConfig(id) {
               </svg>
               批量操作
             </button>
-            <!-- 批量操作下拉 -->
-            <div v-if="showBatchOperationDropdown" class="batch-operation-dropdown">
-              <div class="dropdown-item" @click="batchDelete">
+            <!-- 批量操作下拉（Teleport 到 body，避免被容器遮挡） -->
+            <teleport to="body">
+              <div
+                v-if="showBatchOperationDropdown"
+                class="batch-operation-dropdown"
+                :style="batchOpDropdownStyle"
+                @mouseenter="onBatchOpDropdownEnter"
+                @mouseleave="onBatchOpDropdownLeave"
+              >
+                <div class="dropdown-item" @click="batchDelete">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                   <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
                 </svg>
                 删除
-              </div>
-              <div class="dropdown-item" @click="batchMove">
+                </div>
+                <div class="dropdown-item" @click="batchMove">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                   <path d="M10 9v6l5-3-5-3zm0 10c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zm0-16C5.58 3 2 6.58 2 11s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8z"/>
                 </svg>
                 移动
-              </div>
-              <div class="dropdown-item" @click="batchEdit">
+                </div>
+                <div class="dropdown-item" @click="batchEdit">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                   <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
                 </svg>
                 编辑
-              </div>
-              <div class="dropdown-item" @click="batchCopy">
+                </div>
+                <div class="dropdown-item" @click="batchCopy">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                   <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
                 </svg>
                 复制
+                </div>
               </div>
-            </div>
+            </teleport>
           </div>
           <button class="tool-btn" @click="openCustomHeaderModal">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
@@ -846,144 +708,29 @@ function goToCaseConfig(id) {
       </main>
     </div>
 
-    <!-- 新增用例弹窗 -->
-    <div v-if="showAddCaseModal" class="modal-overlay" @click.self="closeAddCaseModal">
-      <div class="modal-container">
-        <!-- 弹窗头部 -->
-        <div class="modal-header">
-          <h3 class="modal-title">新增用例</h3>
-          <button class="modal-close" @click="closeAddCaseModal">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-            </svg>
-          </button>
-        </div>
+    <!-- 新增/编辑用例弹窗（AntD 风格组件，Teleport 到 body，避免被外层容器影响） -->
+    <teleport to="body">
+      <AddEditCaseModal
+        v-model:visible="showAddCaseModal"
+        v-model:modelValue="editingCase"
+        :mode="caseModalMode"
+        :default-suite="currentSuite"
+        @close="closeAddCaseModal"
+        @save="handleSaveCase"
+      />
+    </teleport>
 
-        <!-- 弹窗内容 -->
-        <div class="modal-body">
-          <form class="case-form">
-            <!-- 用例名称 -->
-            <div class="form-item required">
-              <label class="form-label">
-                <span class="required-star">*</span>
-                用例名称:
-              </label>
-              <input 
-                v-model="addCaseForm.name" 
-                type="text" 
-                class="form-input" 
-                placeholder="请输入用例名称"
-              />
-            </div>
-
-            <!-- 编排方式 -->
-            <div class="form-item required">
-              <label class="form-label">
-                <span class="required-star">*</span>
-                编排方式:
-              </label>
-              <div class="radio-group">
-                <label class="radio-item">
-                  <input type="radio" v-model="addCaseForm.arrangeMode" value="list" />
-                  <span class="radio-text">列表编排</span>
-                </label>
-                <label class="radio-item">
-                  <input type="radio" v-model="addCaseForm.arrangeMode" value="graph" />
-                  <span class="radio-text">图形编排</span>
-                </label>
-                <label class="radio-item">
-                  <input type="radio" v-model="addCaseForm.arrangeMode" value="code" />
-                  <span class="radio-text">代码编排</span>
-                </label>
-              </div>
-            </div>
-
-            <!-- 用例类型 -->
-            <div class="form-item required">
-              <label class="form-label">
-                <span class="required-star">*</span>
-                用例类型:
-              </label>
-              <select v-model="addCaseForm.type" class="form-select">
-                <option value="">请选择</option>
-                <option v-for="opt in caseTypeOptions" :key="opt.value" :value="opt.value">
-                  {{ opt.label }}
-                </option>
-              </select>
-            </div>
-
-            <!-- 所属用例集 -->
-            <div class="form-item required">
-              <label class="form-label">
-                <span class="required-star">*</span>
-                所属用例集
-                <svg class="help-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>
-                </svg>
-                :
-              </label>
-              <select v-model="addCaseForm.caseSet" class="form-select">
-                <option value="">请选择</option>
-                <option v-for="opt in caseSetOptions" :key="opt.value" :value="opt.value">
-                  {{ opt.label }}
-                </option>
-              </select>
-            </div>
-
-            <!-- 优先级 -->
-            <div class="form-item">
-              <label class="form-label">
-                <span class="required-star">*</span>
-                优先级:
-              </label>
-              <select v-model="addCaseForm.priority" class="form-select">
-                <option value="">请选择</option>
-                <option v-for="opt in priorityOptions" :key="opt.value" :value="opt.value">
-                  {{ opt.label }}
-                </option>
-              </select>
-            </div>
-
-            <!-- 前置条件 -->
-            <div class="form-item">
-              <label class="form-label">前置条件:</label>
-              <textarea 
-                v-model="addCaseForm.preCondition" 
-                class="form-textarea" 
-                placeholder="前置条件"
-                rows="3"
-              ></textarea>
-            </div>
-
-            <!-- 用例描述 -->
-            <div class="form-item">
-              <label class="form-label">用例描述:</label>
-              <textarea 
-                v-model="addCaseForm.description" 
-                class="form-textarea" 
-                placeholder="描述信息"
-                rows="3"
-              ></textarea>
-            </div>
-
-            <!-- 标签 -->
-            <div class="form-item">
-              <label class="form-label">标签:</label>
-              <div class="tag-section">
-                <button type="button" class="add-tag-btn">+ 新增标签</button>
-              </div>
-            </div>
-          </form>
-        </div>
-
-        <!-- 弹窗底部 -->
-        <div class="modal-footer">
-          <button class="btn-cancel" @click="closeAddCaseModal">取消</button>
-          <button class="btn-save" @click="saveCase">保存</button>
-          <button class="btn-save-go" @click="saveAndGo">保存并前往</button>
-        </div>
-      </div>
-    </div>
+    <!-- 新增用例集弹窗 -->
+    <AddSuiteModal
+      :visible="showAddSuiteModal"
+      :project-id="currentProjectId"
+      :mode="suiteModalMode"
+      :suite="editingSuite"
+      :default-parent-id="defaultParentSuiteId"
+      :default-parent-suite="defaultParentSuite"
+      @close="closeAddSuiteModal"
+      @saved="createSuiteFromModal"
+    />
 
     <!-- 同步用例弹窗 -->
     <div v-if="showSyncCaseModal" class="modal-overlay" @click.self="closeSyncCaseModal">
@@ -1447,7 +1194,8 @@ function goToCaseConfig(id) {
   border: 1px solid #e8e8e8;
   border-radius: 12px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-  z-index: 100;
+  /* 提高层级，避免被右侧主容器遮挡 */
+  z-index: 10000;
   overflow: hidden;
 }
 
@@ -1775,6 +1523,7 @@ function goToCaseConfig(id) {
   .tree-item {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 6px;
     padding: 6px 8px;
     cursor: pointer;
@@ -1787,6 +1536,37 @@ function goToCaseConfig(id) {
 
     &.child {
       padding-left: 24px;
+    }
+  }
+
+  .tree-main {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .tree-actions {
+    display: none;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .tree-item:hover .tree-actions {
+    display: inline-flex;
+  }
+
+  .tree-action-btn {
+    border: none;
+    background: transparent;
+    padding: 0 4px;
+    font-size: 12px;
+    color: #999;
+    cursor: pointer;
+
+    &:hover {
+      color: #1890ff;
     }
   }
 
