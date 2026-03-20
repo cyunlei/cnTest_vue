@@ -6,7 +6,14 @@
 </script>
 
 <template>
-  <router-view />
+  <router-view v-slot="{ Component, route }">
+    <template v-if="route.meta.keepAlive">
+      <KeepAlive>
+        <component :is="Component" />
+      </KeepAlive>
+    </template>
+    <component :is="Component" v-else />
+  </router-view>
 </template>
 
 <style>

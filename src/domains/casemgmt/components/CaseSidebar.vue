@@ -33,6 +33,7 @@ const activeMoreNode = ref(null)
 const showNodeEnvSubmenu = ref(false)
 const nodeEnvSubmenuStyle = ref({})
 let nodeMoreCloseTimer = null
+let moduleDropdownCloseTimer = null
 
 // Teleport 定位相关
 const moduleTriggerRef = ref(null)
@@ -61,7 +62,7 @@ async function loadSuites(parentId) {
       params.parent_id = parentId
     }
     const resp = await fetchSuiteList(params)
-    const list = resp?.data?.data?.list || []
+    const list = resp?.data?.data?.items || []
     return list.map(item => ({
       id: item.id,
       name: item.name,
@@ -88,6 +89,16 @@ async function loadSuites(parentId) {
 async function loadRootSuites() {
   const roots = await loadSuites()
   treeData.value = roots
+  const routeSuiteId = Number(route.query.suite_id)
+  const hasRouteSuiteId = Number.isFinite(routeSuiteId)
+  if (hasRouteSuiteId) {
+    const matched = roots.find(item => item.id === routeSuiteId)
+    if (matched) {
+      selectedSuiteId.value = matched.id
+      emit('selectSuite', matched)
+      return
+    }
+  }
   if (roots.length && selectedSuiteId.value == null) {
     selectedSuiteId.value = roots[0].id
   }
@@ -99,6 +110,8 @@ async function loadChildSuites(node) {
 
 async function loadModules() {
   try {
+    // 进入页面先恢复持久化项目
+    projectStore.restoreCurrentProject()
     const resp = await fetchProjectList({
       project_id: '',
       page: 1,
@@ -111,9 +124,12 @@ async function loadModules() {
       count: ''
     }))
     if (modules.value.length > 0) {
-      const first = modules.value[0]
-      selectedModule.value = first.name
-      projectStore.setCurrentProject({ id: first.id, name: first.name })
+      // 优先使用 store 持久化的项目 ID
+      const savedId = projectStore.currentProjectId
+      const target =
+        modules.value.find(item => item.id === savedId) || modules.value[0]
+      selectedModule.value = target.name
+      projectStore.setCurrentProject({ id: target.id, name: target.name })
     }
     // 加载顶层用例集（不传任何参数）
     await loadRootSuites()
@@ -197,10 +213,20 @@ const flatNodes = computed(() => {
   return result
 })
 
-function selectModule(module) {
+async function selectModule(module) {
   selectedModule.value = module.name
   showModuleDropdown.value = false
   projectStore.setCurrentProject({ id: module.id, name: module.name })
+  // 切换项目后重新拉取该项目的用例集树
+  expandedKeys.value = []
+  selectedSuiteId.value = null
+  await loadRootSuites()
+  // 若路由未指定 suite_id，则默认选中第一个根用例集并通知右侧刷新列表
+  const routeSuiteId = Number(route.query.suite_id)
+  const hasRouteSuiteId = Number.isFinite(routeSuiteId)
+  if (!hasRouteSuiteId && treeData.value.length > 0) {
+    selectSuite(treeData.value[0])
+  }
 }
 
 function toggleModuleDropdown() {
@@ -208,11 +234,16 @@ function toggleModuleDropdown() {
 }
 
 function openModuleDropdown() {
+  if (moduleDropdownCloseTimer) {
+    clearTimeout(moduleDropdownCloseTimer)
+    moduleDropdownCloseTimer = null
+  }
   showModuleDropdown.value = true
 }
 
 function closeModuleDropdown() {
-  setTimeout(() => {
+  if (moduleDropdownCloseTimer) clearTimeout(moduleDropdownCloseTimer)
+  moduleDropdownCloseTimer = setTimeout(() => {
     showModuleDropdown.value = false
   }, 100)
 }

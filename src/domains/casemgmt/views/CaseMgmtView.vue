@@ -3,8 +3,8 @@
  * 用例管理页面
  * 位置: domains/casemgmt/views/
  */
-import { ref, computed, nextTick, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, nextTick, watch, onActivated } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import AppHeader from '@/shared/ui/organisms/AppHeader.vue'
 import CaseSidebar from '../components/CaseSidebar.vue'
 import AddSuiteModal from '../components/suite/AddSuiteModal.vue'
@@ -21,6 +21,7 @@ import { ElMessage } from 'element-plus'
 import { useProjectStore } from '@/domains/project/stores/useProjectStore'
 
 const router = useRouter()
+const route = useRoute()
 const projectStore = useProjectStore()
 
 const activeTab = ref('scenario')
@@ -438,6 +439,28 @@ async function handleSelectSuite(suite) {
   casePage.value = 1
   await loadTestcases()
 }
+
+async function refreshListFromRoute() {
+  const suiteId = Number(route.query.suite_id)
+  if (Number.isFinite(suiteId) && suiteId > 0) {
+    currentSuite.value = {
+      ...(currentSuite.value || {}),
+      id: suiteId,
+      name: currentSuite.value?.name || ''
+    }
+    casePage.value = 1
+    await loadTestcases()
+    return
+  }
+  if (currentSuite.value?.id) {
+    casePage.value = 1
+    await loadTestcases()
+  }
+}
+
+onActivated(() => {
+  void refreshListFromRoute()
+})
 
 // 全选/取消全选某组
 function toggleGroup(group, checked) {

@@ -64,7 +64,8 @@ const routes = [
     component: () => import('@/domains/casemgmt/views/CaseMgmtView.vue'),
     meta: { 
       requiresAuth: true,
-      title: '用例管理'
+      title: '用例管理',
+      keepAlive: true
     }
   },
   {
@@ -73,7 +74,8 @@ const routes = [
     component: () => import('@/domains/casemgmt/views/CaseConfigView.vue'),
     meta: { 
       requiresAuth: true,
-      title: '用例配置'
+      title: '用例配置',
+      keepAlive: true
     }
   },
   {

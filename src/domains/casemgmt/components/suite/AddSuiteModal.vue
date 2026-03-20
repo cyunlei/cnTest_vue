@@ -44,7 +44,7 @@ async function loadParentOptions() {
   if (!props.projectId) return
   try {
     const resp = await fetchSuiteList({ project_id: props.projectId })
-    const list = resp?.data?.data?.list || []
+    const list = resp?.data?.data?.items || []
     parentOptions.value = list.map(item => ({
       label: item.name,
       value: item.id

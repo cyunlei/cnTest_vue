@@ -158,6 +158,16 @@ function goBack() {
   router.push('/case-mgmt')
 }
 
+function handleSelectSuiteFromSidebar(suite) {
+  router.push({
+    path: '/case-mgmt',
+    query: {
+      project_id: route.query.project_id ? String(route.query.project_id) : undefined,
+      suite_id: suite?.id ? String(suite.id) : undefined
+    }
+  })
+}
+
 function openHttpStepDrawer() {
   editingHttpStep.value = null
   showHttpStepDrawer.value = true
@@ -261,7 +271,7 @@ function closeStepTypeDialog() {
   <div class="case-config-page">
     <AppHeader @navigate="handleNav" />
     <div class="page-container">
-      <CaseSidebar />
+      <CaseSidebar @selectSuite="handleSelectSuiteFromSidebar" />
       <main class="main-content">
         <div class="title-bar">
           <div class="content-tabs">
