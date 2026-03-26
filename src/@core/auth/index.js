@@ -72,15 +72,19 @@ export function isAuthenticated() {
   return !!getToken()
 }
 
-// ======== 用户信息缓存（内存） ========
-let cachedUserInfo = null
+// ======== 用户信息缓存（localStorage 持久化） ========
+const USER_INFO_KEY = 'user_info'
 
 /**
  * 设置缓存的用户信息
  * @param {import('@/domains/auth/types').UserEntity|null} info
  */
 export function setCachedUserInfo(info) {
-  cachedUserInfo = info
+  if (info) {
+    localStorage.setItem(USER_INFO_KEY, JSON.stringify(info))
+  } else {
+    localStorage.removeItem(USER_INFO_KEY)
+  }
 }
 
 /**
@@ -88,12 +92,18 @@ export function setCachedUserInfo(info) {
  * @returns {import('@/domains/auth/types').UserEntity|null}
  */
 export function getCachedUserInfo() {
-  return cachedUserInfo
+  const data = localStorage.getItem(USER_INFO_KEY)
+  if (!data) return null
+  try {
+    return JSON.parse(data)
+  } catch {
+    return null
+  }
 }
 
 /**
  * 清除缓存的用户信息
  */
 export function clearCachedUserInfo() {
-  cachedUserInfo = null
+  localStorage.removeItem(USER_INFO_KEY)
 }

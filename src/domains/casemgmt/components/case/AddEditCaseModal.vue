@@ -294,6 +294,7 @@
 
 <script setup>
 import { computed, watch, reactive, ref } from 'vue'
+import { CASE_TYPE_OPTIONS, PRIORITY_OPTIONS } from '../../types'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -315,24 +316,8 @@ const form = reactive({
   note: ''
 })
 
-const caseTypeOptions = [
-  { value: '0', label: '功能用例' },
-  { value: '1', label: '性能用例' },
-  { value: '2', label: '接口用例' },
-  { value: '3', label: '冒烟用例' },
-  { value: '4', label: '回归用例' },
-  { value: '5', label: '前置用例' },
-  { value: '6', label: '后置用例' }
-]
-
-const priorityOptions = [
-  { value: '0', label: 'P0' },
-  { value: '1', label: 'P1' },
-  { value: '2', label: 'P2' },
-  { value: '3', label: 'P3' },
-  { value: '4', label: 'P4' },
-  { value: '5', label: 'P5' }
-]
+const caseTypeOptions = CASE_TYPE_OPTIONS
+const priorityOptions = PRIORITY_OPTIONS
 
 const showCaseTypeDropdown = ref(false)
 const showPriorityDropdown = ref(false)

@@ -3,9 +3,11 @@
  * 用例管理页面
  * 位置: domains/casemgmt/views/
  */
-import { ref, computed, nextTick, watch, onActivated } from 'vue'
+import { ref, computed, nextTick, watch, onActivated, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppHeader from '@/shared/ui/organisms/AppHeader.vue'
+import AppPagination from '@/shared/ui/organisms/AppPagination.vue'
+import DateRangeInput from '@/shared/ui/molecules/DateRangeInput.vue'
 import CaseSidebar from '../components/CaseSidebar.vue'
 import AddSuiteModal from '../components/suite/AddSuiteModal.vue'
 import AddEditCaseModal from '../components/case/AddEditCaseModal.vue'
@@ -19,6 +21,8 @@ import {
 } from '../api'
 import { ElMessage } from 'element-plus'
 import { useProjectStore } from '@/domains/project/stores/useProjectStore'
+import { getCaseTypeLabel, getPriorityLabel } from '../types'
+import { withGlobalLoading } from '@/shared/composables'
 
 const router = useRouter()
 const route = useRoute()
@@ -43,6 +47,7 @@ const showCustomHeaderModal = ref(false)
 
 // 选中的用例
 const selectedCases = ref([])
+const isBatchOperationDisabled = computed(() => selectedCases.value.length === 0)
 
 // 同步用例表单
 const syncCaseForm = ref({
@@ -78,7 +83,7 @@ const defaultHeaders = [
   { key: 'name', label: '用例名称', checked: true, group: '基本信息' },
   { key: 'type', label: '类型', checked: true, group: '基本信息' },
   { key: 'caseSet', label: '所属用例集', checked: true, group: '基本信息' },
-  { key: 'app', label: '关联应用', checked: true, group: '基本信息' },
+  { key: 'app', label: '关联项目', checked: true, group: '基本信息' },
   { key: 'tag', label: '标签', checked: true, group: '基本信息' },
   { key: 'priority', label: '优先级', checked: true, group: '基本信息' },
   { key: 'steps', label: '步骤数', checked: true, group: '执行信息' },
@@ -132,9 +137,116 @@ const caseData = ref([])
 const caseTotal = ref(0)
 const casePage = ref(1)
 const casePageSize = ref(50)
+const pageSizeOptions = [20, 50, 100]
+const navigatingCaseId = ref('')
+
+const showMoreFilters = ref(false)
+
+const filterForm = ref({
+  keyword: '',
+  creator: '',
+  api: '',
+  tags: '',
+  updater: '',
+  method: '',
+  createdAtStart: '',
+  createdAtEnd: ''
+})
+
+function formatTags(tags) {
+  if (Array.isArray(tags)) {
+    return tags.filter(Boolean).join(',')
+  }
+  if (typeof tags === 'string') return tags
+  return ''
+}
+
+function toNumberOrZero(val) {
+  const num = typeof val === 'number' ? val : Number(val)
+  return Number.isFinite(num) ? num : 0
+}
+
+function toggleMoreFilters() {
+  showMoreFilters.value = !showMoreFilters.value
+  localStorage.setItem('casemgmt.caseList.showMoreFilters', showMoreFilters.value ? '1' : '0')
+}
+
+function resetFilters() {
+  filterForm.value = {
+    keyword: '',
+    creator: '',
+    api: '',
+    tags: '',
+    updater: '',
+    method: '',
+    createdAtStart: '',
+    createdAtEnd: ''
+  }
+}
+
+async function handleResetTestcases() {
+  resetFilters()
+  casePage.value = 1
+  await withGlobalLoading(
+    () => loadTestcases({ withParentId: Boolean(currentSuite.value?.id) }),
+    '加载用例列表...'
+  )
+}
+
+function buildFilterParams() {
+  const form = filterForm.value
+  const params = {}
+  if (form.keyword?.trim()) params.name_or_id = form.keyword.trim()
+  if (form.creator?.trim()) params.creator = form.creator.trim()
+  if (form.api?.trim()) params.api_url = form.api.trim()
+  if (form.tags?.trim()) params.tags = form.tags.trim()
+  if (form.updater?.trim()) params.updater = form.updater.trim()
+  if (form.method?.trim()) {
+    const rawMethod = form.method.trim()
+    const upperMethod = rawMethod.toUpperCase()
+    const methodMap = {
+      GET: 0,
+      POST: 1,
+      PUT: 2,
+      DELETE: 3,
+      PATCH: 4
+    }
+    if (/^\d+$/.test(rawMethod)) {
+      params.method = Number(rawMethod)
+    } else if (upperMethod in methodMap) {
+      params.method = methodMap[upperMethod]
+    }
+  }
+  if (form.createdAtStart?.trim()) params.created_at_start = form.createdAtStart.trim()
+  if (form.createdAtEnd?.trim()) params.created_at_end = form.createdAtEnd.trim()
+  return params
+}
+
+async function handleQueryTestcases() {
+  casePage.value = 1
+  await withGlobalLoading(
+    () => loadTestcases({ withParentId: Boolean(currentSuite.value?.id) }),
+    '加载用例列表...'
+  )
+}
 
 function handleNav(path) {
   void path
+}
+
+async function reloadCurrentTestcases() {
+  await loadTestcases({ withParentId: Boolean(currentSuite.value?.id) })
+}
+
+async function handleCasePageChange(page) {
+  casePage.value = page
+  await reloadCurrentTestcases()
+}
+
+async function handleCasePageSizeChange(nextSize) {
+  casePageSize.value = nextSize
+  casePage.value = 1
+  await reloadCurrentTestcases()
 }
 
 // 打开新增用例弹窗（可从左侧树或工具栏触发）
@@ -324,6 +436,7 @@ function closeExecResultDrawer() {
 
 // 切换批量操作下拉框
 function toggleBatchOperation() {
+  if (isBatchOperationDisabled.value) return
   showBatchOperationDropdown.value = !showBatchOperationDropdown.value
 }
 
@@ -334,6 +447,7 @@ function closeBatchOperation() {
 }
 
 function openBatchOperation() {
+  if (isBatchOperationDisabled.value) return
   showBatchOperationDropdown.value = true
 }
 
@@ -362,6 +476,12 @@ function updateBatchOpDropdownPosition() {
 watch(showBatchOperationDropdown, (val) => {
   if (val) {
     nextTick(() => updateBatchOpDropdownPosition())
+  }
+})
+
+watch(selectedCases, (val) => {
+  if (!Array.isArray(val) || val.length === 0) {
+    showBatchOperationDropdown.value = false
   }
 })
 
@@ -401,32 +521,71 @@ function confirmCustomHeader() {
 
 // ========= 测试用例列表加载 =========
 
-async function loadTestcases() {
-  if (!currentSuite.value) return
+async function loadTestcases(options = { withParentId: true }) {
   try {
-    const resp = await fetchTestcaseList({
-      // 按后端约定：parent_id 传当前选中用例集 ID
-      parent_id: currentSuite.value.id,
+    const currentProjectId = projectStore.currentProjectId
+    const params = {
+      project_id: currentProjectId,
       page: casePage.value,
-      page_size: casePageSize.value
-    })
+      page_size: casePageSize.value,
+      ...buildFilterParams()
+    }
+    if (options.withParentId && currentSuite.value?.id) {
+      // 仅在明确选中用例集后传 parent_id
+      params.parent_id = currentSuite.value.id
+    }
+
+    const resp = await fetchTestcaseList(params)
     const data = resp?.data?.data
     const list = data?.list || []
     caseTotal.value = data?.total || 0
+    casePage.value = Number(data?.page) || casePage.value
+    casePageSize.value = Number(data?.page_size) || casePageSize.value
     caseData.value = list.map(item => ({
       id: String(item.id),
       name: item.name,
-      type: item.type || '',
-      caseSet: currentSuite.value.name || '',
-      app: item.app_code || '',
-      steps: item.step_count || 0,
-      tasks: item.task_count || 0,
-      execCount: item.exec_count || 0,
-      result: item.last_result || '-',
+      type: getCaseTypeLabel(item.case_type ?? item.caseType ?? item.type),
+      caseSet:
+        item.suite_name ??
+        item.suiteName ??
+        item.parent_name ??
+        item.parentName ??
+        currentSuite.value?.name ??
+        '',
+      app:
+        item.project_name ??
+        item.projectName ??
+        projectStore.currentProject?.name ??
+        item.app_code ??
+        '',
+      tag: formatTags(
+        item.tags ??
+        item.tag ??
+        item.labels
+      ),
+      steps: toNumberOrZero(
+        item.step_count ??
+        item.stepCount ??
+        item.steps_count ??
+        item.stepsCount
+      ),
+      tasks: toNumberOrZero(
+        item.task_count ??
+        item.taskCount
+      ),
+      execCount: toNumberOrZero(
+        item.exec_count ??
+        item.execCount ??
+        item.execution_count ??
+        item.executionCount
+      ),
+      result:
+        item.last_result ||
+        '-',
       creator: item.creator || '',
       createTime: item.created_at || '',
       updateTime: item.updated_at || '',
-      priority: item.priority || ''
+      priority: getPriorityLabel(item.priority)
     }))
   } catch (error) {
     void error
@@ -435,9 +594,22 @@ async function loadTestcases() {
 }
 
 async function handleSelectSuite(suite) {
-  currentSuite.value = suite
+  currentSuite.value = suite || null
   casePage.value = 1
-  await loadTestcases()
+  await withGlobalLoading(
+    () => loadTestcases({ withParentId: Boolean(suite?.id) }),
+    '加载用例列表...'
+  )
+}
+
+async function handleProjectChanged() {
+  // 进入页面与切换项目时，默认列表查询不传 parent_id
+  currentSuite.value = null
+  casePage.value = 1
+  await withGlobalLoading(
+    () => loadTestcases({ withParentId: false }),
+    '加载用例列表...'
+  )
 }
 
 async function refreshListFromRoute() {
@@ -449,16 +621,26 @@ async function refreshListFromRoute() {
       name: currentSuite.value?.name || ''
     }
     casePage.value = 1
-    await loadTestcases()
+    await withGlobalLoading(
+      () => loadTestcases({ withParentId: true }),
+      '加载用例列表...'
+    )
     return
   }
-  if (currentSuite.value?.id) {
-    casePage.value = 1
-    await loadTestcases()
-  }
+  // 默认列表：不传 parent_id
+  currentSuite.value = null
+  casePage.value = 1
+  await withGlobalLoading(
+    () => loadTestcases({ withParentId: false }),
+    '加载用例列表...'
+  )
 }
 
 onActivated(() => {
+  void refreshListFromRoute()
+})
+
+onMounted(() => {
   void refreshListFromRoute()
 })
 
@@ -507,14 +689,24 @@ function toggleSelectAll(event) {
   }
 }
 
-// 跳转到用例配置页面
-function goToCaseConfig(id) {
-  router.push({
-    path: `/case-config/${id}`,
-    query: {
-      project_id: projectStore.currentProjectId ? String(projectStore.currentProjectId) : undefined
-    }
-  })
+// 跳转到用例配置页面（增加过渡态，避免生硬跳转和重复点击）
+async function goToCaseConfig(id) {
+  if (!id || navigatingCaseId.value === id) return
+  navigatingCaseId.value = id
+  try {
+    await router.push({
+      path: `/case-config/${id}`,
+      query: {
+        project_id: projectStore.currentProjectId ? String(projectStore.currentProjectId) : undefined
+      }
+    })
+  } finally {
+    setTimeout(() => {
+      if (navigatingCaseId.value === id) {
+        navigatingCaseId.value = ''
+      }
+    }, 200)
+  }
 }
 </script>
 
@@ -529,6 +721,7 @@ function goToCaseConfig(id) {
         @openAddCaseModal="openAddCaseModal"
         @editSuite="openEditSuiteModal"
         @deleteSuite="deleteSuiteFromSidebar"
+        @project-changed="handleProjectChanged"
         @selectSuite="handleSelectSuite"
       />
 
@@ -557,21 +750,56 @@ function goToCaseConfig(id) {
 
         <!-- 搜索栏 -->
         <div class="search-filter">
-          <div class="filter-item">
-            <label>关键字:</label>
-            <input type="text" placeholder="输入名称/编号查询" />
+          <!-- 第一排：始终显示 -->
+          <div class="filter-row">
+            <div class="filter-item filter-item--keyword">
+              <label>关键字:</label>
+              <input v-model="filterForm.keyword" type="text" placeholder="输入名称/编号查询" />
+            </div>
+            <div class="filter-item filter-item--creator">
+              <label>创建人:</label>
+              <input v-model="filterForm.creator" type="text" placeholder="输入erp" />
+            </div>
+            <div class="filter-item filter-item--api">
+              <label>接口:</label>
+              <input v-model="filterForm.api" type="text" placeholder="输入接口地址/topic" />
+            </div>
+            <div class="filter-actions">
+              <button type="button" class="advanced-link-btn" @click="toggleMoreFilters">
+                {{ showMoreFilters ? '隐藏筛选' : '高级筛选' }}
+              </button>
+              <button class="query-btn" @click="handleQueryTestcases">查询</button>
+              <button class="reset-btn" @click="handleResetTestcases">重置</button>
+            </div>
           </div>
-          <div class="filter-item">
-            <label>创建人:</label>
-            <input type="text" placeholder="输入erp" />
+
+          <!-- 第二排：展开后显示（100% 参考“更多信息/隐藏信息”） -->
+          <div v-if="showMoreFilters" class="filter-row filter-row--more">
+            <div class="filter-item filter-item--tags">
+              <label>标签:</label>
+              <input v-model="filterForm.tags" type="text" placeholder="请选择" />
+            </div>
+            <div class="filter-item filter-item--updater">
+              <label>修改人:</label>
+              <input v-model="filterForm.updater" type="text" placeholder="输入erp" />
+            </div>
+            <div class="filter-item filter-item--method">
+              <label>方法:</label>
+              <input v-model="filterForm.method" type="text" placeholder="输入HTTP方法名" />
+            </div>
+            <div class="filter-item filter-item--range">
+              <label>创建时间:</label>
+              <div class="range-inputs range-inputs--picker">
+                <DateRangeInput
+                  :start-date="filterForm.createdAtStart"
+                  :end-date="filterForm.createdAtEnd"
+                  @update:start-date="value => (filterForm.createdAtStart = value)"
+                  @update:end-date="value => (filterForm.createdAtEnd = value)"
+                />
+              </div>
+            </div>
           </div>
-          <div class="filter-item">
-            <label>接口:</label>
-            <input type="text" placeholder="输入接口地址/topic" />
-          </div>
-          <button class="filter-btn">高级筛选</button>
-          <button class="query-btn">查询</button>
-          <button class="reset-btn">重置</button>
+
         </div>
 
         <!-- 操作栏 -->
@@ -625,7 +853,7 @@ function goToCaseConfig(id) {
             <!-- 批量操作下拉（Teleport 到 body，避免被容器遮挡） -->
             <teleport to="body">
               <div
-                v-if="showBatchOperationDropdown"
+                v-if="showBatchOperationDropdown && !isBatchOperationDisabled"
                 class="batch-operation-dropdown"
                 :style="batchOpDropdownStyle"
                 @mouseenter="onBatchOpDropdownEnter"
@@ -682,7 +910,7 @@ function goToCaseConfig(id) {
                 <th v-if="isHeaderVisible('name')" class="col-name">用例名称</th>
                 <th v-if="isHeaderVisible('type')" class="col-type">类型</th>
                 <th v-if="isHeaderVisible('caseSet')" class="col-set">所属用例集</th>
-                <th v-if="isHeaderVisible('app')" class="col-app">关联应用</th>
+                <th v-if="isHeaderVisible('app')" class="col-app">关联项目</th>
                 <th v-if="isHeaderVisible('tag')" class="col-tag">标签</th>
                 <th v-if="isHeaderVisible('steps')" class="col-steps">步骤数</th>
                 <th v-if="isHeaderVisible('tasks')" class="col-tasks">任务数</th>
@@ -705,7 +933,14 @@ function goToCaseConfig(id) {
                 </td>
                 <td v-if="isHeaderVisible('id')" class="col-id">{{ row.id }}</td>
                 <td v-if="isHeaderVisible('name')" class="col-name">
-                  <a href="javascript:;" class="link" @click="goToCaseConfig(row.id)">{{ row.name }}</a>
+                  <a
+                    href="javascript:;"
+                    class="link"
+                    :class="{ 'link--routing': navigatingCaseId === row.id }"
+                    @click="goToCaseConfig(row.id)"
+                  >
+                    {{ row.name }}
+                  </a>
                 </td>
                 <td v-if="isHeaderVisible('type')" class="col-type">{{ row.type }}</td>
                 <td v-if="isHeaderVisible('caseSet')" class="col-set">{{ row.caseSet }}</td>
@@ -730,19 +965,14 @@ function goToCaseConfig(id) {
 
         <!-- 分页 -->
         <div class="pagination">
-          <span>第 1-50 条 / 总共 8459 条</span>
-          <div class="page-btns">
-            <button class="page-btn active">1</button>
-            <button class="page-btn">2</button>
-            <button class="page-btn">3</button>
-            <button class="page-btn">4</button>
-            <button class="page-btn">5</button>
-            <span>...</span>
-            <button class="page-btn">170</button>
-          </div>
-          <select class="page-size">
-            <option>50 条/页</option>
-          </select>
+          <AppPagination
+            :current-page="casePage"
+            :page-size="casePageSize"
+            :total="caseTotal"
+            :page-size-options="pageSizeOptions"
+            @page-change="handleCasePageChange"
+            @page-size-change="handleCasePageSizeChange"
+          />
         </div>
       </main>
     </div>
@@ -1161,6 +1391,9 @@ function goToCaseConfig(id) {
 .casemgmt-page {
   min-height: 100vh;
   background: #f5f5f5;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.85);
 }
 
 .page-container {
@@ -1636,6 +1869,8 @@ function goToCaseConfig(id) {
   flex: 1;
   padding: 16px;
   overflow-y: auto;
+  position: relative;
+  padding-bottom: 84px;
 }
 
 /* 标题栏 */
@@ -1681,13 +1916,26 @@ function goToCaseConfig(id) {
 /* 搜索筛选 */
 .search-filter {
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  font-size: 14px;
+}
+
+.filter-row {
+  display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 12px;
-  padding: 12px;
-  background: #fff;
-  border-radius: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+
+.filter-row--more {
+  margin-top: 2px;
 }
 
 .filter-item {
@@ -1699,40 +1947,101 @@ function goToCaseConfig(id) {
     font-size: 14px;
     color: #666;
     white-space: nowrap;
+    width: 48px;
+    text-align: right;
   }
 
   input {
-    padding: 8px 12px;
+    padding: 4px 10px;
     border: 1px solid #d9d9d9;
     border-radius: 4px;
     font-size: 14px;
-    width: 140px;
-    height: 36px;
+    height: 30px;
+    line-height: 20px;
     box-sizing: border-box;
+    background-color: #fff;
   }
 }
 
+.filter-item--keyword input { width: 180px; }
+.filter-item--creator input { width: 180px; }
+.filter-item--api input { width: 220px; }
+.filter-item--tags input { width: 180px; }
+.filter-item--updater input { width: 180px; }
+.filter-item--method input { width: 200px; }
+
+.filter-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.filter-item--range {
+  margin-left: 4px;
+}
+
+.range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.range-inputs input {
+  width: 100px;
+}
+
+.range-inputs--picker :deep(.el-date-editor) {
+  width: 260px;
+}
+
+.range-inputs--picker :deep(.el-input__wrapper) {
+  height: 30px;
+}
+
+.range-sep {
+  color: #999;
+  user-select: none;
+}
+
 .filter-btn, .reset-btn {
-  padding: 8px 16px;
+  padding: 0 12px;
   border: 1px solid #d9d9d9;
   background: #fff;
   border-radius: 4px;
   font-size: 14px;
   cursor: pointer;
-  height: 36px;
+  height: 30px;
+  line-height: 28px;
   box-sizing: border-box;
 }
 
 .query-btn {
-  padding: 8px 20px;
+  padding: 0 14px;
   border: none;
   background: #1890ff;
   color: #fff;
   border-radius: 4px;
   font-size: 14px;
   cursor: pointer;
-  height: 36px;
+  height: 30px;
+  line-height: 30px;
   box-sizing: border-box;
+}
+
+.advanced-link-btn {
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: #1890ff;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.advanced-link-btn:hover {
+  color: #40a9ff;
+  text-decoration: underline;
 }
 
 /* 工具栏 */
@@ -1788,6 +2097,15 @@ th, td {
   border-bottom: 1px solid #f0f0f0;
 }
 
+/* 对齐参考站字体（排除：用例名称、任务数、执行次数、结果这四列） */
+th:not(.col-name):not(.col-tasks):not(.col-exec):not(.col-result),
+td:not(.col-name):not(.col-tasks):not(.col-exec):not(.col-result) {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.85);
+  padding: 12px 8px;
+}
+
 th {
   background: #fafafa;
   font-weight: 500;
@@ -1803,10 +2121,16 @@ td {
 .link {
   color: #1890ff;
   text-decoration: none;
+  transition: opacity 0.2s ease, color 0.2s ease;
 
   &:hover {
     text-decoration: underline;
   }
+}
+
+.link--routing {
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 .result-tag {
@@ -1831,12 +2155,21 @@ td {
 
 /* 分页 */
 .pagination {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 16px;
-  margin-top: 16px;
+  margin-top: 0;
   font-size: 14px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #ebeef5;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .page-btns {
@@ -1859,6 +2192,18 @@ td {
     color: #fff;
     border-color: #1890ff;
   }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.page-ellipsis {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px;
+  color: #999;
 }
 
 .page-size {

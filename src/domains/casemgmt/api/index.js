@@ -59,6 +59,17 @@ export function updateStep(data) {
 }
 
 /**
+ * 执行测试步骤
+ * POST /api/v1/testcases/step/execute
+ * Content-Type: application/json
+ * @param {{ step_id: number }} data
+ * @returns {Promise<import('axios').AxiosResponse<import('../types').ApiResponse<any>>>}
+ */
+export function executeStep(data) {
+  return create(`${STEP_BASE_URL}/execute`, data)
+}
+
+/**
  * 删除测试步骤
  * POST /api/v1/testcases/step/delete
  * Content-Type: application/json

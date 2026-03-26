@@ -1,11 +1,13 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import AppHeader from '@/shared/ui/organisms/AppHeader.vue'
+import AppPagination from '@/shared/ui/organisms/AppPagination.vue'
 import HttpStepDrawer from '../components/HttpStepDrawer.vue'
+import StepExecuteDrawer from '../components/StepExecuteDrawer.vue'
 import CaseSidebar from '../components/CaseSidebar.vue'
-import { createStep } from '../api'
+import { createStep, deleteStep, executeStep, fetchStepList, fetchTestcaseDetail, updateStep } from '../api'
 import { STEP_TYPE, ENV_CODE, HTTP_METHOD } from '../types'
 import { fetchProjectList } from '@/domains/project/api'
 
@@ -30,37 +32,37 @@ const router = useRouter()
 const caseId = computed(() => route.params.id)
 const projectId = computed(() => {
   const raw = route.query.project_id
-  const num = typeof raw === 'string' ? Number(raw) : Number.NaN
+  const str = Array.isArray(raw) ? raw[0] : raw
+  const num = str ? Number(str) : Number.NaN
   return Number.isNaN(num) ? 0 : num
 })
 
 const activeTab = ref('scenario')
 const caseDetail = ref({
-  id: caseId.value || '6426940',
-  name: 'jos授权工具接口返回refreshToken字段',
-  caseSet: '授权管理/取消授权',
-  owner: '陈云雷',
-  createTime: '2026-02-27 10:16:58',
+  id: caseId.value || '',
+  name: '',
+  caseSet: '',
+  owner: '',
+  createTime: '',
   execSuccess: 0,
   execFail: 0
 })
 
-const stepList = ref([
-  {
-    id: '17742916',
-    name: 'jos授权工具接口返回refreshToken字段',
-    detail: 'com.jd.open.oauth.rpc.JdTokenService',
-    type: 'JSF',
-    inputGroup: '1/1',
-    order: 1
-  }
-])
+const stepList = ref([])
+const stepTotal = ref(0)
+const stepPage = ref(1)
+const stepPageSize = ref(10)
+const stepPageSizeOptions = [10, 20, 50, 100]
 
 const execStrategy = ref('immediate')
 const showHttpStepDrawer = ref(false)
 const editingHttpStep = ref(null)
 const showStepTypeDialog = ref(false)
 const selectedStepType = ref(null)
+const draggingStepId = ref('')
+const dragOverStepId = ref('')
+const showStepExecDrawer = ref(false)
+const executingStep = ref(null)
 
 // 项目下拉（module-select-trigger 使用）
 const projectOptions = ref([])
@@ -94,7 +96,7 @@ async function loadProjects() {
       })
     }
   } catch (error) {
-    void error
+    ElMessage.error('加载项目列表失败')
   } finally {
     projectLoading.value = false
   }
@@ -112,7 +114,279 @@ function handleProjectSelect(id) {
 
 onMounted(() => {
   void loadProjects()
+  void loadCaseConfigData()
 })
+
+watch(
+  () => caseId.value,
+  () => {
+    stepPage.value = 1
+    void loadCaseConfigData()
+  }
+)
+
+watch(
+  () => selectedProjectId.value,
+  () => {
+    stepPage.value = 1
+    void loadCaseConfigData()
+  }
+)
+
+async function loadCaseConfigData() {
+  await Promise.all([loadCaseDetail(), loadStepList()])
+}
+
+async function loadCaseDetail() {
+  const testcaseId = Number(caseId.value)
+  if (!Number.isFinite(testcaseId) || testcaseId <= 0) {
+    caseDetail.value = {
+      id: '',
+      name: '',
+      caseSet: '',
+      owner: '',
+      createTime: '',
+      execSuccess: 0,
+      execFail: 0
+    }
+    return
+  }
+
+  try {
+    const resp = await fetchTestcaseDetail({ case_id: testcaseId })
+    const testcase = resp?.data?.data?.testcase
+    if (!testcase) return
+
+    caseDetail.value = {
+      id: testcase.id ?? testcaseId,
+      name: testcase.name || '',
+      caseSet: testcase.parent_name || testcase.suite_name || '',
+      owner: testcase.creator || '',
+      createTime: testcase.created_at || '',
+      execSuccess: Number(testcase.exec_success_count ?? testcase.success_count ?? 0) || 0,
+      execFail: Number(testcase.exec_fail_count ?? testcase.fail_count ?? 0) || 0
+    }
+  } catch (error) {
+    void error
+    ElMessage.error('加载用例详情失败')
+  }
+}
+
+async function loadStepList() {
+  const testcaseId = Number(caseId.value)
+  if (!Number.isFinite(testcaseId) || testcaseId <= 0) {
+    stepList.value = []
+    stepTotal.value = 0
+    return
+  }
+
+  try {
+    const resp = await fetchStepList({
+      testcase_id: testcaseId,
+      page: stepPage.value,
+      page_size: stepPageSize.value
+    })
+    const data = resp?.data?.data || {}
+    const list = data.list || []
+    stepTotal.value = Number(data.total ?? list.length ?? 0) || 0
+    stepPage.value = Number(data.page ?? stepPage.value) || 1
+    stepPageSize.value = Number(data.page_size ?? stepPageSize.value) || stepPageSize.value
+    const numericSortOrders = list
+      .map(item => item?.sort_order)
+      .filter(v => typeof v === 'number' && Number.isFinite(v))
+    const hasValidDistinctSortOrder =
+      numericSortOrders.length === list.length &&
+      new Set(numericSortOrders).size === list.length
+    const sortOrderBase = hasValidDistinctSortOrder
+      ? Math.min(...numericSortOrders)
+      : 0
+
+    stepList.value = list.map((item, index) => ({
+      id: String(item.id ?? ''),
+      name: item.name || '',
+      detail:
+        item.detail ||
+        [item.method_label, item.api_url].filter(Boolean).join(' | ') ||
+        item.api_url ||
+        '',
+      type: item.step_type_label || '',
+      inputGroup: '1/1',
+      order:
+        hasValidDistinctSortOrder
+          ? item.sort_order - sortOrderBase + 1
+          : index + 1,
+      stepRaw: item
+    }))
+  } catch (error) {
+    void error
+    stepList.value = []
+    stepTotal.value = 0
+    ElMessage.error('加载步骤列表失败')
+  }
+}
+
+async function handleStepPageChange(page) {
+  stepPage.value = page
+  await loadStepList()
+}
+
+async function handleStepPageSizeChange(pageSize) {
+  stepPageSize.value = pageSize
+  stepPage.value = 1
+  await loadStepList()
+}
+
+function buildCreateStepPayloadFromRow(step) {
+  const raw = step?.stepRaw || {}
+  return {
+    name: raw.name || step?.name || '',
+    project_id: raw.project_id ?? selectedProjectId.value ?? projectId.value ?? 0,
+    environment_id: raw.environment_id ?? 1,
+    method: raw.method ?? HTTP_METHOD.GET,
+    step_type: raw.step_type ?? STEP_TYPE.HTTP,
+    api_url: raw.api_url || '',
+    env_code: raw.env_code ?? ENV_CODE.TEST,
+    expected_result: raw.expected_result || '',
+    testcase_id: Number(caseId.value),
+    api_input_params: raw.api_input_params ?? {},
+    api_assertion: raw.api_assertion ?? {},
+    preset_variables: raw.preset_variables ?? {},
+    pre_operations: raw.pre_operations ?? [],
+    post_operations: raw.post_operations ?? [],
+    max_wait_time: raw.max_wait_time ?? 30,
+    retry_count: raw.retry_count ?? 0,
+    sleep_time: raw.sleep_time ?? 0,
+    concurrent_num: raw.concurrent_num ?? 0,
+    assertion_retry_count: raw.assertion_retry_count ?? 0,
+    sort_order: step?.order ? Math.max(0, Number(step.order) - 1) : 0
+  }
+}
+
+async function handleDeleteStep(step) {
+  const stepId = Number(step?.id)
+  if (!Number.isFinite(stepId) || stepId <= 0) return
+
+  try {
+    const resp = await deleteStep({ step_id: stepId })
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+    if (code !== 0 && code !== 200) {
+      ElMessage.error(msg || '删除步骤失败')
+      return
+    }
+    ElMessage.success(msg || '删除步骤成功')
+    await loadStepList()
+  } catch (error) {
+    void error
+    ElMessage.error('删除步骤失败')
+  }
+}
+
+async function handleCopyStep(step) {
+  try {
+    const payload = buildCreateStepPayloadFromRow(step)
+    const resp = await createStep(payload)
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+    if (code !== 0 && code !== 200) {
+      ElMessage.error(msg || '复制步骤失败')
+      return
+    }
+    ElMessage.success(msg || '复制步骤成功')
+    await loadStepList()
+  } catch (error) {
+    void error
+    ElMessage.error('复制步骤失败')
+  }
+}
+
+async function handleExecuteStep(step) {
+  executingStep.value = step || null
+  showStepExecDrawer.value = true
+}
+
+function closeStepExecDrawer() {
+  showStepExecDrawer.value = false
+}
+
+async function confirmExecuteStep(stepId) {
+  if (!Number.isFinite(stepId) || stepId <= 0) return
+  try {
+    const resp = await executeStep({ step_id: stepId })
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+    if (code !== 0 && code !== 200) {
+      ElMessage.error(msg || '执行步骤失败')
+      return
+    }
+    ElMessage.success(msg || '执行已触发')
+    closeStepExecDrawer()
+  } catch (error) {
+    void error
+    ElMessage.error('执行步骤失败')
+  }
+}
+
+function handleRowDragStart(step) {
+  draggingStepId.value = String(step.id)
+}
+
+function handleRowDragOver(step) {
+  if (!draggingStepId.value) return
+  if (draggingStepId.value === String(step.id)) return
+  dragOverStepId.value = String(step.id)
+}
+
+function handleRowDragEnd() {
+  draggingStepId.value = ''
+  dragOverStepId.value = ''
+}
+
+async function handleRowDrop(targetStep) {
+  const fromId = draggingStepId.value
+  const toId = String(targetStep.id)
+  if (!fromId || !toId || fromId === toId) {
+    handleRowDragEnd()
+    return
+  }
+
+  const fromIndex = stepList.value.findIndex(step => String(step.id) === fromId)
+  const toIndex = stepList.value.findIndex(step => String(step.id) === toId)
+  if (fromIndex < 0 || toIndex < 0) {
+    handleRowDragEnd()
+    return
+  }
+
+  const movedStep = stepList.value[fromIndex]
+  const targetSortOrder = toIndex
+
+  const newList = [...stepList.value]
+  const [moved] = newList.splice(fromIndex, 1)
+  newList.splice(toIndex, 0, moved)
+  // 本地先更新顺序，提升交互流畅度
+  stepList.value = newList.map((item, idx) => ({
+    ...item,
+    order: idx + 1
+  }))
+
+  try {
+    // 只更新被拖动的这一步，避免一次拖动触发 N 次 update
+    await updateStep({
+      step_id: Number(movedStep.id),
+      sort_order: targetSortOrder
+    })
+    ElMessage.success('步骤顺序已更新')
+    // 回源刷新，使用后端最终顺序
+    await loadStepList()
+  } catch (error) {
+    void error
+    ElMessage.error('更新步骤顺序失败，请重试')
+    // 失败后回源刷新，避免前后端顺序不一致
+    await loadStepList()
+  } finally {
+    handleRowDragEnd()
+  }
+}
 
 // 更多类型下拉选项（1=MySQL, 2=Redis, 3=JMQ, 4=DUBBO, 5=KAFKA, 6=R2M, 7=FMQ, 8=JAR, 9=SHELL, 10=循环, 11=条件, 12=STARDB, 13=SCHEDULEJOB）
 // 注意：HTTP(0)已在外部单独展示，不在下拉框中显示
@@ -193,7 +467,7 @@ async function saveHttpStep(stepData) {
       preset_variables: {},
       max_wait_time: 30,
       retry_count: 0,
-      sort_order: stepList.value.length + 1
+      sort_order: stepList.value.length
     }
 
     const resp = await createStep(dto)
@@ -216,6 +490,7 @@ async function saveHttpStep(stepData) {
       order: stepList.value.length + 1,
       httpData: stepData
     })
+    stepTotal.value += 1
 
     ElMessage.success('保存步骤成功')
     closeHttpStepDrawer()
@@ -253,6 +528,7 @@ function handleStepTypeSelect(stepType) {
     stepData: { type: typeOption.value, component: typeOption.component }
   }
   stepList.value.push(newStep)
+  stepTotal.value += 1
   ElMessage.success(`已添加 ${typeOption.label} 步骤`)
 }
 
@@ -281,12 +557,18 @@ function closeStepTypeDialog() {
         </div>
         <div class="config-header">
           <div class="header-left">
-            <button class="back-btn" @click="goBack"><span>X</span></button>
+            <button class="back-btn" title="返回" @click="goBack">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
             <h3 class="page-title">用例配置</h3>
+            <div class="header-left-actions">
+              <button class="action-btn action-btn--mini">分享</button>
+              <button class="action-btn action-btn--mini">另存为</button>
+            </div>
           </div>
           <div class="header-actions">
-            <button class="action-btn">分享</button>
-            <button class="action-btn">另存为</button>
             <button class="action-btn primary">设置为原子用例</button>
             <button class="action-btn">执行结果</button>
           </div>
@@ -352,7 +634,19 @@ function closeStepTypeDialog() {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="step in stepList" :key="step.id">
+              <tr
+                v-for="step in stepList"
+                :key="step.id"
+                draggable="true"
+                :class="{
+                  'is-dragging': draggingStepId === String(step.id),
+                  'is-drag-over': dragOverStepId === String(step.id)
+                }"
+                @dragstart="handleRowDragStart(step)"
+                @dragover.prevent="handleRowDragOver(step)"
+                @drop.prevent="handleRowDrop(step)"
+                @dragend="handleRowDragEnd"
+              >
                 <td class="col-checkbox"><input type="checkbox" /></td>
                 <td class="col-id">{{ step.id }}</td>
                 <td class="col-name"><a class="link" @click="openStepDrawer(step)">{{ step.name }}</a></td>
@@ -360,10 +654,41 @@ function closeStepTypeDialog() {
                 <td class="col-type"><span class="type-tag jsf">{{ step.type }}</span></td>
                 <td class="col-group">{{ step.inputGroup }}</td>
                 <td class="col-order">{{ step.order }}</td>
-                <td class="col-action"><button class="action-icon">复制</button><button class="action-icon">执行</button></td>
+                <td class="col-action">
+                  <button class="action-icon-btn" title="删除" @click.stop="handleDeleteStep(step)">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 6h18" />
+                      <path d="M8 6V4h8v2" />
+                      <path d="M19 6l-1 14H6L5 6" />
+                      <path d="M10 11v6M14 11v6" />
+                    </svg>
+                  </button>
+                  <button class="action-icon-btn" title="复制" @click.stop="handleCopyStep(step)">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="9" y="9" width="11" height="11" rx="2" />
+                      <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+                    </svg>
+                  </button>
+                  <button class="action-icon-btn" title="执行" @click.stop="handleExecuteStep(step)">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="M10 8.5L16 12l-6 3.5z" fill="currentColor" stroke="none" />
+                    </svg>
+                  </button>
+                </td>
               </tr>
             </tbody>
           </table>
+        </div>
+        <div class="step-pagination">
+          <AppPagination
+            :current-page="stepPage"
+            :page-size="stepPageSize"
+            :total="stepTotal"
+            :page-size-options="stepPageSizeOptions"
+            @page-change="handleStepPageChange"
+            @page-size-change="handleStepPageSizeChange"
+          />
         </div>
         <div class="exec-strategy">
           <h4 class="strategy-title">执行策略</h4>
@@ -377,6 +702,12 @@ function closeStepTypeDialog() {
       </main>
     </div>
     <HttpStepDrawer :visible="showHttpStepDrawer" :step="editingHttpStep" @close="closeHttpStepDrawer" @save="saveHttpStep" />
+    <StepExecuteDrawer
+      v-model:visible="showStepExecDrawer"
+      :step="executingStep"
+      @close="closeStepExecDrawer"
+      @execute="confirmExecuteStep"
+    />
 
     <!-- 步骤类型配置对话框 -->
     <el-dialog
@@ -416,12 +747,26 @@ function closeStepTypeDialog() {
 .tab-btn { padding: 8px 16px; border: none; background: transparent; font-size: 15px; color: #666; cursor: pointer; border-radius: 4px; }
 .tab-btn:hover { color: #1890ff; }
 .tab-btn.active { color: #1890ff; font-weight: 500; background: #e6f7ff; }
-.config-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding: 12px 16px; background: #fff; border-radius: 8px; }
-.header-left { display: flex; align-items: center; gap: 12px; }
-.back-btn { width: 32px; height: 32px; border: 1px solid #d9d9d9; background: #fff; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.page-title { font-size: 16px; font-weight: 600; margin: 0; color: #333; }
+.config-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding: 0; background: transparent; border-radius: 0; }
+.header-left { display: flex; align-items: center; gap: 8px; }
+.back-btn {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #1677ff;
+  padding: 0;
+}
+.page-title { font-size: 28px; font-weight: 700; margin: 0; color: #1f1f1f; line-height: 1; }
+.header-left-actions { display: flex; gap: 8px; margin-left: 10px; }
 .header-actions { display: flex; gap: 8px; }
 .action-btn { padding: 6px 16px; border: 1px solid #d9d9d9; background: #fff; border-radius: 4px; font-size: 14px; cursor: pointer; color: #666; }
+.action-btn--mini { padding: 4px 16px; height: 30px; }
 .action-btn:hover { border-color: #1890ff; color: #1890ff; }
 .action-btn.primary { background: #1890ff; color: #fff; border-color: #1890ff; }
 .case-info { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
@@ -437,17 +782,22 @@ function closeStepTypeDialog() {
 .link { color: #1890ff; text-decoration: none; cursor: pointer; }
 .user-tag { display: inline-flex; align-items: center; gap: 4px; color: #1890ff; }
 .fail { color: #f5222d; }
-.toolbar-section { display: flex; align-items: center; justify-content: space-between; background: #e6f7ff; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; }
+.toolbar-section { display: flex; align-items: center; justify-content: space-between; background: #e6f7ff; padding: 10px 14px; border-radius: 8px; margin-bottom: 10px; }
 .toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 8px; }
 .toolbar-label { font-size: 14px; color: #333; }
 .tool-btn { padding: 6px 16px; border: 1px solid #d9d9d9; background: #fff; border-radius: 4px; font-size: 14px; cursor: pointer; color: #333; outline: none; }
 .tool-btn:hover { border-color: #1890ff; color: #1890ff; }
 .tool-btn:focus { outline: none; }
 .tool-btn.primary { background: #1890ff; color: #fff; border-color: #1890ff; }
-.step-table { background: #fff; border-radius: 8px; overflow: auto; margin-bottom: 16px; }
+.step-table { background: #fff; border-radius: 8px; overflow: auto; margin-bottom: 10px; }
 .step-table table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.step-table th, .step-table td { padding: 12px; text-align: left; border-bottom: 1px solid #f0f0f0; }
+.step-table th, .step-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #f0f0f0; line-height: 1.25; }
 .step-table th { background: #fafafa; font-weight: 500; color: #666; }
+.step-table tbody tr { cursor: move; transition: background-color 0.2s ease; }
+.step-table tbody tr:hover { background: #f7fbff; }
+.step-table tbody tr.is-dragging { opacity: 0.55; }
+.step-table tbody tr.is-drag-over { background: #e6f7ff; }
+.step-pagination { display: flex; justify-content: flex-end; margin: 0 0 10px; }
 .type-tag { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
 .type-tag.jsf { background: #f6ffed; color: #52c41a; }
 .type-tag.HTTP { background: #e6f7ff; color: #1890ff; }
@@ -464,8 +814,23 @@ function closeStepTypeDialog() {
 .type-tag.条件 { background: #e6fffb; color: #08979c; }
 .type-tag.STARDB { background: #f0f5ff; color: #1d39c4; }
 .type-tag.SCHEDULEJOB { background: #fff7e6; color: #d48806; }
-.action-icon { padding: 4px 8px; border: none; background: transparent; color: #1890ff; cursor: pointer; font-size: 13px; }
-.exec-strategy { background: #fff; border-radius: 8px; padding: 16px; }
+.col-action { white-space: nowrap; }
+.action-icon-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  margin-right: 6px;
+  border: none;
+  background: transparent;
+  color: #595959;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.action-icon-btn:last-child { margin-right: 0; }
+.action-icon-btn:hover { color: #1890ff; }
+.exec-strategy { background: #fff; border-radius: 8px; padding: 12px 14px; }
 .strategy-title { font-size: 14px; font-weight: 500; color: #333; margin: 0 0 12px 0; }
 .strategy-form { display: flex; align-items: center; gap: 12px; }
 .strategy-form .required { color: #f5222d; }
@@ -520,4 +885,5 @@ function closeStepTypeDialog() {
 :deep(.el-dropdown) {
   vertical-align: middle;
 }
+
 </style>

@@ -2,7 +2,7 @@
 /**
  * HTTP 测试步骤抽屉 - 参考界面重构版
  */
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { fetchProjectList } from '@/domains/project/api'
 import { Close, Plus, Delete, ArrowRight, More, ArrowDown, ArrowUp, QuestionFilled, Link, EditPen, Right, CopyDocument } from '@element-plus/icons-vue'
 import JsonAddDialog from './common/JsonAddDialog.vue'
@@ -336,7 +336,7 @@ const jsonDialogType = ref('params')
 const jsonDialogTitle = ref('Json添加Param')
 const currentExtractStepId = ref(null)
 
-const extractStepRefs = ref({})
+const extractStepRefs = ref(new Map())
 
 // 打开 JSON 添加弹窗
 function openJsonDialog(type = 'params') {
@@ -353,7 +353,7 @@ function handleJsonSave(selectedItems) {
   if (jsonDialogType.value === 'jsonpath') {
     // 将选中的 JSONPath 填充到当前提取变量步骤中
     const stepId = currentExtractStepId.value
-    const comp = stepId && extractStepRefs.value[stepId]
+    const comp = stepId && extractStepRefs.value.get(stepId)
     if (comp && typeof comp.addRowsFromJsonpaths === 'function') {
       const paths = (selectedItems || []).map((item) => item.key)
       comp.addRowsFromJsonpaths(paths)
@@ -490,6 +490,11 @@ function handleClose() {
   emit('update:visible', false)
   emit('close')
 }
+
+// 组件卸载时清理 refs
+onUnmounted(() => {
+  extractStepRefs.value.clear()
+})
 
 // 保存
 function handleSave() {
@@ -1221,8 +1226,7 @@ function clearBinaryFile() {
                             :collapsed="postAllCollapsed"
                             @delete="handlePostStepDelete(step.id)"
                             @copy="handlePostStepCopy(step.id)"
-                            :ref="el => { if (el) extractStepRefs[step.id] = el }"
-                            @quick-add-jsonpath="handleExtractQuickAdd(step.id)"
+                            :ref="el => { if (el) extractStepRefs.set(step.id, el) }"
                           />
                           <DelayStepDrawer
                             v-else-if="step && step.type === 'delay'"
@@ -1285,7 +1289,7 @@ function clearBinaryFile() {
 
       <!-- A/B 对比组设置弹窗 -->
       <CompareGroupSettings
-        v-model:modelValue="compareGroups"
+        v-model="compareGroups"
         v-model:visible="compareGroupVisible"
         :base-method="basicForm.method"
         :base-url="basicForm.url"

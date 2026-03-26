@@ -3,6 +3,7 @@
  * 根组件
  * 职责: 应用级容器，仅渲染路由视图
  */
+import GlobalLoading from '@/shared/ui/organisms/GlobalLoading.vue'
 </script>
 
 <template>
@@ -14,6 +15,7 @@
     </template>
     <component :is="Component" v-else />
   </router-view>
+  <GlobalLoading />
 </template>
 
 <style>

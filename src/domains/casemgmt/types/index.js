@@ -4,6 +4,111 @@
  * 遵循手册: 六.类型系统 - 领域驱动类型
  */
 
+// ======== 测试用例 Enums ========
+
+/**
+ * 用例类型（与后端 case_type 整数枚举保持一致）
+ * 0=功能用例, 1=性能用例, 2=接口用例, 3=冒烟用例, 4=回归用例, 5=前置用例, 6=后置用例
+ * @type {const}
+ */
+export const CASE_TYPE = {
+  FUNCTIONAL: 0,
+  PERFORMANCE: 1,
+  API: 2,
+  SMOKE: 3,
+  REGRESSION: 4,
+  PRECONDITION: 5,
+  POSTCONDITION: 6
+}
+
+/**
+ * 用例类型 label 映射（展示用）
+ * @type {Readonly<Record<number, string>>}
+ */
+export const CASE_TYPE_LABEL = Object.freeze({
+  0: '功能用例',
+  1: '性能用例',
+  2: '接口用例',
+  3: '冒烟用例',
+  4: '回归用例',
+  5: '前置用例',
+  6: '后置用例'
+})
+
+/**
+ * 用例类型下拉选项（value 使用 string，便于表单 v-model）
+ * @type {ReadonlyArray<{value: string, label: string}>}
+ */
+export const CASE_TYPE_OPTIONS = Object.freeze([
+  { value: '0', label: '功能用例' },
+  { value: '1', label: '性能用例' },
+  { value: '2', label: '接口用例' },
+  { value: '3', label: '冒烟用例' },
+  { value: '4', label: '回归用例' },
+  { value: '5', label: '前置用例' },
+  { value: '6', label: '后置用例' }
+])
+
+/**
+ * 优先级（与后端 priority 整数枚举保持一致）
+ * 0=P0, 1=P1, 2=P2, 3=P3, 4=P4, 5=P5
+ * @type {const}
+ */
+export const PRIORITY = {
+  P0: 0,
+  P1: 1,
+  P2: 2,
+  P3: 3,
+  P4: 4,
+  P5: 5
+}
+
+/**
+ * 优先级 label 映射（展示用）
+ * @type {Readonly<Record<number, string>>}
+ */
+export const PRIORITY_LABEL = Object.freeze({
+  0: 'P0',
+  1: 'P1',
+  2: 'P2',
+  3: 'P3',
+  4: 'P4',
+  5: 'P5'
+})
+
+/**
+ * 优先级下拉选项（value 使用 string，便于表单 v-model）
+ * @type {ReadonlyArray<{value: string, label: string}>}
+ */
+export const PRIORITY_OPTIONS = Object.freeze([
+  { value: '0', label: 'P0' },
+  { value: '1', label: 'P1' },
+  { value: '2', label: 'P2' },
+  { value: '3', label: 'P3' },
+  { value: '4', label: 'P4' },
+  { value: '5', label: 'P5' }
+])
+
+/**
+ * 将后端 case_type 值格式化为中文 label（未知值返回 '-'）
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function getCaseTypeLabel(value) {
+  const num = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(num) ? CASE_TYPE_LABEL[num] || '-' : '-'
+}
+
+/**
+ * 将后端 priority 值格式化为 label（未知值返回 '-'）
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function getPriorityLabel(value) {
+  const num = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(num) ? PRIORITY_LABEL[num] || '-' : '-'
+}
+
 // ======== 测试步骤 Enums ========
 
 /**
@@ -197,8 +302,12 @@ export const HTTP_METHOD = {
  * @typedef {Object} SuiteEntity
  * @property {number} id - 用例集 ID
  * @property {number} project_id - 项目 ID
+ * @property {string} [project_name] - 关联项目（项目名称）
  * @property {string} name - 用例集名称
  * @property {string} [description] - 描述
+ * @property {string} [tags] - 标签（后端 tags 字段，通常为字符串或逗号分隔）
+ * @property {number} [step_count] - 步骤数
+ * @property {number} [testcase_count] - 用例数
  * @property {string} [created_at] - 创建时间
  * @property {string} [updated_at] - 更新时间
  */
@@ -263,7 +372,8 @@ export const HTTP_METHOD = {
  * @property {number} project_id - 项目 ID（必填）
  * @property {number} suite_id - 所属用例集 ID（必填）
  * @property {string} name - 用例名称（必填）
- * @property {string} [type] - 用例类型（冒烟/功能/回归等）
+ * @property {number} [case_type] - 用例类型（参见 CASE_TYPE）
+ * @property {number} [priority] - 优先级（参见 PRIORITY）
  * @property {string} [remark] - 备注
  * @property {string} [tags] - 标签，逗号分隔
  * @property {string} [app_code] - 关联应用编码
@@ -278,7 +388,8 @@ export const HTTP_METHOD = {
  * @property {number} [project_id] - 项目 ID
  * @property {number} [suite_id] - 所属用例集 ID
  * @property {string} [name] - 用例名称
- * @property {string} [type] - 用例类型
+ * @property {number} [case_type] - 用例类型（参见 CASE_TYPE）
+ * @property {number} [priority] - 优先级（参见 PRIORITY）
  * @property {string} [remark] - 备注
  * @property {string} [tags] - 标签
  * @property {string} [app_code] - 关联应用编码
@@ -321,11 +432,17 @@ export const HTTP_METHOD = {
  * @property {number} project_id - 项目 ID
  * @property {number} suite_id - 所属用例集 ID
  * @property {string} name - 用例名称
- * @property {string} [type] - 用例类型
+ * @property {number} [case_type] - 用例类型（参见 CASE_TYPE）
+ * @property {number} [priority] - 优先级（参见 PRIORITY）
  * @property {string} [remark] - 备注
  * @property {string} [tags] - 标签
+ * @property {string} [project_name] - 关联项目名称
  * @property {string} [app_code] - 关联应用编码
  * @property {string} [group] - 逻辑分组
+ * @property {number} [step_count] - 步骤数
+ * @property {number} [task_count] - 任务数
+ * @property {number} [execution_count] - 执行总次数
+ * @property {string|null} [last_result] - 最近执行结果
  * @property {string} [creator] - 创建人
  * @property {string} [created_at] - 创建时间
  * @property {string} [updated_at] - 更新时间

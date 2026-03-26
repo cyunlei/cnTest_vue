@@ -17,9 +17,6 @@
  */
 import { create, fetch } from '@/@core/http'
 
-// 从 verification 领域重新导出发送邮箱验证码，保持向后兼容
-export { sendEmailCode } from '@/domains/verification/api'
-
 const BASE_URL = '/api/v1/auth'
 
 /**
@@ -40,6 +37,16 @@ export function loginByPassword(params) {
  */
 export function loginByEmailCode(params) {
   return create(`${BASE_URL}/email_code_login`, params)
+}
+
+/**
+ * 发送邮箱验证码
+ * POST /api/v1/auth/send_email_code
+ * @param {{email: string}} params
+ * @returns {Promise<import('../types').ApiResponse<void>>}
+ */
+export function sendEmailCode(params) {
+  return create(`${BASE_URL}/send_email_code`, params)
 }
 
 /**

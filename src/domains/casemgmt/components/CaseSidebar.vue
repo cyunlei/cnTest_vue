@@ -11,7 +11,8 @@ const emit = defineEmits([
   'openAddCaseModal',
   'editSuite',
   'deleteSuite',
-  'selectSuite'
+  'selectSuite',
+  'projectChanged'
 ])
 
 const projectStore = useProjectStore()
@@ -99,9 +100,8 @@ async function loadRootSuites() {
       return
     }
   }
-  if (roots.length && selectedSuiteId.value == null) {
-    selectedSuiteId.value = roots[0].id
-  }
+  // 默认不选中任何用例集；仅在用户点击或路由指定 suite_id 时选中
+  selectedSuiteId.value = null
 }
 
 async function loadChildSuites(node) {
@@ -130,6 +130,8 @@ async function loadModules() {
         modules.value.find(item => item.id === savedId) || modules.value[0]
       selectedModule.value = target.name
       projectStore.setCurrentProject({ id: target.id, name: target.name })
+      // 进入页面时：通知右侧先拉默认用例列表（不传 parent_id）
+      emit('projectChanged', { id: target.id, name: target.name })
     }
     // 加载顶层用例集（不传任何参数）
     await loadRootSuites()
@@ -217,15 +219,18 @@ async function selectModule(module) {
   selectedModule.value = module.name
   showModuleDropdown.value = false
   projectStore.setCurrentProject({ id: module.id, name: module.name })
+  // 切换项目后：右侧先拉默认用例列表（不传 parent_id）
+  emit('projectChanged', { id: module.id, name: module.name })
   // 切换项目后重新拉取该项目的用例集树
   expandedKeys.value = []
   selectedSuiteId.value = null
   await loadRootSuites()
-  // 若路由未指定 suite_id，则默认选中第一个根用例集并通知右侧刷新列表
+  // 若路由未指定 suite_id，默认不选中任何用例集，右侧列表走不带 parent_id 的默认查询
   const routeSuiteId = Number(route.query.suite_id)
   const hasRouteSuiteId = Number.isFinite(routeSuiteId)
-  if (!hasRouteSuiteId && treeData.value.length > 0) {
-    selectSuite(treeData.value[0])
+  if (!hasRouteSuiteId) {
+    selectedSuiteId.value = null
+    emit('selectSuite', null)
   }
 }
 

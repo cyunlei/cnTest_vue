@@ -11,3 +11,9 @@ export {
   PHONE_REGEX
 } from './useFormValidator'
 export { useDebounce } from './useDebounce'
+export {
+  useGlobalLoading,
+  showGlobalLoading,
+  hideGlobalLoading,
+  withGlobalLoading
+} from './useGlobalLoading'
