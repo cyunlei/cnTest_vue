@@ -5,6 +5,7 @@
  */
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { showGlobalLoading, hideGlobalLoading } from '@/shared/composables/useGlobalLoading'
 
 // 懒加载 router，避免循环依赖
 const getRouter = () => import('@/app/router').then(m => m.default)
@@ -35,6 +36,12 @@ const httpClient = axios.create({
 // ======== 请求拦截器 ========
 httpClient.interceptors.request.use(
   (config) => {
+    const shouldUseGlobalLoading = config?.globalLoading !== false
+    if (shouldUseGlobalLoading) {
+      showGlobalLoading()
+      config.__globalLoadingShown = true
+    }
+
     // 检查是否需要添加认证头
     const url = config.url || ''
     const needsAuth = !NO_AUTH_URLS.some(u => url.includes(u))
@@ -50,6 +57,9 @@ httpClient.interceptors.request.use(
     return config
   },
   (error) => {
+    if (error?.config?.__globalLoadingShown) {
+      hideGlobalLoading()
+    }
     return Promise.reject(error)
   }
 )
@@ -57,6 +67,10 @@ httpClient.interceptors.request.use(
 // ======== 响应拦截器 ========
 httpClient.interceptors.response.use(
   (response) => {
+    if (response?.config?.__globalLoadingShown) {
+      hideGlobalLoading()
+    }
+
     const { status, data } = response
     
     // 2xx 状态码直接返回
@@ -105,6 +119,10 @@ httpClient.interceptors.response.use(
     return response
   },
   (error) => {
+    if (error?.config?.__globalLoadingShown) {
+      hideGlobalLoading()
+    }
+
     ElMessage.error({
       message: error.message || '网络请求失败',
       type: 'error',

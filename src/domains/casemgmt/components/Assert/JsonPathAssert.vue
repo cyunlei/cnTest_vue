@@ -302,7 +302,7 @@ function handleSelectionChange(rows: JsonPathAssertRow[]) {
             <span v-else class="cell-text">{{ row.field || '' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="规则" width="80">
+        <el-table-column label="规则" width="110">
           <template #header>
             <span>规则</span>
             <el-tooltip placement="top">
@@ -564,12 +564,13 @@ function handleSelectionChange(rows: JsonPathAssertRow[]) {
 }
 
 .rule-select {
-  width: 90px;
+  width: 100%;
+  min-width: 100px;
 }
 
 :global(.json-assert-rule-popper) {
-  min-width: 110px !important;
-  width: 110px !important;
+  min-width: 140px !important;
+  width: 140px !important;
 }
 
 :global(.json-assert-rule-popper .el-select-dropdown__item) {

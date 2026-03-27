@@ -7,7 +7,7 @@
             <span>变量选择</span>
           </div>
           <el-select v-model="selectedModule" class="select" placeholder="请选择" size="small" clearable>
-            <el-option v-for="opt in moduleOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+            <el-option v-for="opt in projectOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
           </el-select>
         </div>
 
@@ -72,13 +72,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { Plus, QuestionFilled } from '@element-plus/icons-vue'
 import { usePresetVariablesStore } from '../../stores/usePresetVariablesStore'
 import { usePresetTemplateStore } from '../../stores/usePresetTemplateStore'
 import PresetVarTableCore from './PresetVarTableCore.vue'
+import { fetchTemplateVariableList, fetchTemplateVariableDetail } from '../../api'
+import { fetchProjectList } from '@/domains/project/api'
 
 // 类型映射：
 // 0: 普通变量
@@ -112,45 +114,35 @@ const emit = defineEmits<{
 
 const router = useRouter()
 
-const moduleOptions = [
-  { label: '商家开放', value: '商家开放' },
-  { label: '开放平台', value: '开放平台' },
-  { label: '内部平台', value: '内部平台' }
-]
-
-const builtinTemplateOptions = [
-  { label: '开放平台', value: '开放平台' },
-  { label: '商家开放', value: '商家开放' },
-  { label: '内部平台', value: '内部平台' }
-]
+const projectOptions = ref<Array<{ label: string; value: string | number }>>([])
 
 const store = usePresetVariablesStore()
 const templateStore = usePresetTemplateStore()
 
-const selectedModule = computed<string>({
+const selectedModule = computed<string | number>({
   get() {
     return store.selectedModule
   },
   set(v) {
-    store.setSelectedModule(v)
+    store.setSelectedModule(v as any)
   }
 })
 
-const templateSingle = computed<string>({
+const templateSingle = computed<string | number>({
   get() {
     return store.templateSingle
   },
   set(v) {
-    store.setTemplateSingle(v)
+    store.setTemplateSingle(v as any)
   }
 })
 
-const templateMulti = computed<string[]>({
+const templateMulti = computed<Array<string | number>>({
   get() {
-    return store.templateMulti
+    return (store.templateMulti || []) as Array<string | number>
   },
   set(v) {
-    store.setTemplateMulti(v)
+    store.setTemplateMulti(v as any)
   }
 })
 
@@ -163,23 +155,25 @@ const multiTemplateEnabled = computed<boolean>({
   }
 })
 
+const remoteTemplateOptions = ref<Array<{ label: string; value: string | number }>>([])
+
 const templateOptions = computed(() => {
   const dynamic = templateStore.templates.map((t) => ({
     label: t.name,
     value: t.name
   }))
-  return [...builtinTemplateOptions, ...dynamic]
+  return [...remoteTemplateOptions.value, ...dynamic]
 })
 
-const templateSelectValue = computed<string | string[]>({
+const templateSelectValue = computed<string | number | Array<string | number>>({
   get() {
     return multiTemplateEnabled.value ? templateMulti.value : templateSingle.value
   },
   set(v) {
     if (multiTemplateEnabled.value) {
-      templateMulti.value = Array.isArray(v) ? v : (v ? [String(v)] : [])
+      templateMulti.value = Array.isArray(v) ? v : (v !== '' && v != null ? [v as string | number] : [])
     } else {
-      templateSingle.value = Array.isArray(v) ? String(v[0] ?? '') : String(v ?? '')
+      templateSingle.value = Array.isArray(v) ? (v[0] ?? '') : ((v ?? '') as string | number)
     }
   }
 })
@@ -216,15 +210,91 @@ const showTemplateActions = computed(() => {
   return !!templateSingle.value
 })
 
+function resolveListPayload(resp: any) {
+  return resp?.data?.data?.items || resp?.data?.data?.list || []
+}
+
+function mapTemplateOption(item: any, idx: number) {
+  const value = item?.template_id ?? item?.id ?? item?.templateId ?? idx
+  const label = item?.template_name ?? item?.name ?? item?.title ?? `模板${idx + 1}`
+  return { value, label }
+}
+
+function mapVariableRow(item: any) {
+  return {
+    id: item?.id ?? item?.variable_id ?? undefined,
+    varType: Number(item?.var_type ?? item?.varType ?? 0),
+    name: item?.name ?? item?.variable_name ?? item?.key ?? '',
+    value: item?.value ?? item?.variable_value ?? '',
+    remark: item?.remark ?? item?.description ?? ''
+  }
+}
+
+async function loadTemplateOptions() {
+  if (selectedModule.value === '' || selectedModule.value == null) {
+    remoteTemplateOptions.value = []
+    return
+  }
+  const resp = await fetchTemplateVariableList({ project_id: selectedModule.value })
+  const list = resolveListPayload(resp)
+  remoteTemplateOptions.value = (Array.isArray(list) ? list : []).map(mapTemplateOption)
+}
+
+async function loadTemplateVariables(templateId: string | number) {
+  if (templateId === '' || templateId == null) return
+  const resp = await fetchTemplateVariableDetail({ template_id: templateId })
+  const variables = resp?.data?.data?.variables || []
+  const rows = (Array.isArray(variables) ? variables : []).map((item: any) => ({
+    id: item?.id ?? undefined,
+    varType: Number(item?.var_type ?? 0),
+    name: item?.var_name ?? '',
+    value: item?.var_value ?? '',
+    remark: item?.remark ?? ''
+  }))
+  emit('update:modelValue', rows)
+}
+
+onMounted(() => {
+  void loadProjectOptions()
+})
+
+async function loadProjectOptions() {
+  const resp = await fetchProjectList({ project_id: '', page: 1, page_size: 100 })
+  const list = resp?.data?.data?.list || []
+  projectOptions.value = (Array.isArray(list) ? list : []).map((item: any) => ({
+    label: item?.name ?? '',
+    value: item?.id ?? ''
+  }))
+  if ((selectedModule.value === '' || selectedModule.value == null) && projectOptions.value.length > 0) {
+    selectedModule.value = projectOptions.value[0].value
+  } else {
+    void loadTemplateOptions()
+  }
+}
+
+watch(
+  () => selectedModule.value,
+  () => {
+    templateSingle.value = ''
+    templateMulti.value = []
+    emit('update:modelValue', [])
+    void loadTemplateOptions()
+  }
+)
+
 // 单选模板变化时，如果命中已保存模板，则自动填充变量行
 watch(
   () => templateSingle.value,
-  (name) => {
-    if (!name) return
-    const tpl = templateStore.templates.find((t) => t.name === name)
+  (templateId) => {
+    if (templateId === '' || templateId == null) return
+    void loadTemplateVariables(templateId)
+
+    const tpl = templateStore.templates.find((t) => t.name === String(templateId))
     if (!tpl) return
     const pureRows = Array.isArray(tpl.rows) ? tpl.rows : []
-    emit('update:modelValue', pureRows)
+    if (pureRows.length > 0) {
+      emit('update:modelValue', pureRows)
+    }
   }
 )
 

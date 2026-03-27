@@ -9,6 +9,7 @@
   "devDependencies": {
     "@vue/compiler-sfc": "^3.2.6",
     "element-plus": "^2.13.3",
+    "playwright": "^1.58.2",
     "sass": "^1.97.3",
     "unplugin-auto-import": "^21.0.0",
     "unplugin-vue-components": "^31.0.0"

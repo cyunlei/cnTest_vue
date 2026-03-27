@@ -17,29 +17,31 @@ const value = computed({
 
 <template>
   <div class="response-expected-view">
-    <el-input
-      v-model="value"
-      type="textarea"
-      :rows="6"
-      resize="none"
-      placeholder=""
-      readonly
-      class="plain-textarea"
-    />
+    <pre class="expected-text">{{ value || '' }}</pre>
   </div>
 </template>
 
 <style scoped>
 .response-expected-view {
   width: 100%;
+  height: 100%;
+  min-height: 180px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
-.plain-textarea :deep(.el-textarea__inner) {
-  border: none;
-  box-shadow: none;
-  background-color: transparent;
-  padding-left: 0;
-  padding-right: 0;
+.expected-text {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  color: #0b4fb3;
+  font-size: 12px;
+  line-height: 1.6;
+  font-family: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: hidden;
 }
 </style>
 

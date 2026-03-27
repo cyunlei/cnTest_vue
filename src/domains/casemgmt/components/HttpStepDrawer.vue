@@ -28,6 +28,7 @@ import ResponseExpectedView from './response/ResponseExpectedView.vue'
 import ResponseActualInputView from './response/ResponseActualInputView.vue'
 import { usePresetVariablesStore } from '../stores/usePresetVariablesStore'
 import { usePresetTemplateStore } from '../stores/usePresetTemplateStore'
+import { executeStep } from '../api'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -41,28 +42,11 @@ const innerVisible = computed({
   set: (v) => emit('update:visible', v)
 })
 
-watch(
-  () => props.step,
-  (val) => {
-    if (!val) return
-    // 回填基础信息
-    basicForm.value.name = val.name || ''
-    if (val.detail && typeof val.detail === 'string') {
-      const parts = val.detail.split('|')
-      if (parts[0]) {
-        basicForm.value.method = parts[0].trim()
-      }
-      if (parts[1]) {
-        basicForm.value.url = parts[1].trim()
-      }
-    }
-  },
-  { immediate: true }
-)
+// ========== 响应式数据定义（必须在 watch 和 resetForm 之前）==========
 
 // 折叠面板状态
-const basicExpanded = ref(true) // 基础信息整体展开/收起
-const showMoreInfo = ref(false) // 更多信息展开/收起（控制第二排后两个和第三排）
+const basicExpanded = ref(true)
+const showMoreInfo = ref(false)
 const detailExpanded = ref(true)
 
 // 响应区域显示状态
@@ -78,10 +62,12 @@ const responseTimeMs = ref(0)
 const responseStatusCode = ref(0)
 const assertSuccessCount = ref(0)
 const assertTotalCount = ref(0)
-const responseSummary = ref('')          // 断言结果等汇总文案
-const responseSummaryDetail = ref('')    // 展开后详细信息（断言 / 预设变量 / 前置后置等）
-const responseSummaryType = ref('success') // success / error
+const responseSummary = ref('')
+const responseSummaryDetail = ref('')
+const responseSummaryType = ref('success')
 const responseSummaryExpanded = ref(false)
+const executionResultItems = ref([])
+const executionResultExpanded = ref(false)
 
 // 详细信息Tab
 const activeDetailTab = ref('input')
@@ -120,11 +106,11 @@ async function loadProjectOptions() {
       page_size: 100
     })
     const list = resp?.data?.data?.list || []
-    moduleOptions.value = list.map(item => ({
+    moduleOptions.value = list.map((item) => ({
       label: item.name,
       value: item.id
     }))
-    // 如果还没选过项目，默认选第一个
+    // 新增模式下如果未选择项目，默认选中第一个项目ID
     if (basicForm.value.projectId == null && moduleOptions.value.length > 0) {
       basicForm.value.projectId = moduleOptions.value[0].value
     }
@@ -134,15 +120,6 @@ async function loadProjectOptions() {
     moduleLoading.value = false
   }
 }
-
-watch(
-  () => innerVisible.value,
-  (visible) => {
-    if (visible) {
-      void loadProjectOptions()
-    }
-  }
-)
 
 // HTTP方法选项
 const methodOptions = [
@@ -155,12 +132,12 @@ const methodOptions = [
 
 // 断言表单数据
 const assertForm = ref({
-  compareType: '1', // 比对方式：1-普通，2-A/B
-  compareRule: 'key', // 对比规则：overall-整体，key-键值，script-自定义脚本
-  ruleFormat: 'jsonpath', // 规则形式：text-文本，jsonpath-JSONPath（仅键值模式可切换）
+  compareType: '1',
+  compareRule: 'key',
+  ruleFormat: 'jsonpath',
   textContent: '',
-  ignoreNull: '0', // 排除空值：0-不需要，1-需要
-  ignoreOrder: '0' // 忽略顺序：0-不需要，1-需要
+  ignoreNull: '0',
+  ignoreOrder: '0'
 })
 
 // 断言表格数据（JSONPath 断言列表）
@@ -172,28 +149,17 @@ const compareGroups = ref([
   { id: 1, name: '对比组1', enabled: true }
 ])
 
-function openAssertJsonAdd() {
-  // JSON 添加用于断言时，使用专用类型，避免误加到入参
-  openJsonDialog('assert-jsonpath')
-}
-
-function handleAssertBatchDelete() {
-  // 批量删除：可结合表格多选状态实现
-  assertTableData.value = []
-}
-
 // 多组参数
 const paramGroups = ref([
-  { 
-    id: 1, 
-    name: '第1组', 
-    checked: true, 
-    params: [], 
-    headers: [], 
-    body: '', 
-    ipport: '', 
+  {
+    id: 1,
+    name: '第1组',
+    checked: true,
+    params: [],
+    headers: [],
+    body: '',
+    ipport: '',
     encrypt: '',
-    // Body 数据（使用新的统一结构）
     bodyData: {
       contentType: 'raw',
       formData: [],
@@ -213,20 +179,8 @@ const presetVariables = computed({
   set: (v) => presetVariablesStore.setRows(v)
 })
 
-function handlePresetSaveTemplate() {
-  // 保存模板时不再清空持久化数据，保持当前 store 内容
-}
-
 const presetTemplateDialogVisible = ref(false)
 const presetTemplateStore = usePresetTemplateStore()
-
-function handleOpenNewTemplate() {
-  presetTemplateDialogVisible.value = true
-}
-
-function handleTemplateSave(payload) {
-  presetTemplateStore.addTemplate(payload)
-}
 
 // ===== 前置/后置操作 - 步骤展示（支持多步骤 + 展开/收起全部） =====
 const preSteps = ref([])
@@ -241,6 +195,323 @@ const postAllCollapsed = ref(false)
 const duccDiffVisible = ref(false)
 const dummyLeft = ref('v20260302204818')
 const dummyRight = ref('v20260302204843')
+
+// 提取变量步骤的 ref 管理（避免使用函数式 ref）
+const extractStepRefs = ref(new Map())
+
+// 计算当前组
+const currentGroup = computed(() => {
+  return paramGroups.value.find(g => g.id === currentGroupId.value) || paramGroups.value[0]
+})
+
+// 重命名弹窗状态
+const renameDialogVisible = ref(false)
+const renameForm = ref({ id: null, name: '' })
+
+// JSON 添加弹窗状态（参数 / 头 / JSONPATH 通用）
+const jsonDialogVisible = ref(false)
+const jsonDialogType = ref('params')
+const jsonDialogTitle = ref('Json添加Param')
+const jsonDialogInitialContent = ref('')
+const currentExtractStepId = ref(null)
+
+// 批量编辑弹窗状态
+const batchEditVisible = ref(false)
+
+// ========== 函数定义 ==========
+
+const ASSERT_RULE_LABEL_TO_VALUE = {
+  等于: 0,
+  字符串等于: 1,
+  不等于: 2,
+  大于: 3,
+  大于等于: 4,
+  小于: 5,
+  小于等于: 6,
+  包含: 7,
+  不包含: 8,
+  被包含: 11,
+  长度等于: 12,
+  包含键: 13,
+  为空: 14,
+  非空: 15,
+  为空或字符串为空: 18,
+  开头是: 19,
+  正则匹配: 20,
+  表达式为真: 21,
+  类型为: 22
+}
+const ASSERT_TYPE_TO_BACKEND = {
+  JSON: 0,
+  REGEX: 1,
+  HEADER: 2,
+  STATUS: 3
+}
+
+// 重置表单
+function resetForm() {
+  basicForm.value = {
+    name: '',
+    projectId: null,
+    method: 'GET',
+    url: '',
+    env: '',
+    stepDesc: '',
+    expectedResult: '',
+    jdosApp: '',
+    pfinderEnabled: false,
+    forcebotEnabled: false
+  }
+  currentGroupId.value = 1
+  paramGroups.value = [{
+    id: 1,
+    name: '第1组',
+    checked: true,
+    params: [],
+    headers: [],
+    body: '',
+    ipport: '',
+    encrypt: '',
+    bodyData: {
+      contentType: 'raw',
+      formData: [],
+      urlencoded: [],
+      raw: '',
+      rawType: 'json',
+      binary: null
+    }
+  }]
+  assertForm.value = {
+    compareType: '1',
+    compareRule: 'key',
+    ruleFormat: 'jsonpath',
+    textContent: '',
+    ignoreNull: '0',
+    ignoreOrder: '0'
+  }
+  assertTableData.value = []
+  preSteps.value = []
+  postSteps.value = []
+}
+
+// 设置提取变量步骤的 ref（避免在模板中使用函数式 ref）
+function setExtractStepRef(el, stepId) {
+  if (el && stepId) {
+    extractStepRefs.value.set(stepId, el)
+  }
+}
+
+// 移除提取变量步骤的 ref
+function removeExtractStepRef(stepId) {
+  if (stepId) {
+    extractStepRefs.value.delete(stepId)
+  }
+}
+
+// ========== Watch 定义（在数据定义之后）==========
+
+watch(
+  () => props.step,
+  (val) => {
+    if (!val) {
+      // 重置表单
+      resetForm()
+      return
+    }
+
+    // 先确保 paramGroups 已初始化
+    if (!paramGroups.value || paramGroups.value.length === 0) {
+      resetForm()
+    }
+
+    // 获取当前组（必须在 resetForm 之后获取）
+    const group = currentGroup.value
+    if (!group) {
+      console.warn('[HttpStepDrawer] currentGroup is not available')
+      return
+    }
+
+    // 回填基础信息
+    basicForm.value.name = val.name || ''
+    basicForm.value.method = val.method || 'GET'
+    basicForm.value.url = val.url || ''
+    basicForm.value.projectId = val.projectId || null
+    basicForm.value.expectedResult = val.expectedResult || ''
+
+    // 回填入参配置
+    if (val.inputParams) {
+      const inputParams = val.inputParams
+
+      // 处理 params (对象转数组)
+      if (inputParams.params && Object.keys(inputParams.params).length > 0) {
+        group.params = Object.entries(inputParams.params).map(([key, value]) => ({
+          key,
+          value: String(value)
+        }))
+      } else {
+        group.params = []
+      }
+
+      // 处理 headers (对象转数组)
+      if (inputParams.header && Object.keys(inputParams.header).length > 0) {
+        group.headers = Object.entries(inputParams.header).map(([key, value]) => ({
+          key,
+          value: String(value)
+        }))
+      } else {
+        group.headers = []
+      }
+
+      // 处理 body
+      if (inputParams.body) {
+        const body = inputParams.body
+        if (body.raw && body.raw.raw_context) {
+          try {
+            // 尝试解析并格式化 JSON
+            const parsed = JSON.parse(body.raw.raw_context)
+            group.bodyData.raw = JSON.stringify(parsed, null, 2)
+          } catch {
+            // 如果不是 JSON，直接显示原始内容
+            group.bodyData.raw = body.raw.raw_context
+          }
+          group.bodyData.contentType = 'raw'
+        }
+      }
+    }
+
+    // 回填断言配置
+    if (val.assertion) {
+      const backendCompareType = Number(val.assertion.compareType ?? 0)
+      assertForm.value.compareType = backendCompareType === 1 ? '2' : '1'
+      assertForm.value.compareRule =
+        val.assertion.compareRule === 0
+          ? 'overall'
+          : val.assertion.compareRule === 1
+            ? 'key'
+            : 'script'
+      assertForm.value.ruleFormat = val.assertion.ruleFormat === 0 ? 'text' : 'jsonpath'
+      assertForm.value.ignoreNull = String(val.assertion.excludeEmpty ?? 0)
+      assertForm.value.ignoreOrder = String(val.assertion.ignoreOrder ?? 0)
+      if (Array.isArray(val.assertion.ruleContext)) {
+        assertTableData.value = val.assertion.ruleContext.map((item) => ({
+          type:
+            Number(item?.json_path_assert_type) === 1 ? 'REGEX'
+              : Number(item?.json_path_assert_type) === 2 ? 'HEADER'
+                : Number(item?.json_path_assert_type) === 3 ? 'STATUS'
+                  : (item?.type || 'JSON'),
+          field: item?.field || '',
+          rule: item?.rule ?? item?.compare_rule ?? '等于',
+          expected: item?.expected_value ?? item?.expected ?? '',
+          remark: item?.remark || '',
+          extractVar: item?.extract_variable ?? item?.extractVar ?? item?.extract_var ?? ''
+        }))
+      } else {
+        assertTableData.value = []
+      }
+
+      // 如果有脚本代码，可以在这里处理
+      if (val.assertion.scriptCode) {
+        // TODO: 脚本断言回填
+      }
+    }
+
+    // 回填预设变量
+    if (val.presetVariables && Object.keys(val.presetVariables).length > 0) {
+      const presetVars = Object.entries(val.presetVariables).map(([key, value]) => ({
+        name: key,
+        value: String(value)
+      }))
+      // 添加到预设变量 store
+      presetVariablesStore.setRows(presetVars)
+    }
+
+    // 回填前置操作
+    if (val.preOperations && Array.isArray(val.preOperations)) {
+      preSteps.value = val.preOperations.map(op => {
+        const typeMap = {
+          0: 'mysql',
+          2: 'redis',
+          1: 'ducc', // DUCC 类型
+          3: 'script',
+          4: 'delay'
+        }
+        return {
+          id: op.id || Date.now() + Math.random(),
+          type: typeMap[op.operationType] || 'mysql',
+          name: op.name || '前置操作',
+          config: op.mysqlConfig || op.redisConfig || op.duccConfig || op.scriptConfig || op.delayConfig
+        }
+      })
+    }
+
+    // 回填后置操作
+    if (val.postOperations && Array.isArray(val.postOperations)) {
+      postSteps.value = val.postOperations.map(op => {
+        const typeMap = {
+          0: 'mysql',
+          2: 'redis',
+          1: 'ducc',
+          3: 'script',
+          4: 'delay',
+          5: 'extract'
+        }
+        return {
+          id: op.id || Date.now() + Math.random(),
+          type: typeMap[op.operationType] || 'extract',
+          name: op.name || '后置操作',
+          config: op.extractConfig || op.mysqlConfig || op.redisConfig || op.duccConfig || op.scriptConfig || op.delayConfig
+        }
+      })
+    }
+  },
+  { immediate: true }
+)
+
+// 每次打开抽屉都拉一次项目列表，展示 name，并持有 id 供保存时传 project_id
+watch(
+  () => innerVisible.value,
+  (visible) => {
+    if (visible) {
+      void loadProjectOptions()
+      ensureParamsEditableRow(currentGroup.value)
+      ensureHeadersEditableRow(currentGroup.value)
+    }
+  }
+)
+
+watch(
+  () => [currentGroupId.value, activeInputTab.value, paramGroups.value.length],
+  () => {
+    if (activeInputTab.value === 'params') {
+      ensureParamsEditableRow(currentGroup.value)
+    } else if (activeInputTab.value === 'headers') {
+      ensureHeadersEditableRow(currentGroup.value)
+    }
+  },
+  { immediate: true }
+)
+
+function openAssertJsonAdd() {
+  // JSON 添加用于断言时，使用专用类型，避免误加到入参
+  openJsonDialog('assert-jsonpath')
+}
+
+function handleAssertBatchDelete() {
+  // 批量删除：可结合表格多选状态实现
+  assertTableData.value = []
+}
+
+function handlePresetSaveTemplate() {
+  // 保存模板时不再清空持久化数据，保持当前 store 内容
+}
+
+function handleOpenNewTemplate() {
+  presetTemplateDialogVisible.value = true
+}
+
+function handleTemplateSave(payload) {
+  presetTemplateStore.addTemplate(payload)
+}
 
 // 前置/后置操作添加下拉：根据 command 新增步骤
 function handlePreActionCommand(command) {
@@ -321,25 +592,24 @@ function openDuccDiff() {
   duccDiffVisible.value = true
 }
 
-// 计算当前组
-const currentGroup = computed(() => {
-  return paramGroups.value.find(g => g.id === currentGroupId.value) || paramGroups.value[0]
-})
-
-// 重命名弹窗状态
-const renameDialogVisible = ref(false)
-const renameForm = ref({ id: null, name: '' })
-
-// JSON 添加弹窗状态（参数 / 头 / JSONPATH 通用）
-const jsonDialogVisible = ref(false)
-const jsonDialogType = ref('params')
-const jsonDialogTitle = ref('Json添加Param')
-const currentExtractStepId = ref(null)
-
-const extractStepRefs = ref(new Map())
 
 // 打开 JSON 添加弹窗
 function openJsonDialog(type = 'params') {
+  if (type === 'jsonpath' || type === 'assert-jsonpath') {
+    const bodyText = String(responseBody.value || '').trim()
+    if (bodyText) {
+      try {
+        jsonDialogInitialContent.value = JSON.stringify(JSON.parse(bodyText), null, 2)
+      } catch (e) {
+        void e
+        jsonDialogInitialContent.value = bodyText
+      }
+    } else {
+      jsonDialogInitialContent.value = ''
+    }
+  } else {
+    jsonDialogInitialContent.value = ''
+  }
   jsonDialogType.value = type
   jsonDialogTitle.value =
     type === 'jsonpath' || type === 'assert-jsonpath'
@@ -398,8 +668,6 @@ function handleJsonSave(selectedItems) {
   jsonDialogVisible.value = false
 }
 
-// 批量编辑弹窗状态
-const batchEditVisible = ref(false)
 
 // 打开批量编辑弹窗
 function openBatchEdit() {
@@ -471,6 +739,7 @@ function copyGroup(group) {
       binary: group.bodyData?.binary || null
     }
   })
+  ensureParamsEditableRow(paramGroups.value[paramGroups.value.length - 1])
 }
 
 // 删除参数组
@@ -485,6 +754,81 @@ function deleteGroup(groupId) {
   }
 }
 
+function ensureParamsEditableRow(group) {
+  if (!group) return
+  if (!Array.isArray(group.params)) {
+    group.params = []
+  }
+  if (group.params.length === 0) {
+    group.params.push({ key: '', value: '' })
+  }
+}
+
+function rowHasContent(row) {
+  const key = String(row?.key ?? '').trim()
+  const value = String(row?.value ?? '').trim()
+  return Boolean(key || value)
+}
+
+function ensureTrailingEmptyRow(rows) {
+  if (!Array.isArray(rows)) return
+  if (rows.length === 0) {
+    rows.push({ key: '', value: '' })
+    return
+  }
+  const last = rows[rows.length - 1]
+  if (rowHasContent(last)) {
+    rows.push({ key: '', value: '' })
+    return
+  }
+  // 防止出现多个连续空行
+  while (rows.length > 1) {
+    const tail = rows[rows.length - 1]
+    const prev = rows[rows.length - 2]
+    if (!rowHasContent(tail) && !rowHasContent(prev)) {
+      rows.splice(rows.length - 1, 1)
+    } else {
+      break
+    }
+  }
+}
+
+function handleParamRowInput() {
+  const group = currentGroup.value
+  if (!group || !Array.isArray(group.params)) return
+  ensureTrailingEmptyRow(group.params)
+}
+
+function handleHeaderRowInput() {
+  const group = currentGroup.value
+  if (!group || !Array.isArray(group.headers)) return
+  ensureTrailingEmptyRow(group.headers)
+}
+
+function ensureHeadersEditableRow(group) {
+  if (!group) return
+  if (!Array.isArray(group.headers)) {
+    group.headers = []
+  }
+  if (group.headers.length === 0) {
+    group.headers.push({ key: '', value: '' })
+  }
+}
+
+function removeParamRow(index) {
+  const group = currentGroup.value
+  if (!group || !Array.isArray(group.params)) return
+  group.params.splice(index, 1)
+  ensureTrailingEmptyRow(group.params)
+}
+
+function removeHeaderRow(index) {
+  const group = currentGroup.value
+  if (!group || !Array.isArray(group.headers)) return
+  group.headers.splice(index, 1)
+  ensureTrailingEmptyRow(group.headers)
+}
+
 // 关闭抽屉
 function handleClose() {
   emit('update:visible', false)
@@ -496,14 +840,117 @@ onUnmounted(() => {
   extractStepRefs.value.clear()
 })
 
+function normalizePairsToObject(rows = []) {
+  const obj = {}
+  rows.forEach((row) => {
+    const key = row?.key
+    if (!key) return
+    obj[key] = row?.value ?? ''
+  })
+  return obj
+}
+
+function normalizeAssertion() {
+  const compareTypeMap = { '1': 0, '2': 1 }
+  const compareRuleMap = { overall: 0, key: 1, script: 2 }
+  const ruleFormatMap = { text: 0, jsonpath: 1 }
+  const normalizeRuleValue = (rule) => {
+    if (typeof rule === 'number' && Number.isFinite(rule)) return rule
+    if (typeof rule === 'string') return ASSERT_RULE_LABEL_TO_VALUE[rule] ?? rule
+    return 0
+  }
+  const normalizeRuleContext = (rows = []) =>
+    rows
+      .map((row) => ({
+        json_path_assert_type: ASSERT_TYPE_TO_BACKEND[row?.type] ?? 0,
+        field: row?.field || '',
+        rule: normalizeRuleValue(row?.rule),
+        expected_value: row?.expected ?? '',
+        remark: row?.remark || '',
+        extract_variable: row?.extractVar ?? row?.extract_variable ?? row?.extract_var ?? ''
+      }))
+      .filter((row) => row.field)
+
+  return {
+    compare_type: compareTypeMap[assertForm.value.compareType] ?? 0,
+    compare_rule: compareRuleMap[assertForm.value.compareRule] ?? 2,
+    rule_format: ruleFormatMap[assertForm.value.ruleFormat] ?? 1,
+    exclude_empty: Number(assertForm.value.ignoreNull ?? 0),
+    ignore_order: Number(assertForm.value.ignoreOrder ?? 0),
+    rule_text: assertForm.value.textContent || '',
+    rule_context: normalizeRuleContext(Array.isArray(assertTableData.value) ? assertTableData.value : []),
+    script_code: ''
+  }
+}
+
+function normalizeInputParams(group) {
+  const bodyData = group?.bodyData || {}
+  // 后端 ApiInputParams.RAW_TYPE_CHOICES:
+  // 0=Json, 1=Text, 2=Xml, 3=Html
+  const rawTypeMap = { json: 0, text: 1, xml: 2, html: 3 }
+  const contentType = bodyData?.contentType || 'raw'
+  const rawType = rawTypeMap[String(bodyData?.rawType || 'json').toLowerCase()] ?? 0
+  const isEncrypted =
+    group?.encrypt === true ||
+    group?.encrypt === 1 ||
+    group?.encrypt === '1' ||
+    String(group?.encrypt || '').toLowerCase() === 'true'
+
+  let body = {}
+  if (contentType === 'raw') {
+    body = {
+      raw: {
+        raw_type: rawType,
+        raw_context: bodyData.raw || ''
+      }
+    }
+  } else if (contentType === 'formData' || contentType === 'form-data') {
+    body = {
+      form_data: Array.isArray(bodyData.formData) ? bodyData.formData : []
+    }
+  } else if (contentType === 'x-www-form-urlencoded') {
+    body = {
+      urlencoded: Array.isArray(bodyData.urlencoded) ? bodyData.urlencoded : []
+    }
+  } else if (contentType === 'none') {
+    body = { none: true }
+  } else if (contentType === 'binary') {
+    body = { binary: bodyData.binary || null }
+  }
+
+  return {
+    params: normalizePairsToObject(group?.params || []),
+    header: normalizePairsToObject(group?.headers || []),
+    body,
+    raw_type: rawType,
+    ip_port: group?.ipport || '',
+    is_encrypted: isEncrypted
+  }
+}
+
 // 保存
-function handleSave() {
+function handleSave(action = 'save') {
+  const group = currentGroup.value || paramGroups.value[0] || {}
   const payload = {
+    id: props.step?.id || null,
     name: basicForm.value.name,
     projectId: basicForm.value.projectId,
     method: basicForm.value.method,
     url: basicForm.value.url,
-    expectedResult: basicForm.value.expectedResult
+    expectedResult: basicForm.value.expectedResult,
+    environmentId: Number(props.step?.environmentId || props.step?.environment_id || 1),
+    maxWaitTime: Number(props.step?.maxWaitTime ?? props.step?.max_wait_time ?? 30),
+    retryCount: Number(props.step?.retryCount ?? props.step?.retry_count ?? 0),
+    sleepTime: Number(props.step?.sleepTime ?? props.step?.sleep_time ?? 0),
+    sortOrder: Number(props.step?.sortOrder ?? props.step?.sort_order ?? 1),
+    apiInputParams: normalizeInputParams(group),
+    apiAssertion: normalizeAssertion(),
+    presetVariables: Object.fromEntries(
+      (presetVariables.value || []).map((item) => [item?.name, item?.value ?? '']).filter(([k]) => !!k)
+    ),
+    preOperations: preSteps.value || [],
+    postOperations: postSteps.value || [],
+    action
   }
   emit('save', payload)
 }
@@ -554,52 +1001,283 @@ const assertRateClass = computed(() => {
   return 'meta-tag--partial'
 })
 
-// 测试一下
-function handleTest() {
-  // 这里先模拟一次接口调用，把返回结果挂到响应区域四个字段上
-  // 实际接后端时，只需要在请求成功回调里替换下面的 mock 数据即可
-  const mockBody = {
-    code: 0,
-    msg: 'ok',
-    data: {
-      orderId: '202603120001',
-      status: 'SUCCESS'
+const sortedExecutionResultItems = computed(() => {
+  return [...executionResultItems.value].sort((a, b) => {
+    if (a.ok === b.ok) return 0
+    return a.ok ? 1 : -1
+  })
+})
+
+const displayExecutionResultItems = computed(() => {
+  if (executionResultExpanded.value) return sortedExecutionResultItems.value
+  return sortedExecutionResultItems.value.slice(0, 1)
+})
+
+function safeStringify(value) {
+  if (typeof value === 'string') return value
+  try {
+    return JSON.stringify(value)
+  } catch (e) {
+    void e
+    return String(value ?? '')
+  }
+}
+
+function normalizeRuleText(rule) {
+  const ruleMap = {
+    0: '等于',
+    1: '不等于',
+    2: '包含',
+    3: '不包含',
+    4: '大于',
+    5: '大于等于',
+    6: '小于',
+    7: '小于等于'
+  }
+  if (typeof rule === 'number') return ruleMap[rule] || '等于'
+  return String(rule || '等于')
+}
+
+function getValueByJsonPath(source, jsonPath) {
+  if (!jsonPath || typeof jsonPath !== 'string' || !jsonPath.startsWith('$.')) return undefined
+  const segments = jsonPath.slice(2).split('.').filter(Boolean)
+  let current = source
+  for (let i = 0; i < segments.length; i += 1) {
+    const key = segments[i]
+    if (current == null || typeof current !== 'object' || !(key in current)) {
+      return undefined
     }
+    current = current[key]
+  }
+  return current
+}
+
+function buildRuleExecutionItems(ruleContext, responseBody) {
+  if (!Array.isArray(ruleContext) || !ruleContext.length) return []
+  return ruleContext.map((rule, idx) => {
+    const path = String(rule?.json_path || rule?.jsonPath || `$.rule_${idx + 1}`)
+    const expectedRaw = rule?.expected_value ?? rule?.expectedValue ?? ''
+    const actualRaw = getValueByJsonPath(responseBody, path)
+    const passed =
+      actualRaw !== undefined &&
+      String(actualRaw) === String(expectedRaw ?? '')
+    return {
+      ok: passed,
+      text: `路径: ${path} 规则: ${normalizeRuleText(rule?.compare_rule ?? rule?.compareRule ?? rule?.json_path_assert_type)} 期望: "${String(expectedRaw ?? '')}" 实际: ${safeStringify(actualRaw)}`
+    }
+  })
+}
+
+function buildAssertionExecutionItems(assertionResults, responseBody) {
+  if (!Array.isArray(assertionResults) || !assertionResults.length) return []
+  return assertionResults.map((item, idx) => {
+    const path = String(
+      item?.json_path ||
+      item?.path ||
+      item?.field ||
+      item?.assert_path ||
+      `$.assertion_${idx + 1}`
+    )
+    const ruleText = String(item?.rule ?? item?.compare_rule ?? item?.assert_rule ?? item?.type ?? 'eq')
+    const expectedRaw = item?.expected_value ?? item?.expected ?? item?.expect ?? ''
+    const actualRaw =
+      item?.actual_value ??
+      item?.actual ??
+      item?.real ??
+      getValueByJsonPath(responseBody, path)
+    return {
+      ok: Boolean(item?.passed),
+      text: `路径: ${path} 规则: ${ruleText} 期望: "${String(expectedRaw ?? '')}" 实际: ${safeStringify(actualRaw)}`
+    }
+  })
+}
+
+function normalizeRuleLabel(rule) {
+  const ruleText = String(rule ?? '').toLowerCase()
+  const ruleMap = {
+    eq: '等于',
+    ne: '不等于',
+    gt: '大于',
+    ge: '大于等于',
+    lt: '小于',
+    le: '小于等于',
+    in: '包含',
+    not_in: '不包含',
+    contain: '包含',
+    not_contain: '不包含'
+  }
+  if (ruleMap[ruleText]) return ruleMap[ruleText]
+  return normalizeRuleText(rule)
+}
+
+function parseMaybeJson(input) {
+  if (typeof input !== 'string') return input
+  const text = input.trim()
+  if (!text) return input
+  if (!(text.startsWith('[') || text.startsWith('{'))) return input
+  try {
+    return JSON.parse(text)
+  } catch (e) {
+    void e
+    return input
+  }
+}
+
+function toExpectedLine(item, idx) {
+  const path = String(item?.field ?? item?.json_path ?? item?.jsonPath ?? `$.assertion_${idx + 1}`)
+  const rule = normalizeRuleLabel(item?.rule ?? item?.compare_rule ?? item?.assert_rule ?? 'eq')
+  const expected = String(item?.expected ?? item?.expected_value ?? item?.expect ?? '')
+  return `路径: ${path}; 规则: ${rule}\\"${expected}\\"`
+}
+
+function formatExpectedResult(expectResult, ruleContext) {
+  const parsedExpect = parseMaybeJson(expectResult)
+  if (Array.isArray(parsedExpect) && parsedExpect.length) {
+    const lines = parsedExpect.map((item, idx) => {
+      if (item && typeof item === 'object') {
+        return toExpectedLine(item, idx)
+      }
+      return String(item ?? '')
+    })
+    return lines.join('\n')
+  }
+  if (parsedExpect && typeof parsedExpect === 'object') {
+    return safeStringify(parsedExpect)
+  }
+  if (typeof parsedExpect === 'string' && parsedExpect.trim()) {
+    return parsedExpect
+  }
+  if (Array.isArray(ruleContext) && ruleContext.length) {
+    const lines = ruleContext.map((item, idx) => toExpectedLine(item, idx))
+    return lines.join('\n')
+  }
+  return typeof ruleContext === 'string' ? ruleContext : safeStringify(ruleContext ?? [])
+}
+
+// 测试一下：调用执行步骤接口并回填响应区
+async function handleTest() {
+  const stepId = Number(props.step?.id)
+  const methodValueMap = {
+    GET: 0,
+    POST: 1,
+    PUT: 2,
+    DELETE: 3,
+    PATCH: 4,
+    HEAD: 5,
+    OPTIONS: 6
+  }
+  const group = currentGroup.value || paramGroups.value[0] || {}
+
+  // 未保存场景：按 step_data 执行
+  const stepDataPayload = {
+    name: basicForm.value.name || '',
+    step_type: 0,
+    api_url: basicForm.value.url || '',
+    method: methodValueMap[String(basicForm.value.method || 'GET').toUpperCase()] ?? 0,
+    env_code: 0,
+    api_input_params_detail: normalizeInputParams(group),
+    api_assertion_detail: normalizeAssertion(),
+    max_wait_time: Number(props.step?.maxWaitTime ?? props.step?.max_wait_time ?? 30)
   }
 
-  const mockHeaders = [
-    { key: 'Content-Type', value: 'application/json; charset=utf-8' },
-    { key: 'Date', value: new Date().toUTCString() }
-  ]
+  const executePayload = { step_data: stepDataPayload }
 
-  const group = currentGroup.value
-  const mockActualInput = group && group.bodyData && group.bodyData.raw
-    ? group.bodyData.raw
-    : ''
+  try {
+    const resp = await executeStep(executePayload)
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg || ''
+    const data = resp?.data?.data || {}
 
-  responseBody.value = JSON.stringify(mockBody, null, 4)
-  responseHeaders.value = mockHeaders
-  responseExpected.value = ''
-  responseActualInput.value = mockActualInput
-  responseSuccess.value = mockBody.code === 0
-  responseTimeMs.value = 435
-  responseStatusCode.value = 200
-  assertSuccessCount.value = 5
-  assertTotalCount.value = 5
+    // 按后端执行接口返回结构精确回填
+    const body = data?.response_body ?? {}
+    responseBody.value =
+      typeof body === 'string' ? body : JSON.stringify(body ?? {}, null, 2)
 
-  if (responseSuccess.value) {
-    responseSummaryType.value = 'success'
-    responseSummary.value = '断言全部通过，预设变量与前置/后置步骤执行正常'
-    responseSummaryDetail.value = '断言结果：全部通过\n预设变量：写入成功\n前置步骤：执行成功\n后置步骤：执行成功'
-  } else {
+    const headers = data?.response_headers || {}
+    responseHeaders.value = Object.entries(headers).map(([k, v]) => ({
+      key: k,
+      value: String(v ?? '')
+    }))
+
+    const requestParams =
+      data?.request_params ??
+      stepDataPayload?.api_input_params_detail?.params ??
+      {}
+    const requestBody =
+      data?.request_body ??
+      stepDataPayload?.api_input_params_detail?.body ??
+      {}
+    const hasParams =
+      requestParams &&
+      typeof requestParams === 'object' &&
+      !Array.isArray(requestParams) &&
+      Object.keys(requestParams).length > 0
+    const actualInput = hasParams ? requestParams : requestBody
+    responseActualInput.value =
+      typeof actualInput === 'string' ? actualInput : JSON.stringify(actualInput, null, 2)
+
+    const ruleContext =
+      data?.api_assertion_detail?.rule_context ??
+      stepDataPayload?.api_assertion_detail?.rule_context ??
+      normalizeAssertion().rule_context ??
+      []
+    const expectResult =
+      data?.expectResult ??
+      data?.expect_result ??
+      data?.expected_result ??
+      ''
+    responseExpected.value = formatExpectedResult(expectResult, ruleContext)
+    responseStatusCode.value = Number(data?.response_status_code ?? 0) || 0
+    responseTimeMs.value = Number(data?.response_time_ms ?? 0) || 0
+
+    const assertionResults = Array.isArray(data?.assertion_results) ? data.assertion_results : []
+    assertTotalCount.value = assertionResults.length
+    assertSuccessCount.value = assertionResults.filter(item => item?.passed === true).length
+
+    responseSuccess.value = (code === 0 || code === 200) && String(data?.status || '') === 'success'
+    responseSummaryType.value = responseSuccess.value ? 'success' : 'error'
+    responseSummary.value = msg || (responseSuccess.value ? '步骤执行成功' : '步骤执行失败')
+    responseSummaryDetail.value =
+      data?.execution_summary ||
+      [data?.pre_operations_log, data?.post_operations_log, data?.error_message]
+        .filter(Boolean)
+        .join('\n\n') ||
+      JSON.stringify(data || {}, null, 2)
+    responseSummaryExpanded.value = false
+    executionResultExpanded.value = false
+    const bodyObject = data?.response_body && typeof data.response_body === 'object'
+      ? data.response_body
+      : {}
+    const assertionItems = buildAssertionExecutionItems(assertionResults, bodyObject)
+    if (assertionItems.length > 0) {
+      executionResultItems.value = assertionItems
+    } else {
+      const ruleItems = buildRuleExecutionItems(ruleContext, bodyObject)
+      if (ruleItems.length > 0) {
+        executionResultItems.value = ruleItems
+      } else {
+        const items = []
+        items.push({
+          ok: responseSuccess.value,
+          text: `路径: $.status 规则: 等于 期望: "success" 实际: ${safeStringify(data?.status)}`
+        })
+        executionResultItems.value = items
+      }
+    }
+    showResponse.value = true
+  } catch (error) {
+    void error
+    responseSuccess.value = false
     responseSummaryType.value = 'error'
-    responseSummary.value = '断言失败，详情请展开查看'
-    responseSummaryDetail.value = '断言结果：存在失败项\n预设变量：部分写入失败\n前置/后置步骤：请检查执行日志'
+    responseSummary.value = '执行步骤失败'
+    responseSummaryDetail.value = '调用 /api/v1/testcases/step/execute 失败，请检查网络或后端日志。'
+    responseSummaryExpanded.value = false
+    executionResultExpanded.value = false
+    executionResultItems.value = [
+      { ok: false, text: '路径: $.execute 规则: 等于 期望: "success" 实际: "failed"' }
+    ]
+    showResponse.value = true
   }
-
-  responseSummaryExpanded.value = false
-
-  showResponse.value = true
 }
 
 // 添加参数组
@@ -626,6 +1304,7 @@ function addGroup() {
   })
   // 切换到新添加的组
   currentGroupId.value = newId
+  ensureParamsEditableRow(paramGroups.value[paramGroups.value.length - 1])
 }
 
 // ================= cURL 解析结果处理 =================
@@ -648,6 +1327,7 @@ function handleParseParams(params) {
       })
     }
   })
+  ensureTrailingEmptyRow(group.params)
 }
 
 // 处理解析出的 Headers，自动添加到当前组的 headers 中
@@ -668,6 +1348,7 @@ function handleParseHeaders(headers) {
       })
     }
   })
+  ensureTrailingEmptyRow(group.headers)
 }
 
 // 处理解析出的 Body，自动填写到当前组的 body 中
@@ -764,7 +1445,7 @@ function clearBinaryFile() {
                   </el-form-item>
                 </el-col>
                 <el-col :span="6">
-                  <el-form-item label="接口所属模块" required>
+                  <el-form-item label="接口所属项目" required>
                     <el-select
                       v-model="basicForm.projectId"
                       class="w-100"
@@ -967,12 +1648,17 @@ function clearBinaryFile() {
                                   <el-button size="small" class="ml-8" @click="openJsonDialog('params')">JSON添加</el-button>
                                 </template>
                                 <template #default="{ row }">
-                                  <el-input v-model="row.key" size="small" placeholder="请输入Key" />
+                                  <el-input v-model="row.key" size="small" placeholder="请输入Key" @input="handleParamRowInput" />
                                 </template>
                               </el-table-column>
                               <el-table-column label="VALUE" min-width="180">
                                 <template #default="{ row }">
-                                  <el-input v-model="row.value" size="small" placeholder="请输入Value" />
+                                  <el-input
+                                    v-model="row.value"
+                                    size="small"
+                                    placeholder="请输入Value"
+                                    @input="handleParamRowInput"
+                                  />
                                 </template>
                               </el-table-column>
                               <el-table-column label="操作" width="80" align="center">
@@ -980,7 +1666,13 @@ function clearBinaryFile() {
                                   <el-link type="primary" @click="openBatchEdit">批量编辑</el-link>
                                 </template>
                                 <template #default="{ $index }">
-                                  <el-button link type="danger" size="small" @click="currentGroup.params.splice($index, 1)">
+                                  <el-button
+                                    v-if="Array.isArray(currentGroup.params) && $index < currentGroup.params.length - 1"
+                                    link
+                                    type="danger"
+                                    size="small"
+                                    @click="removeParamRow($index)"
+                                  >
                                     <el-icon><Delete /></el-icon>
                                   </el-button>
                                 </template>
@@ -997,12 +1689,17 @@ function clearBinaryFile() {
                                   <el-button size="small" class="ml-8" @click="openJsonDialog('headers')">JSON添加</el-button>
                                 </template>
                                 <template #default="{ row }">
-                                  <el-input v-model="row.key" size="small" placeholder="请输入Key" />
+                                  <el-input v-model="row.key" size="small" placeholder="请输入Key" @input="handleHeaderRowInput" />
                                 </template>
                               </el-table-column>
                               <el-table-column label="VALUE" min-width="180">
                                 <template #default="{ row }">
-                                  <el-input v-model="row.value" size="small" placeholder="请输入Value" />
+                                  <el-input
+                                    v-model="row.value"
+                                    size="small"
+                                    placeholder="请输入Value"
+                                    @input="handleHeaderRowInput"
+                                  />
                                 </template>
                               </el-table-column>
                               <el-table-column label="操作" width="80" align="center">
@@ -1010,7 +1707,13 @@ function clearBinaryFile() {
                                   <el-link type="primary" @click="openBatchEdit">批量编辑</el-link>
                                 </template>
                                 <template #default="{ $index }">
-                                  <el-button link type="danger" size="small" @click="currentGroup.headers.splice($index, 1)">
+                                  <el-button
+                                    v-if="Array.isArray(currentGroup.headers) && $index < currentGroup.headers.length - 1"
+                                    link
+                                    type="danger"
+                                    size="small"
+                                    @click="removeHeaderRow($index)"
+                                  >
                                     <el-icon><Delete /></el-icon>
                                   </el-button>
                                 </template>
@@ -1226,7 +1929,7 @@ function clearBinaryFile() {
                             :collapsed="postAllCollapsed"
                             @delete="handlePostStepDelete(step.id)"
                             @copy="handlePostStepCopy(step.id)"
-                            :ref="el => { if (el) extractStepRefs.set(step.id, el) }"
+                            :ref="el => setExtractStepRef(el, step.id)"
                           />
                           <DelayStepDrawer
                             v-else-if="step && step.type === 'delay'"
@@ -1299,24 +2002,23 @@ function clearBinaryFile() {
         <div class="section-header">
           <span class="section-title">响应信息区域</span>
         </div>
-        <!-- 断言 / 预设变量 / 前置后置 等结果汇总，可展开 -->
-        <div
-          v-if="responseSummary"
-          class="response-summary"
-          :class="responseSummaryType === 'success' ? 'response-summary--success' : 'response-summary--error'"
-        >
-          <div class="response-summary-main" @click="responseSummaryExpanded = !responseSummaryExpanded">
-            <span class="response-summary-icon">
-              <!-- 简单状态圆点 -->
-              <span class="status-dot" />
+        <!-- 执行结果列表（按设计稿样式） -->
+        <div v-if="executionResultItems.length" class="execution-result-list">
+          <div
+            v-for="(item, idx) in displayExecutionResultItems"
+            :key="idx"
+            class="execution-result-item"
+            :class="item.ok ? 'execution-result-item--ok' : 'execution-result-item--error'"
+          >
+            <span class="execution-result-icon">{{ item.ok ? '✓' : '✕' }}</span>
+            <span class="execution-result-text">{{ item.text }}</span>
+            <span
+              v-if="idx === 0 && executionResultItems.length > 1"
+              class="execution-result-toggle"
+              @click="executionResultExpanded = !executionResultExpanded"
+            >
+              {{ executionResultExpanded ? '收起' : '展开' }}
             </span>
-            <span class="response-summary-text">{{ responseSummary }}</span>
-            <span class="response-summary-toggle">
-              {{ responseSummaryExpanded ? '收起' : '展开' }}
-            </span>
-          </div>
-          <div v-if="responseSummaryExpanded" class="response-summary-detail">
-            <pre class="response-summary-detail-text">{{ responseSummaryDetail }}</pre>
           </div>
         </div>
 
@@ -1366,8 +2068,8 @@ function clearBinaryFile() {
     <!-- 底部操作栏 -->
     <template #footer>
       <div class="drawer-footer">
-        <el-button type="primary" @click="handleSave">保存</el-button>
-        <el-button type="primary">保存并继续</el-button>
+        <el-button type="primary" @click="handleSave('save')">保存</el-button>
+        <el-button type="primary" @click="handleSave('saveAndContinue')">保存并继续</el-button>
         <el-button type="danger" @click="handleTest">测试一下</el-button>
         <span class="footer-tip">(多个IP默认直连调用第一个)</span>
         <el-button>分环境测试</el-button>
@@ -1401,6 +2103,7 @@ function clearBinaryFile() {
       v-model="jsonDialogVisible"
       :type="jsonDialogType"
       :title="jsonDialogTitle"
+      :initial-content="jsonDialogInitialContent"
       @save="handleJsonSave"
     />
     
@@ -1782,6 +2485,26 @@ function clearBinaryFile() {
   background: #fafafa;
 }
 
+.key-value-table :deep(.el-input__inner) {
+  text-overflow: clip;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+
+.key-value-table :deep(.el-input__wrapper) {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.key-value-table :deep(.el-input__wrapper::-webkit-scrollbar) {
+  height: 6px;
+}
+
+.key-value-table :deep(.el-input__wrapper::-webkit-scrollbar-thumb) {
+  background: #cfd3dc;
+  border-radius: 6px;
+}
+
 .ml-8 {
   margin-left: 8px;
 }
@@ -1872,7 +2595,7 @@ function clearBinaryFile() {
   flex: 1;
   border: 1px dashed #dcdfe6;
   border-radius: 6px;
-  
+  overflow: hidden;
 }
 
 .sub-header {
@@ -2016,6 +2739,78 @@ function clearBinaryFile() {
 
 .response-summary--error .status-dot {
   background-color: #ff4d4f;
+}
+
+/* 执行结果列表（仿截图） */
+.execution-result-list {
+  margin: 6px 0 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.execution-result-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid;
+  border-radius: 2px;
+  padding: 5px 10px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.execution-result-icon {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  line-height: 1;
+  flex: none;
+}
+
+.execution-result-text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #595959;
+}
+
+.execution-result-item--ok {
+  color: #389e0d;
+  background: #f6ffed;
+  border-color: #d9f7be;
+}
+
+.execution-result-item--error {
+  color: #cf1322;
+  background: #fff1f0;
+  border-color: #ffd6d6;
+}
+
+.execution-result-item--ok .execution-result-icon {
+  color: #fff;
+  background: #52c41a;
+}
+
+.execution-result-item--error .execution-result-icon {
+  color: #fff;
+  background: #ff4d4f;
+}
+
+.execution-result-toggle {
+  flex: none;
+  font-size: 12px;
+  color: #1677ff;
+  cursor: pointer;
+  user-select: none;
+  line-height: 1;
+  margin-left: 8px;
 }
 
 /* 底部操作栏 */

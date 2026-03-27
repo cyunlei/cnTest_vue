@@ -15,6 +15,7 @@ import { create, fetch } from '@/@core/http'
 const STEP_BASE_URL = '/api/v1/testcases/step'
 const SUITE_BASE_URL = '/api/v1/testcases/suite'
 const TESTCASE_BASE_URL = '/api/v1/testcases'
+const TEMPLATE_VARIABLE_BASE_URL = '/api/v1/testcases/template/variable'
 
 /**
  * 创建测试步骤
@@ -188,4 +189,24 @@ export function updateTestcase(data) {
  */
 export function deleteTestcase(data) {
   return create(`${TESTCASE_BASE_URL}/delete`, data)
+}
+
+/**
+ * 查询预设变量模板列表/详情
+ * GET /api/v1/testcases/template/variable/list
+ * @param {Record<string, unknown>} [params]
+ * @returns {Promise<import('axios').AxiosResponse<any>>}
+ */
+export function fetchTemplateVariableList(params = {}) {
+  return fetch(`${TEMPLATE_VARIABLE_BASE_URL}/list`, params)
+}
+
+/**
+ * 查询预设变量模板详情
+ * GET /api/v1/testcases/template/variable/detail
+ * @param {Record<string, unknown>} params
+ * @returns {Promise<import('axios').AxiosResponse<any>>}
+ */
+export function fetchTemplateVariableDetail(params = {}) {
+  return fetch(`${TEMPLATE_VARIABLE_BASE_URL}/detail`, params)
 }

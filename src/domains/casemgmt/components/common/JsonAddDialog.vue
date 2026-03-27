@@ -18,6 +18,10 @@ const props = defineProps({
   title: {
     type: String,
     default: 'Json添加Param'
+  },
+  initialContent: {
+    type: String,
+    default: ''
   }
 })
 
@@ -37,6 +41,10 @@ const hasSaved = ref(false)
 
 // 所有叶子节点数量（用于全选/取消全选状态判断）
 const allLeafKeyCount = computed(() => collectAllLeafKeys(treeData.value, []).length)
+const dialogPersistedContent = computed(() => {
+  if (props.type === 'params') return jsonCacheStore.content || ''
+  return currentInput.value || props.initialContent || ''
+})
 
 // 监听弹窗打开
 watch(() => props.modelValue, (val) => {
@@ -45,8 +53,10 @@ watch(() => props.modelValue, (val) => {
     treeData.value = []
     selectedKeys.value = []
     hasSaved.value = false
-    // 只有入参场景需要记住上次输入内容，其它场景默认空
-    currentInput.value = props.type === 'params' ? jsonCacheStore.content || '' : ''
+    // 入参场景读取缓存，其它场景优先使用外部传入的初始化内容
+    currentInput.value = props.type === 'params'
+      ? (jsonCacheStore.content || '')
+      : (props.initialContent || '')
   }
 })
 
@@ -310,7 +320,7 @@ function getValueByPath(obj, path) {
       placeholder="请在此填写 JSON 格式数据，然后点击弹层下方左侧生成按钮"
       action-button-text="生成"
       :parse-function="parseJson"
-      :persisted-content="props.type === 'params' ? jsonCacheStore.content : ''"
+      :persisted-content="dialogPersistedContent"
       @update:persisted-content="handlePersistedContentUpdate"
       @close="handleInputClose"
     />

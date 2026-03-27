@@ -7,7 +7,7 @@ import AppPagination from '@/shared/ui/organisms/AppPagination.vue'
 import HttpStepDrawer from '../components/HttpStepDrawer.vue'
 import StepExecuteDrawer from '../components/StepExecuteDrawer.vue'
 import CaseSidebar from '../components/CaseSidebar.vue'
-import { createStep, deleteStep, executeStep, fetchStepList, fetchTestcaseDetail, updateStep } from '../api'
+import { createStep, deleteStep, executeStep, fetchStepList, fetchStepDetail, fetchTestcaseDetail, updateStep } from '../api'
 import { STEP_TYPE, ENV_CODE, HTTP_METHOD } from '../types'
 import { fetchProjectList } from '@/domains/project/api'
 
@@ -453,46 +453,64 @@ function closeHttpStepDrawer() {
 
 async function saveHttpStep(stepData) {
   try {
-    const dto = {
+    const stepId = Number(stepData?.id)
+    const isUpdate = Number.isFinite(stepId) && stepId > 0
+
+    const baseDto = {
       name: stepData.name,
       step_type: STEP_TYPE.HTTP,
       project_id: stepData.projectId || projectId.value,
       testcase_id: Number(caseDetail.value.id),
+      environment_id: Number(stepData.environmentId ?? 1),
       env_code: ENV_CODE.TEST,
       api_url: stepData.url,
       method: HTTP_METHOD[stepData.method] ?? HTTP_METHOD.GET,
       expected_result: stepData.expectedResult || '',
-      paramsAndAssert: {},
-      type_config: {},
-      preset_variables: {},
-      max_wait_time: 30,
-      retry_count: 0,
-      sort_order: stepList.value.length
+      max_wait_time: Number(stepData.maxWaitTime ?? 30),
+      retry_count: Number(stepData.retryCount ?? 0),
+      sleep_time: Number(stepData.sleepTime ?? 0),
+      sort_order: Number(stepData.sortOrder ?? stepList.value.length),
+      api_input_params: stepData.apiInputParams || {},
+      api_assertion: stepData.apiAssertion || {},
+      preset_variables: stepData.presetVariables || {},
+      pre_operations: stepData.preOperations || [],
+      post_operations: stepData.postOperations || [],
+      config: {},
+      pre_post_steps: [],
+      testcase_as_pre_post: []
     }
 
-    const resp = await createStep(dto)
+    const dto = isUpdate ? { step_id: stepId, ...baseDto } : baseDto
+    const resp = isUpdate ? await updateStep(dto) : await createStep(dto)
     const code = resp?.data?.code
     const msg = resp?.data?.msg
 
-    // 按后端约定：code === 0 才表示成功，其它（如 24001）都视为业务错误
-    if (code !== 0) {
-      ElMessage.error(msg || '保存步骤失败')
+    if (code !== 0 && code !== 200) {
+      ElMessage.error(msg || (isUpdate ? '更新步骤失败' : '保存步骤失败'))
       return
     }
 
-    const backendId = resp.data?.data?.id
-    stepList.value.push({
-      id: backendId ? String(backendId) : Date.now().toString(),
-      name: stepData.name,
-      detail: stepData.method + ' | ' + stepData.url,
-      type: 'HTTP',
-      inputGroup: '1/1',
-      order: stepList.value.length + 1,
-      httpData: stepData
-    })
-    stepTotal.value += 1
+    ElMessage.success(msg || (isUpdate ? '更新步骤成功' : '保存步骤成功'))
+    await loadStepList()
 
-    ElMessage.success('保存步骤成功')
+    if (stepData.action === 'saveAndContinue') {
+      const targetStepId = isUpdate
+        ? stepId
+        : Number(resp?.data?.data?.id || resp?.data?.data?.step_id)
+      if (Number.isFinite(targetStepId) && targetStepId > 0) {
+        const detailResp = await fetchStepDetail({ step_id: targetStepId })
+        const detailCode = detailResp?.data?.code
+        const detailData = detailResp?.data?.data
+        if ((detailCode === 0 || detailCode === 200) && detailData) {
+          editingHttpStep.value = transformStepDetailToFrontend(detailData)
+          showHttpStepDrawer.value = true
+          return
+        }
+      }
+      showHttpStepDrawer.value = true
+      return
+    }
+
     closeHttpStepDrawer()
   } catch (error) {
     void error
@@ -500,15 +518,142 @@ async function saveHttpStep(stepData) {
   }
 }
 
-function openStepDrawer(step) {
-  // 点击任意步骤名称，都打开 HTTP 步骤抽屉
-  // 如果是已保存的 HTTP 步骤，优先使用 httpData 回填
-  // 否则至少回填步骤名称和 detail（方法 / URL 由用户再补）
-  editingHttpStep.value = step.httpData || {
-    name: step.name,
-    detail: step.detail
+async function openStepDrawer(step) {
+  const stepId = Number(step?.id)
+  if (!Number.isFinite(stepId) || stepId <= 0) {
+    // 新建步骤或无效ID，直接打开空抽屉
+    editingHttpStep.value = null
+    showHttpStepDrawer.value = true
+    return
   }
-  showHttpStepDrawer.value = true
+
+  try {
+    const resp = await fetchStepDetail({ step_id: stepId })
+    const code = resp?.data?.code
+    const data = resp?.data?.data
+    if ((code !== 0 && code !== 200) || !data) {
+      ElMessage.error('获取步骤详情失败')
+      return
+    }
+    // 将后端数据转换为前端格式并回填抽屉
+    editingHttpStep.value = transformStepDetailToFrontend(data)
+    showHttpStepDrawer.value = true
+  } catch (error) {
+    void error
+    ElMessage.error('获取步骤详情失败')
+  }
+}
+
+/**
+ * 将后端步骤详情转换为前端组件需要的格式
+ * @param {Object} data - 后端返回的步骤详情数据
+ * @returns {Object} 前端组件需要的格式
+ */
+function transformStepDetailToFrontend(data) {
+  // 方法映射：后端 0=GET, 1=POST -> 前端 'GET', 'POST'
+  const methodMap = { 0: 'GET', 1: 'POST', 2: 'PUT', 3: 'PATCH', 4: 'DELETE', 5: 'HEAD', 6: 'OPTIONS' }
+
+  // 基础信息
+  const result = {
+    id: data.id,
+    name: data.name || '',
+    projectId: data.project_id,
+    environmentId: data.environment_id,
+    method: methodMap[data.method] || 'GET',
+    url: data.api_url || '',
+    envCode: data.env_code,
+    expectedResult: data.expected_result || '',
+    testcaseId: data.testcase_id,
+    maxWaitTime: data.max_wait_time ?? 30,
+    retryCount: data.retry_count ?? 0,
+    sleepTime: data.sleep_time ?? 0,
+    concurrentNum: data.concurrent_num ?? 1,
+    assertionRetryCount: data.assertion_retry_count ?? 0,
+    sortOrder: data.sort_order ?? 1
+  }
+
+  // 入参配置
+  {
+    const inputParams = data.api_input_params_detail || data.api_input_params || null
+    if (!inputParams) {
+      // no-op
+    } else {
+    result.inputParams = {
+      params: inputParams.params || {},
+      header: inputParams.header || {},
+      body: inputParams.body || {},
+      rawType: inputParams.raw_type ?? 0,
+      ipPort: inputParams.ip_port,
+      isEncrypted: inputParams.is_encrypted ?? false
+    }
+    }
+  }
+
+  // 断言配置
+  {
+    const assertion = data.api_assertion_detail || data.api_assertion || null
+    if (!assertion) {
+      // no-op
+    } else {
+    result.assertion = {
+      compareType: assertion.compare_type ?? 0,
+      compareRule: assertion.compare_rule ?? 2,
+      ruleFormat: assertion.rule_format ?? 1,
+      excludeEmpty: assertion.exclude_empty ?? 0,
+      ignoreOrder: assertion.ignore_order ?? 0,
+      ruleText: assertion.rule_text,
+      ruleContext: assertion.rule_context,
+      scriptCode: assertion.script_code || '',
+      scriptHash: assertion.script_hash,
+      templateId: assertion.template_id
+    }
+    }
+  }
+
+  // 预设变量
+  result.presetVariables = data.preset_variables || {}
+
+  // 前置操作
+  if (data.pre_operations && Array.isArray(data.pre_operations)) {
+    result.preOperations = data.pre_operations.map(op => ({
+      id: op.id,
+      position: op.position,
+      positionLabel: op.position_label,
+      operationType: op.operation_type,
+      operationTypeLabel: op.operation_type_label,
+      name: op.name,
+      sortOrder: op.sort_order,
+      isActive: op.is_active,
+      mysqlConfig: op.mysql_config,
+      redisConfig: op.redis_config,
+      duccConfig: op.ducc_config,
+      scriptConfig: op.script_config,
+      delayConfig: op.delay_config,
+      extractConfig: op.extract_config
+    }))
+  }
+
+  // 后置操作
+  if (data.post_operations && Array.isArray(data.post_operations)) {
+    result.postOperations = data.post_operations.map(op => ({
+      id: op.id,
+      position: op.position,
+      positionLabel: op.position_label,
+      operationType: op.operation_type,
+      operationTypeLabel: op.operation_type_label,
+      name: op.name,
+      sortOrder: op.sort_order,
+      isActive: op.is_active,
+      mysqlConfig: op.mysql_config,
+      redisConfig: op.redis_config,
+      duccConfig: op.ducc_config,
+      scriptConfig: op.script_config,
+      delayConfig: op.delay_config,
+      extractConfig: op.extract_config
+    }))
+  }
+
+  return result
 }
 
 // 处理更多类型选择

@@ -52,6 +52,62 @@ const Utils = {
   // 清理 PowerShell 转义符
   cleanPowerShellEscapes(str) {
     return str.replace(/`"/g, '"').replace(/`'/g, "'").replace(/`([\s\S])/g, '$1')
+  },
+
+  // 提取命令行参数值（支持单引号/双引号包裹，且允许值里出现另一种引号）
+  extractFlagValues(input, flags = []) {
+    const values = []
+    if (!input || !Array.isArray(flags) || flags.length === 0) return values
+
+    let i = 0
+    while (i < input.length) {
+      const matchedFlag = flags.find((flag) => {
+        if (input.slice(i, i + flag.length) !== flag) return false
+        const prev = i > 0 ? input[i - 1] : ' '
+        const next = input[i + flag.length] || ' '
+        const prevOk = /\s/.test(prev)
+        const nextOk = /\s/.test(next)
+        return prevOk && nextOk
+      })
+
+      if (!matchedFlag) {
+        i += 1
+        continue
+      }
+
+      let j = i + matchedFlag.length
+      while (j < input.length && /\s/.test(input[j])) j += 1
+      if (j >= input.length) break
+
+      const quote = input[j]
+      if (quote === '"' || quote === "'") {
+        j += 1
+        let value = ''
+        while (j < input.length) {
+          const ch = input[j]
+          if (ch === '\\' && j + 1 < input.length) {
+            value += input[j + 1]
+            j += 2
+            continue
+          }
+          if (ch === quote) {
+            j += 1
+            break
+          }
+          value += ch
+          j += 1
+        }
+        values.push(value)
+      } else {
+        let start = j
+        while (j < input.length && !/\s/.test(input[j])) j += 1
+        values.push(input.slice(start, j))
+      }
+
+      i = j
+    }
+
+    return values
   }
 }
 
@@ -116,19 +172,22 @@ const ParseStrategies = {
       const urlMatch = processed.match(/https?:\/\/[^\s"']+/i)
       if (urlMatch) result.url = urlMatch[0].replace(/["']/g, '')
 
-      // Headers
-      const headerRegex = /-H\s+["']([^"']+)["']/gi
-      let headerMatch
-      while ((headerMatch = headerRegex.exec(processed)) !== null) {
-        const colonIdx = headerMatch[1].indexOf(':')
+      // Headers（避免被 header value 内部引号截断）
+      const headerValues = Utils.extractFlagValues(processed, ['-H', '--header'])
+      headerValues.forEach((headerLine) => {
+        const colonIdx = headerLine.indexOf(':')
         if (colonIdx > 0) {
-          result.headers[headerMatch[1].slice(0, colonIdx).trim()] = headerMatch[1].slice(colonIdx + 1).trim()
+          const key = headerLine.slice(0, colonIdx).trim()
+          const value = headerLine.slice(colonIdx + 1).trim()
+          result.headers[key] = value
         }
-      }
+      })
 
-      // Cookie
-      const cookieMatch = processed.match(/-b\s+["']([^"']+)["']/i)
-      if (cookieMatch) result.headers['Cookie'] = cookieMatch[1]
+      // Cookie（-b/--cookie）
+      const cookieValues = Utils.extractFlagValues(processed, ['-b', '--cookie'])
+      if (cookieValues.length > 0) {
+        result.headers['Cookie'] = cookieValues[cookieValues.length - 1]
+      }
 
       // Body
       const bodyFlagMatch = processed.match(/(--data-raw|--data|-d)\s+/i)
