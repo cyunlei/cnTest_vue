@@ -44,7 +44,8 @@ export default {
   },
   data() {
     return {
-      content: ''
+      content: '',
+      highlightEnabled: false
     }
   },
   computed: {
@@ -53,7 +54,12 @@ export default {
       const escaped = this.escapeHtml(text)
       if (!text) return ''
 
-      if (String(this.contentType || '').toUpperCase() !== 'JSON') {
+      const type = String(this.contentType || '').toUpperCase()
+      if (type !== 'JSON') {
+        return escaped
+      }
+      // 未点击“格式化”前：保持纯文本显示（不做任何 token 高亮）
+      if (!this.highlightEnabled) {
         return escaped
       }
 
@@ -70,6 +76,12 @@ export default {
         }
       },
       immediate: true
+    },
+    contentType: {
+      handler() {
+        // 切换类型时默认回到纯文本模式，避免“未格式化就高亮”
+        this.highlightEnabled = false
+      }
     }
   },
   mounted() {
@@ -97,6 +109,7 @@ export default {
           if (!jsonObj) return
           const formatted = JSON.stringify(jsonObj, null, 2)
           this.content = formatted
+          this.highlightEnabled = true
           this.$emit('input', formatted)
           this.$nextTick(() => this.syncScroll())
           return
@@ -106,6 +119,7 @@ export default {
           if (!xmlOk) return
           const formatted = this.formatXml(content)
           this.content = formatted
+          this.highlightEnabled = true
           this.$emit('input', formatted)
           this.$nextTick(() => this.syncScroll())
           return
@@ -115,6 +129,7 @@ export default {
           if (!htmlOk) return
           const formatted = this.formatHtml(content)
           this.content = formatted
+          this.highlightEnabled = true
           this.$emit('input', formatted)
           this.$nextTick(() => this.syncScroll())
           return
@@ -126,6 +141,7 @@ export default {
 
     setContent(content) {
       this.content = content || ''
+      this.highlightEnabled = false
       this.$emit('input', this.content)
       this.$nextTick(() => this.syncScroll())
     },
@@ -160,8 +176,6 @@ export default {
       s = s.replace(/:\s*(true|false)/g, ': <span class="json-boolean">$1</span>')
       // null
       s = s.replace(/:\s*(null)/g, ': <span class="json-null">$1</span>')
-      // braces / brackets
-      s = s.replace(/([{}\[\]])/g, '<span class="json-brace">$1</span>')
       return s
     },
 

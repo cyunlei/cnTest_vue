@@ -74,12 +74,12 @@
 <script setup lang="ts">
 import { computed, ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, QuestionFilled } from '@element-plus/icons-vue'
 import { usePresetVariablesStore } from '../../stores/usePresetVariablesStore'
 import { usePresetTemplateStore } from '../../stores/usePresetTemplateStore'
 import PresetVarTableCore from './PresetVarTableCore.vue'
-import { fetchTemplateVariableList, fetchTemplateVariableDetail } from '../../api'
+import { fetchTemplateVariableList, fetchTemplateVariableDetail, updateTemplateVariable } from '../../api'
 import { fetchProjectList } from '@/domains/project/api'
 
 // 类型映射：
@@ -210,6 +210,8 @@ const showTemplateActions = computed(() => {
   return !!templateSingle.value
 })
 
+const templateLoadSeq = ref(0)
+
 function resolveListPayload(resp: any) {
   return resp?.data?.data?.items || resp?.data?.data?.list || []
 }
@@ -242,7 +244,9 @@ async function loadTemplateOptions() {
 
 async function loadTemplateVariables(templateId: string | number) {
   if (templateId === '' || templateId == null) return
+  const seq = ++templateLoadSeq.value
   const resp = await fetchTemplateVariableDetail({ template_id: templateId })
+  if (seq !== templateLoadSeq.value) return
   const variables = resp?.data?.data?.variables || []
   const rows = (Array.isArray(variables) ? variables : []).map((item: any) => ({
     id: item?.id ?? undefined,
@@ -284,17 +288,22 @@ watch(
 
 // 单选模板变化时，如果命中已保存模板，则自动填充变量行
 watch(
-  () => templateSingle.value,
-  (templateId) => {
+  () => templateSelectValue.value,
+  (val) => {
+    // 切换模板时立即清空，避免旧数据停留
+    emit('update:modelValue', [])
+
+    if (multiTemplateEnabled.value) {
+      const arr = Array.isArray(val) ? val : (val !== '' && val != null ? [val as any] : [])
+      const last = arr[arr.length - 1]
+      if (last === '' || last == null) return
+      void loadTemplateVariables(last)
+      return
+    }
+
+    const templateId = Array.isArray(val) ? (val[0] ?? '') : (val as any)
     if (templateId === '' || templateId == null) return
     void loadTemplateVariables(templateId)
-
-    const tpl = templateStore.templates.find((t) => t.name === String(templateId))
-    if (!tpl) return
-    const pureRows = Array.isArray(tpl.rows) ? tpl.rows : []
-    if (pureRows.length > 0) {
-      emit('update:modelValue', pureRows)
-    }
   }
 )
 
@@ -309,10 +318,42 @@ const rowsModel = computed<PresetVarRow[]>({
 
 const tableRef = ref<InstanceType<typeof PresetVarTableCore> | null>(null)
 
-const handleSaveTemplate = () => {
+const handleSaveTemplate = async () => {
   if (tableRef.value && (tableRef.value as any).validateAll && !(tableRef.value as any).validateAll()) {
     return
   }
+  const templateId = multiTemplateEnabled.value
+    ? (Array.isArray(templateSelectValue.value) ? templateSelectValue.value[templateSelectValue.value.length - 1] : templateSelectValue.value)
+    : (Array.isArray(templateSelectValue.value) ? templateSelectValue.value[0] : templateSelectValue.value)
+
+  if (templateId === '' || templateId == null) {
+    ElMessage.warning('请先选择变量模板')
+    return
+  }
+
+  const variables = (rowsModel.value || [])
+    .filter((r) => (r?.name || '').trim())
+    .map((r) => ({
+      var_type: Number((r as any).varType ?? 0),
+      var_name: String((r as any).name ?? ''),
+      var_value: String((r as any).value ?? ''),
+      remark: String((r as any).remark ?? '')
+    }))
+
+  const resp = await updateTemplateVariable({
+    template_id: templateId,
+    variables
+  })
+
+  if (resp?.data?.code === 200) {
+    ElMessage.success(resp?.data?.msg || '保存成功')
+    // 保存后重新拉一次详情，确保与后端一致
+    void loadTemplateVariables(templateId as any)
+  } else {
+    ElMessage.warning(resp?.data?.msg || '保存失败')
+  }
+
+  // 兼容既有事件（如果外部还有监听）
   emit('save-template')
 }
 

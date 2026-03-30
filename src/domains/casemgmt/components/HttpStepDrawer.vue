@@ -928,6 +928,31 @@ function normalizeInputParams(group) {
   }
 }
 
+function getSelectedTemplateIds() {
+  const single = presetVariablesStore.templateSingle
+  if (single !== '' && single != null && Number(single) > 0) {
+    return [Number(single)]
+  }
+  const multi = Array.isArray(presetVariablesStore.templateMulti)
+    ? presetVariablesStore.templateMulti
+    : []
+  const last = multi[multi.length - 1]
+  if (last !== '' && last != null && Number(last) > 0) {
+    return [Number(last)]
+  }
+  const fromStep = Number(props.step?.assertion?.templateId)
+  if (Number.isFinite(fromStep) && fromStep > 0) {
+    return [fromStep]
+  }
+  return []
+}
+
+function collectOperationIds(steps = []) {
+  return (Array.isArray(steps) ? steps : [])
+    .map((step) => Number(step?.id))
+    .filter((id) => Number.isFinite(id) && id > 0)
+}
+
 // 保存
 function handleSave(action = 'save') {
   const group = currentGroup.value || paramGroups.value[0] || {}
@@ -1071,6 +1096,19 @@ function buildRuleExecutionItems(ruleContext, responseBody) {
 function buildAssertionExecutionItems(assertionResults, responseBody) {
   if (!Array.isArray(assertionResults) || !assertionResults.length) return []
   return assertionResults.map((item, idx) => {
+    const assertionType = String(item?.type || '').toLowerCase()
+    if (assertionType === 'script') {
+      const logs = Array.isArray(item?.logs)
+        ? item.logs.map((v) => String(v ?? '')).filter(Boolean).join(' | ')
+        : ''
+      const err = String(item?.error_message || '').trim()
+      const detail = err || logs
+      if (!detail) return null
+      return {
+        ok: Boolean(item?.passed),
+        text: `断言: 脚本 结果: ${Boolean(item?.passed) ? '成功' : '失败'} 详情: ${detail}`
+      }
+    }
     const path = String(
       item?.json_path ||
       item?.path ||
@@ -1089,7 +1127,79 @@ function buildAssertionExecutionItems(assertionResults, responseBody) {
       ok: Boolean(item?.passed),
       text: `路径: ${path} 规则: ${ruleText} 期望: "${String(expectedRaw ?? '')}" 实际: ${safeStringify(actualRaw)}`
     }
-  })
+  }).filter(Boolean)
+}
+
+function buildExtractedVariableItems(extractedVariables) {
+  if (!extractedVariables) return []
+  if (typeof extractedVariables === 'string') {
+    const parsedList = parseExtractedVariablesString(extractedVariables)
+    if (parsedList.length > 0) {
+      return parsedList.map((item) => ({
+        ok: true,
+        text: `提取变量: ${item.name} 值: ${safeStringify(item.value)}`
+      }))
+    }
+    const parsed = parseMaybeJson(extractedVariables)
+    if (parsed && parsed !== extractedVariables) {
+      return buildExtractedVariableItems(parsed)
+    }
+    return []
+  }
+  if (Array.isArray(extractedVariables)) {
+    return extractedVariables.map((item, idx) => {
+      const varName = String(item?.variable_name ?? item?.name ?? `var_${idx + 1}`)
+      const value = item?.value ?? item?.var_value ?? item?.result ?? ''
+      return {
+        ok: true,
+        text: `提取变量: ${varName} 值: ${safeStringify(value)}`
+      }
+    })
+  }
+  if (typeof extractedVariables === 'object') {
+    return Object.entries(extractedVariables).map(([key, value]) => ({
+      ok: true,
+      text: `提取变量: ${String(key)} 值: ${safeStringify(value)}`
+    }))
+  }
+  return []
+}
+
+function parseExtractedVariablesString(text) {
+  const raw = String(text || '').trim()
+  if (!raw) return []
+  // 兼容: "[{{date}}=2026-03-30 22:06:09,{{uid}}=1001]"
+  // 也兼容: "{{date}}=2026-03-30 22:06:09"
+  let body = raw
+  if (body.startsWith('[') && body.endsWith(']')) {
+    body = body.slice(1, -1)
+  }
+  if (!body.trim()) return []
+  return body
+    .split(',')
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .map((part, idx) => {
+      const eqIndex = part.indexOf('=')
+      if (eqIndex < 0) {
+        return { name: `var_${idx + 1}`, value: part }
+      }
+      const name = part.slice(0, eqIndex).trim() || `var_${idx + 1}`
+      const value = part.slice(eqIndex + 1).trim()
+      return { name, value }
+    })
+}
+
+function pickExtractedVariables(data) {
+  if (!data || typeof data !== 'object') return null
+  return (
+    data?.extracted_variables ??
+    data?.extract_variables ??
+    data?.extractedVariables ??
+    data?.post_operations_result?.extracted_variables ??
+    data?.post_operations_result?.extract_variables ??
+    null
+  )
 }
 
 function normalizeRuleLabel(rule) {
@@ -1156,7 +1266,6 @@ function formatExpectedResult(expectResult, ruleContext) {
 
 // 测试一下：调用执行步骤接口并回填响应区
 async function handleTest() {
-  const stepId = Number(props.step?.id)
   const methodValueMap = {
     GET: 0,
     POST: 1,
@@ -1167,6 +1276,13 @@ async function handleTest() {
     OPTIONS: 6
   }
   const group = currentGroup.value || paramGroups.value[0] || {}
+  const templateIds = getSelectedTemplateIds()
+  const normalizedPresetVariables = Object.fromEntries(
+    (presetVariables.value || []).map((item) => [item?.name, item?.value ?? '']).filter(([k]) => !!k)
+  )
+  const preOperationIds = collectOperationIds(preSteps.value)
+  const postOperationIds = collectOperationIds(postSteps.value)
+  const normalizedAssertion = normalizeAssertion()
 
   // 未保存场景：按 step_data 执行
   const stepDataPayload = {
@@ -1176,7 +1292,11 @@ async function handleTest() {
     method: methodValueMap[String(basicForm.value.method || 'GET').toUpperCase()] ?? 0,
     env_code: 0,
     api_input_params_detail: normalizeInputParams(group),
-    api_assertion_detail: normalizeAssertion(),
+    api_assertion_detail: normalizedAssertion,
+    template_id: templateIds,
+    preset_variables: normalizedPresetVariables,
+    pre_operations_id: preOperationIds,
+    post_operations_id: postOperationIds,
     max_wait_time: Number(props.step?.maxWaitTime ?? props.step?.max_wait_time ?? 30)
   }
 
@@ -1205,16 +1325,24 @@ async function handleTest() {
       {}
     const requestBody =
       data?.request_body ??
+      stepDataPayload?.api_input_params_detail?.body?.raw?.raw_context ??
       stepDataPayload?.api_input_params_detail?.body ??
       {}
-    const hasParams =
-      requestParams &&
-      typeof requestParams === 'object' &&
-      !Array.isArray(requestParams) &&
-      Object.keys(requestParams).length > 0
-    const actualInput = hasParams ? requestParams : requestBody
-    responseActualInput.value =
-      typeof actualInput === 'string' ? actualInput : JSON.stringify(actualInput, null, 2)
+    const normalizedParams =
+      requestParams && typeof requestParams === 'object' && !Array.isArray(requestParams)
+        ? requestParams
+        : {}
+    const normalizedRawBody =
+      requestBody && typeof requestBody === 'object'
+        ? requestBody
+        : parseMaybeJson(String(requestBody || '')) || {}
+    const actualInput = {
+      params: normalizedParams,
+      body: {
+        raw: normalizedRawBody
+      }
+    }
+    responseActualInput.value = JSON.stringify(actualInput, null, 2)
 
     const ruleContext =
       data?.api_assertion_detail?.rule_context ??
@@ -1249,19 +1377,15 @@ async function handleTest() {
       ? data.response_body
       : {}
     const assertionItems = buildAssertionExecutionItems(assertionResults, bodyObject)
+    const extractedItems = buildExtractedVariableItems(pickExtractedVariables(data))
     if (assertionItems.length > 0) {
-      executionResultItems.value = assertionItems
+      executionResultItems.value = [...assertionItems, ...extractedItems]
     } else {
       const ruleItems = buildRuleExecutionItems(ruleContext, bodyObject)
       if (ruleItems.length > 0) {
-        executionResultItems.value = ruleItems
+        executionResultItems.value = [...ruleItems, ...extractedItems]
       } else {
-        const items = []
-        items.push({
-          ok: responseSuccess.value,
-          text: `路径: $.status 规则: 等于 期望: "success" 实际: ${safeStringify(data?.status)}`
-        })
-        executionResultItems.value = items
+        executionResultItems.value = [...extractedItems]
       }
     }
     showResponse.value = true

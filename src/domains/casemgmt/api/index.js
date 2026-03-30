@@ -210,3 +210,13 @@ export function fetchTemplateVariableList(params = {}) {
 export function fetchTemplateVariableDetail(params = {}) {
   return fetch(`${TEMPLATE_VARIABLE_BASE_URL}/detail`, params)
 }
+
+/**
+ * 更新预设变量模板
+ * POST /api/v1/testcases/template/variable/update
+ * @param {{ template_id: number|string; variables: Array<{ var_type:number; var_name:string; var_value:string; remark:string }> }} data
+ * @returns {Promise<import('axios').AxiosResponse<any>>}
+ */
+export function updateTemplateVariable(data) {
+  return create(`${TEMPLATE_VARIABLE_BASE_URL}/update`, data)
+}

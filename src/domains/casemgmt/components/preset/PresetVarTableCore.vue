@@ -73,7 +73,7 @@
           <el-input
             v-model="row.value"
             size="small"
-            placeholder="变量值"
+            :placeholder="getValuePlaceholder(row.varType)"
             :disabled="row.editing === false"
           />
         </template>
@@ -149,7 +149,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 
@@ -190,7 +190,7 @@ const createRow = (): PresetVarRow => ({
 })
 
 const rows = ref<PresetVarRow[]>([])
-const initialized = ref(false)
+const internalSyncing = ref(false)
 
 const toPureRows = (arr: PresetVarRow[]) =>
   arr.map(({ editing, _backup, invalid, ...rest }) => ({
@@ -200,23 +200,25 @@ const toPureRows = (arr: PresetVarRow[]) =>
 watch(
   () => props.modelValue,
   (val) => {
-    if (!initialized.value) {
-      rows.value = (Array.isArray(val) && val.length > 0
-        ? val
-        : [createRow()]
-      ).map((r) => ({
-        ...createRow(),
-        ...r,
-        editing: false
-      }))
-      initialized.value = true
-    }
+    // 内部操作（添加/保存/删除）触发的回流更新不覆盖编辑态
+    if (internalSyncing.value) return
+
+    // 外部数据变更（切换模板/重新加载详情）时覆盖当前表格数据
+    rows.value = (Array.isArray(val) && val.length > 0 ? val : [createRow()]).map((r) => ({
+      ...createRow(),
+      ...r,
+      editing: false
+    }))
   },
   { immediate: true, deep: true }
 )
 
 const sync = () => {
+  internalSyncing.value = true
   emit('update:modelValue', toPureRows(rows.value))
+  void nextTick(() => {
+    internalSyncing.value = false
+  })
 }
 
 const validateRow = (row: PresetVarRow): boolean => {
@@ -235,6 +237,134 @@ const validateRow = (row: PresetVarRow): boolean => {
     return false
   }
   row.invalid = false
+  // 值校验（按类型）
+  if (!validateValueByType(row)) {
+    return false
+  }
+  return true
+}
+
+function getValuePlaceholder(varType: PresetVarType) {
+  switch (Number(varType)) {
+    case 1:
+      return '请填写数组变量值'
+    case 2:
+      return '请填写JSON数组变量值'
+    case 3:
+      return '变量值不能为空'
+    case 4:
+      return '位数-最小值-最大值，最多13为随机数'
+    case 6:
+      return 'A为13位时间戳，B为10位时间戳，默认返回13位，例A-1000 即13为时间戳减1000ms A1000即13位时间戳1000ms'
+    case 5:
+      return 's3 即加3秒，m-1即减一分钟'
+    default:
+      return '变量值'
+  }
+}
+
+function parseJsonValue(text: string) {
+  const raw = String(text ?? '').trim()
+  if (!raw) return { ok: false, value: null }
+  try {
+    return { ok: true, value: JSON.parse(raw) }
+  } catch {
+    return { ok: false, value: null }
+  }
+}
+
+function validateValueByType(row: PresetVarRow) {
+  const type = Number(row.varType ?? 0)
+  const value = String(row.value ?? '').trim()
+
+  // 允许普通变量/动态变量为空（后端可能补全）
+  if (type === 0 || type === 7) return true
+
+  // 数组：必须为 JSON 数组
+  if (type === 1) {
+    const parsed = parseJsonValue(value)
+    if (!parsed.ok || !Array.isArray(parsed.value)) {
+      ElMessage.error('数组类型：变量值必须是合法的 JSON 数组，例如：[1,2,3]')
+      return false
+    }
+    return true
+  }
+
+  // JSON数组：必须为 JSON 数组，且每项为对象
+  if (type === 2) {
+    const parsed = parseJsonValue(value)
+    if (!parsed.ok || !Array.isArray(parsed.value)) {
+      ElMessage.error('JSON数组类型：变量值必须是合法的 JSON 数组，例如：[{"k":"v"}]')
+      return false
+    }
+    const bad = parsed.value.some((it: any) => it === null || typeof it !== 'object' || Array.isArray(it))
+    if (bad) {
+      ElMessage.error('JSON数组类型：数组每一项必须是对象，例如：[{"k":"v"}]')
+      return false
+    }
+    return true
+  }
+
+  // UUID：必填（值可为任意非空，生成逻辑由后端/运行时处理）
+  if (type === 3) {
+    if (!value) {
+      ElMessage.error('UUID类型：变量值不能为空')
+      return false
+    }
+    return true
+  }
+
+  // 随机数：位数-最小值-最大值，位数<=13
+  if (type === 4) {
+    const m = value.match(/^(\d{1,2})\s*-\s*(-?\d+)\s*-\s*(-?\d+)$/)
+    if (!m) {
+      ElMessage.error('随机数类型：请按“位数-最小值-最大值”填写，例如：6-1-999999')
+      return false
+    }
+    const digits = Number(m[1])
+    const min = Number(m[2])
+    const max = Number(m[3])
+    if (!Number.isFinite(digits) || digits <= 0 || digits > 13) {
+      ElMessage.error('随机数类型：位数最多13位')
+      return false
+    }
+    if (!Number.isFinite(min) || !Number.isFinite(max) || min > max) {
+      ElMessage.error('随机数类型：最小值不能大于最大值')
+      return false
+    }
+    return true
+  }
+
+  // 时间戳：A/B + 偏移（A-1000, A1000, B-10, B10）
+  if (type === 6) {
+    const m = value.match(/^([AB])\s*([+-]?\s*\d+)?$/i)
+    if (!m) {
+      ElMessage.error('时间戳类型：请按 A/B 加偏移填写，例如：A-1000 或 A1000 或 B-10')
+      return false
+    }
+    const offsetRaw = (m[2] || '').replace(/\s+/g, '')
+    if (offsetRaw && !/^[-+]?\d+$/.test(offsetRaw)) {
+      ElMessage.error('时间戳类型：偏移必须为整数')
+      return false
+    }
+    return true
+  }
+
+  // 当前日期：s3, m-1 等（单位 s/m/h/d，整数偏移）
+  if (type === 5) {
+    const m = value.match(/^([smhd])\s*([-+]?\s*\d+)$/i)
+    if (!m) {
+      ElMessage.error('当前日期类型：请按 “s3 / m-1 / h2 / d-7” 填写')
+      return false
+    }
+    const num = Number(String(m[2]).replace(/\s+/g, ''))
+    if (!Number.isFinite(num)) {
+      ElMessage.error('当前日期类型：偏移必须为整数')
+      return false
+    }
+    return true
+  }
+
   return true
 }
 
