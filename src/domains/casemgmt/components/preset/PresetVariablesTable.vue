@@ -56,12 +56,13 @@
     </div>
 
     <preset-var-table-core
+      v-if="hasTemplateSelected"
       ref="tableRef"
       v-model="rowsModel"
       :show-add-button="false"
     />
 
-    <div v-if="showTemplateActions" class="add-row">
+    <div v-if="hasTemplateSelected && showTemplateActions" class="add-row">
       <el-button size="small" @click="handleAddRow">
         <el-icon class="mr-4"><Plus /></el-icon>
         添加
@@ -210,6 +211,8 @@ const showTemplateActions = computed(() => {
   return !!templateSingle.value
 })
 
+const hasTemplateSelected = computed(() => showTemplateActions.value)
+
 const templateLoadSeq = ref(0)
 
 function resolveListPayload(resp: any) {
@@ -240,6 +243,14 @@ async function loadTemplateOptions() {
   const resp = await fetchTemplateVariableList({ project_id: selectedModule.value })
   const list = resolveListPayload(resp)
   remoteTemplateOptions.value = (Array.isArray(list) ? list : []).map(mapTemplateOption)
+  // 回填场景：如果已有模板选中，拉完模板列表后自动加载对应变量详情
+  const selected = multiTemplateEnabled.value
+    ? (Array.isArray(templateSelectValue.value) ? templateSelectValue.value : [])
+    : [Array.isArray(templateSelectValue.value) ? templateSelectValue.value[0] : templateSelectValue.value]
+  const targetTemplateId = selected[selected.length - 1]
+  if (targetTemplateId !== '' && targetTemplateId != null) {
+    void loadTemplateVariables(targetTemplateId as any)
+  }
 }
 
 async function loadTemplateVariables(templateId: string | number) {
@@ -259,6 +270,18 @@ async function loadTemplateVariables(templateId: string | number) {
 }
 
 onMounted(() => {
+  // 无回填数据时默认空；有回填数据时保留 store 中的项目/模板并自动加载
+  const hasPrefilledSelection = Boolean(
+    (selectedModule.value !== '' && selectedModule.value != null) ||
+    (templateSingle.value !== '' && templateSingle.value != null) ||
+    (Array.isArray(templateMulti.value) && templateMulti.value.length > 0)
+  )
+  if (!hasPrefilledSelection) {
+    selectedModule.value = ''
+    templateSingle.value = ''
+    templateMulti.value = []
+    emit('update:modelValue', [])
+  }
   void loadProjectOptions()
 })
 
@@ -269,10 +292,10 @@ async function loadProjectOptions() {
     label: item?.name ?? '',
     value: item?.id ?? ''
   }))
-  if ((selectedModule.value === '' || selectedModule.value == null) && projectOptions.value.length > 0) {
-    selectedModule.value = projectOptions.value[0].value
-  } else {
+  if (!(selectedModule.value === '' || selectedModule.value == null)) {
     void loadTemplateOptions()
+  } else {
+    remoteTemplateOptions.value = []
   }
 }
 

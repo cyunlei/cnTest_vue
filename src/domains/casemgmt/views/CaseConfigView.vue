@@ -64,6 +64,26 @@ const dragOverStepId = ref('')
 const showStepExecDrawer = ref(false)
 const executingStep = ref(null)
 
+function normalizePresetVariableIds(value) {
+  return (Array.isArray(value) ? value : [])
+    .map((v) => Number(v))
+    .filter((v) => Number.isFinite(v) && v > 0)
+}
+
+function normalizePresetVariablePayload(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const template = normalizePresetVariableIds(value.template)
+  const variable = normalizePresetVariableIds(value.variable)
+  const projectId = Number(value.project_id)
+  const payload = {}
+  if (template.length) payload.template = template
+  if (variable.length) payload.variable = variable
+  if ((template.length || variable.length) && Number.isFinite(projectId) && projectId > 0) {
+    payload.project_id = projectId
+  }
+  return Object.keys(payload).length ? payload : undefined
+}
+
 // 项目下拉（module-select-trigger 使用）
 const projectOptions = ref([])
 const projectLoading = ref(false)
@@ -250,7 +270,9 @@ function buildCreateStepPayloadFromRow(step) {
     testcase_id: Number(caseId.value),
     api_input_params: raw.api_input_params ?? {},
     api_assertion: raw.api_assertion ?? {},
-    preset_variables: raw.preset_variables ?? {},
+    ...(normalizePresetVariablePayload(raw.preset_variable)
+      ? { preset_variable: normalizePresetVariablePayload(raw.preset_variable) }
+      : {}),
     pre_operations: raw.pre_operations ?? [],
     post_operations: raw.post_operations ?? [],
     max_wait_time: raw.max_wait_time ?? 30,
@@ -472,7 +494,9 @@ async function saveHttpStep(stepData) {
       sort_order: Number(stepData.sortOrder ?? stepList.value.length),
       api_input_params: stepData.apiInputParams || {},
       api_assertion: stepData.apiAssertion || {},
-      preset_variables: stepData.presetVariables || {},
+      ...(normalizePresetVariablePayload(stepData.presetVariable)
+        ? { preset_variable: normalizePresetVariablePayload(stepData.presetVariable) }
+        : {}),
       pre_operations: stepData.preOperations || [],
       post_operations: stepData.postOperations || [],
       config: {},
@@ -611,7 +635,7 @@ function transformStepDetailToFrontend(data) {
   }
 
   // 预设变量
-  result.presetVariables = data.preset_variables || {}
+  result.presetVariable = normalizePresetVariablePayload(data.preset_variable)
 
   // 前置操作
   if (data.pre_operations && Array.isArray(data.pre_operations)) {

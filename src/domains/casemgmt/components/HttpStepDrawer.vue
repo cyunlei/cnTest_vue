@@ -136,6 +136,7 @@ const assertForm = ref({
   compareRule: 'key',
   ruleFormat: 'jsonpath',
   textContent: '',
+  ignorePath: '',
   ignoreNull: '0',
   ignoreOrder: '0'
 })
@@ -155,8 +156,8 @@ const paramGroups = ref([
     id: 1,
     name: '第1组',
     checked: true,
-    params: [],
-    headers: [],
+    params: [{ key: '', value: '' }],
+    headers: [{ key: '', value: '' }],
     body: '',
     ipport: '',
     encrypt: '',
@@ -267,8 +268,8 @@ function resetForm() {
     id: 1,
     name: '第1组',
     checked: true,
-    params: [],
-    headers: [],
+    params: [{ key: '', value: '' }],
+    headers: [{ key: '', value: '' }],
     body: '',
     ipport: '',
     encrypt: '',
@@ -286,12 +287,20 @@ function resetForm() {
     compareRule: 'key',
     ruleFormat: 'jsonpath',
     textContent: '',
+    ignorePath: '',
     ignoreNull: '0',
     ignoreOrder: '0'
   }
   assertTableData.value = []
   preSteps.value = []
   postSteps.value = []
+
+  // 新建步骤：预设变量区域默认空（清空持久化选择）
+  presetVariablesStore.setSelectedModule('')
+  presetVariablesStore.setMultiTemplate(false)
+  presetVariablesStore.setTemplateSingle('')
+  presetVariablesStore.setTemplateMulti([])
+  presetVariablesStore.setRows([])
 }
 
 // 设置提取变量步骤的 ref（避免在模板中使用函数式 ref）
@@ -392,6 +401,12 @@ watch(
       assertForm.value.ruleFormat = val.assertion.ruleFormat === 0 ? 'text' : 'jsonpath'
       assertForm.value.ignoreNull = String(val.assertion.excludeEmpty ?? 0)
       assertForm.value.ignoreOrder = String(val.assertion.ignoreOrder ?? 0)
+      assertForm.value.ignorePath =
+        val.assertion.ignore_paths ??
+        val.assertion.ignorePath ??
+        val.assertion.ignore_path ??
+        val.assertion.excludePath ??
+        ''
       if (Array.isArray(val.assertion.ruleContext)) {
         assertTableData.value = val.assertion.ruleContext.map((item) => ({
           type:
@@ -415,14 +430,28 @@ watch(
       }
     }
 
-    // 回填预设变量
-    if (val.presetVariables && Object.keys(val.presetVariables).length > 0) {
-      const presetVars = Object.entries(val.presetVariables).map(([key, value]) => ({
-        name: key,
-        value: String(value)
-      }))
-      // 添加到预设变量 store
-      presetVariablesStore.setRows(presetVars)
+    // 回填预设变量：按新结构 preset_variable.project_id + preset_variable.template
+    const preset = val.presetVariable && typeof val.presetVariable === 'object'
+      ? val.presetVariable
+      : null
+    const presetProjectId = Number(preset?.project_id)
+    const templateIds = toIdArray(preset?.template)
+    if (Number.isFinite(presetProjectId) && presetProjectId > 0) {
+      presetVariablesStore.setSelectedModule(presetProjectId)
+    } else {
+      presetVariablesStore.setSelectedModule('')
+    }
+    if (templateIds.length > 1) {
+      presetVariablesStore.setMultiTemplate(true)
+      presetVariablesStore.setTemplateMulti(templateIds)
+      presetVariablesStore.setTemplateSingle('')
+    } else if (templateIds.length === 1) {
+      presetVariablesStore.setMultiTemplate(false)
+      presetVariablesStore.setTemplateSingle(templateIds[0])
+      presetVariablesStore.setTemplateMulti([])
+    } else {
+      presetVariablesStore.setTemplateSingle('')
+      presetVariablesStore.setTemplateMulti([])
     }
 
     // 回填前置操作
@@ -478,6 +507,11 @@ watch(
     }
   }
 )
+
+function handleDrawerOpen() {
+  ensureParamsEditableRow(currentGroup.value)
+  ensureHeadersEditableRow(currentGroup.value)
+}
 
 watch(
   () => [currentGroupId.value, activeInputTab.value, paramGroups.value.length],
@@ -877,6 +911,7 @@ function normalizeAssertion() {
     rule_format: ruleFormatMap[assertForm.value.ruleFormat] ?? 1,
     exclude_empty: Number(assertForm.value.ignoreNull ?? 0),
     ignore_order: Number(assertForm.value.ignoreOrder ?? 0),
+    ignore_paths: String(assertForm.value.ignorePath || ''),
     rule_text: assertForm.value.textContent || '',
     rule_context: normalizeRuleContext(Array.isArray(assertTableData.value) ? assertTableData.value : []),
     script_code: ''
@@ -928,29 +963,82 @@ function normalizeInputParams(group) {
   }
 }
 
+function toIdArray(val) {
+  return (Array.isArray(val) ? val : [])
+    .map((v) => Number(v))
+    .filter((v) => Number.isFinite(v) && v > 0)
+}
+
 function getSelectedTemplateIds() {
   const single = presetVariablesStore.templateSingle
+  const ids = []
   if (single !== '' && single != null && Number(single) > 0) {
-    return [Number(single)]
+    ids.push(Number(single))
   }
   const multi = Array.isArray(presetVariablesStore.templateMulti)
     ? presetVariablesStore.templateMulti
     : []
-  const last = multi[multi.length - 1]
-  if (last !== '' && last != null && Number(last) > 0) {
-    return [Number(last)]
-  }
-  const fromStep = Number(props.step?.assertion?.templateId)
-  if (Number.isFinite(fromStep) && fromStep > 0) {
-    return [fromStep]
-  }
-  return []
+  multi.forEach((id) => {
+    const num = Number(id)
+    if (Number.isFinite(num) && num > 0) ids.push(num)
+  })
+  return Array.from(new Set(ids))
 }
 
 function collectOperationIds(steps = []) {
   return (Array.isArray(steps) ? steps : [])
     .map((step) => Number(step?.id))
     .filter((id) => Number.isFinite(id) && id > 0)
+}
+
+function extractVariableRefsFromText(text, bucket) {
+  const source = String(text ?? '')
+  const regex = /\{\{\s*([^{}]+?)\s*\}\}/g
+  let match
+  while ((match = regex.exec(source))) {
+    const varName = String(match[1] || '').trim()
+    if (varName) bucket.add(varName)
+  }
+}
+
+function collectReferencedVariableIds(group, assertion) {
+  const names = new Set()
+  extractVariableRefsFromText(basicForm.value.url, names)
+  extractVariableRefsFromText(basicForm.value.expectedResult, names)
+  ;(group?.params || []).forEach((row) => {
+    extractVariableRefsFromText(row?.key, names)
+    extractVariableRefsFromText(row?.value, names)
+  })
+  ;(group?.headers || []).forEach((row) => {
+    extractVariableRefsFromText(row?.key, names)
+    extractVariableRefsFromText(row?.value, names)
+  })
+  extractVariableRefsFromText(group?.bodyData?.raw, names)
+  extractVariableRefsFromText(assertion?.rule_text, names)
+  ;(assertion?.rule_context || []).forEach((row) => {
+    extractVariableRefsFromText(row?.field, names)
+    extractVariableRefsFromText(row?.expected_value, names)
+    extractVariableRefsFromText(row?.extract_variable, names)
+  })
+  const rows = Array.isArray(presetVariables.value) ? presetVariables.value : []
+  const ids = rows
+    .filter((row) => names.has(String(row?.name || '').trim()))
+    .map((row) => Number(row?.id))
+    .filter((id) => Number.isFinite(id) && id > 0)
+  return Array.from(new Set(ids))
+}
+
+function buildPresetVariablePayload(group, assertion) {
+  const templateIds = getSelectedTemplateIds()
+  const variableIds = collectReferencedVariableIds(group, assertion)
+  const presetProjectId = Number(presetVariablesStore.selectedModule)
+  const payload = {}
+  if (templateIds.length) payload.template = templateIds
+  if (variableIds.length) payload.variable = variableIds
+  if ((templateIds.length || variableIds.length) && Number.isFinite(presetProjectId) && presetProjectId > 0) {
+    payload.project_id = presetProjectId
+  }
+  return Object.keys(payload).length ? payload : undefined
 }
 
 // 保存
@@ -970,9 +1058,8 @@ function handleSave(action = 'save') {
     sortOrder: Number(props.step?.sortOrder ?? props.step?.sort_order ?? 1),
     apiInputParams: normalizeInputParams(group),
     apiAssertion: normalizeAssertion(),
-    presetVariables: Object.fromEntries(
-      (presetVariables.value || []).map((item) => [item?.name, item?.value ?? '']).filter(([k]) => !!k)
-    ),
+    // 创建/更新步骤：按后端约定传 preset_variable
+    presetVariable: buildPresetVariablePayload(group, normalizeAssertion()),
     preOperations: preSteps.value || [],
     postOperations: postSteps.value || [],
     action
@@ -1277,9 +1364,6 @@ async function handleTest() {
   }
   const group = currentGroup.value || paramGroups.value[0] || {}
   const templateIds = getSelectedTemplateIds()
-  const normalizedPresetVariables = Object.fromEntries(
-    (presetVariables.value || []).map((item) => [item?.name, item?.value ?? '']).filter(([k]) => !!k)
-  )
   const preOperationIds = collectOperationIds(preSteps.value)
   const postOperationIds = collectOperationIds(postSteps.value)
   const normalizedAssertion = normalizeAssertion()
@@ -1294,7 +1378,6 @@ async function handleTest() {
     api_input_params_detail: normalizeInputParams(group),
     api_assertion_detail: normalizedAssertion,
     template_id: templateIds,
-    preset_variables: normalizedPresetVariables,
     pre_operations_id: preOperationIds,
     post_operations_id: postOperationIds,
     max_wait_time: Number(props.step?.maxWaitTime ?? props.step?.max_wait_time ?? 30)
@@ -1411,8 +1494,8 @@ function addGroup() {
     id: newId,
     name: `第${newId}组`,
     checked: false,  // 新添加的组默认不勾选
-    params: [],
-    headers: [],
+    params: [{ key: '', value: '' }],
+    headers: [{ key: '', value: '' }],
     body: '',
     ipport: '',
     encrypt: '',
@@ -1439,6 +1522,11 @@ function handleParseParams(params) {
   
   const group = currentGroup.value
   if (!group) return
+
+  // cURL 回填前，移除占位空行，避免出现“第一行空、数据从第二行开始”
+  if (Array.isArray(group.params) && group.params.length > 0) {
+    group.params = group.params.filter((row) => rowHasContent(row))
+  }
   
   // 将解析出的 params 添加到当前组的 params 数组中
   Object.entries(params).forEach(([key, value]) => {
@@ -1460,6 +1548,11 @@ function handleParseHeaders(headers) {
   
   const group = currentGroup.value
   if (!group) return
+
+  // cURL 回填前，移除占位空行，避免出现“第一行空、数据从第二行开始”
+  if (Array.isArray(group.headers) && group.headers.length > 0) {
+    group.headers = group.headers.filter((row) => rowHasContent(row))
+  }
   
   // 将解析出的 headers 添加到当前组的 headers 数组中
   Object.entries(headers).forEach(([key, value]) => {
@@ -1530,6 +1623,7 @@ function clearBinaryFile() {
     size="95%"
     :close-on-click-modal="true"
     :destroy-on-close="true"
+    @open="handleDrawerOpen"
     @close="handleClose"
     class="http-step-drawer"
   >
