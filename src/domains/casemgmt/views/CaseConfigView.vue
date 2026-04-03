@@ -518,9 +518,33 @@ async function saveHttpStep(stepData) {
     await loadStepList()
 
     if (stepData.action === 'saveAndContinue') {
-      const targetStepId = isUpdate
-        ? stepId
-        : Number(resp?.data?.data?.id || resp?.data?.data?.step_id)
+      // 更新场景：保留当前抽屉输入状态，避免“保存并继续”后被详情回拉覆盖导致看起来被清空
+      if (isUpdate) {
+        editingHttpStep.value = {
+          ...(editingHttpStep.value || {}),
+          id: stepId,
+          name: stepData.name,
+          projectId: stepData.projectId,
+          method: stepData.method,
+          url: stepData.url,
+          expectedResult: stepData.expectedResult,
+          environmentId: stepData.environmentId,
+          maxWaitTime: stepData.maxWaitTime,
+          retryCount: stepData.retryCount,
+          sleepTime: stepData.sleepTime,
+          sortOrder: stepData.sortOrder,
+          inputParams: stepData.apiInputParams || {},
+          assertion: stepData.apiAssertion || {},
+          presetVariable: stepData.presetVariable,
+          preOperations: stepData.preOperations || [],
+          postOperations: stepData.postOperations || []
+        }
+        showHttpStepDrawer.value = true
+        return
+      }
+
+      // 新建场景：需要拿后端新ID后回拉详情，继续编辑同一步骤
+      const targetStepId = Number(resp?.data?.data?.id || resp?.data?.data?.step_id)
       if (Number.isFinite(targetStepId) && targetStepId > 0) {
         const detailResp = await fetchStepDetail({ step_id: targetStepId })
         const detailCode = detailResp?.data?.code
@@ -625,8 +649,10 @@ function transformStepDetailToFrontend(data) {
       ruleFormat: assertion.rule_format ?? 1,
       excludeEmpty: assertion.exclude_empty ?? 0,
       ignoreOrder: assertion.ignore_order ?? 0,
+      ignore_paths: assertion.ignore_paths ?? '',
       ruleText: assertion.rule_text,
       ruleContext: assertion.rule_context,
+      compare_group: assertion.compare_group ?? assertion.compareGroup ?? null,
       scriptCode: assertion.script_code || '',
       scriptHash: assertion.script_hash,
       templateId: assertion.template_id

@@ -753,17 +753,17 @@ async function goToCaseConfig(id) {
           <!-- 第一排：始终显示 -->
           <div class="filter-row">
             <div class="filter-item filter-item--keyword">
-              <label>关键字:</label>
+            <label>关键字:</label>
               <input v-model="filterForm.keyword" type="text" placeholder="输入名称/编号查询" />
-            </div>
+          </div>
             <div class="filter-item filter-item--creator">
-              <label>创建人:</label>
+            <label>创建人:</label>
               <input v-model="filterForm.creator" type="text" placeholder="输入erp" />
-            </div>
+          </div>
             <div class="filter-item filter-item--api">
-              <label>接口:</label>
+            <label>接口:</label>
               <input v-model="filterForm.api" type="text" placeholder="输入接口地址/topic" />
-            </div>
+          </div>
             <div class="filter-actions">
               <button type="button" class="advanced-link-btn" @click="toggleMoreFilters">
                 {{ showMoreFilters ? '隐藏筛选' : '高级筛选' }}
@@ -859,31 +859,31 @@ async function goToCaseConfig(id) {
                 @mouseenter="onBatchOpDropdownEnter"
                 @mouseleave="onBatchOpDropdownLeave"
               >
-                <div class="dropdown-item" @click="batchDelete">
+              <div class="dropdown-item" @click="batchDelete">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                   <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
                 </svg>
                 删除
-                </div>
-                <div class="dropdown-item" @click="batchMove">
+              </div>
+              <div class="dropdown-item" @click="batchMove">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                   <path d="M10 9v6l5-3-5-3zm0 10c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zm0-16C5.58 3 2 6.58 2 11s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8z"/>
                 </svg>
                 移动
-                </div>
-                <div class="dropdown-item" @click="batchEdit">
+              </div>
+              <div class="dropdown-item" @click="batchEdit">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                   <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
                 </svg>
                 编辑
-                </div>
-                <div class="dropdown-item" @click="batchCopy">
+              </div>
+              <div class="dropdown-item" @click="batchCopy">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                   <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
                 </svg>
                 复制
-                </div>
               </div>
+            </div>
             </teleport>
           </div>
           <button class="tool-btn" @click="openCustomHeaderModal">

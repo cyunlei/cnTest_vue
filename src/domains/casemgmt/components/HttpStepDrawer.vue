@@ -2,7 +2,7 @@
 /**
  * HTTP 测试步骤抽屉 - 参考界面重构版
  */
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import { fetchProjectList } from '@/domains/project/api'
 import { Close, Plus, Delete, ArrowRight, More, ArrowDown, ArrowUp, QuestionFilled, Link, EditPen, Right, CopyDocument } from '@element-plus/icons-vue'
 import JsonAddDialog from './common/JsonAddDialog.vue'
@@ -62,12 +62,19 @@ const responseTimeMs = ref(0)
 const responseStatusCode = ref(0)
 const assertSuccessCount = ref(0)
 const assertTotalCount = ref(0)
+const executionAssertMode = ref('键值')
 const responseSummary = ref('')
 const responseSummaryDetail = ref('')
 const responseSummaryType = ref('success')
 const responseSummaryExpanded = ref(false)
 const executionResultItems = ref([])
 const executionResultExpanded = ref(false)
+
+/** 步骤详情回填后「原始」比对方式，用于切换整体/A-B/键值时不串用 rule_text */
+const loadedAssertionUiKey = ref('')
+const cachedRuleTextFromStep = ref('')
+const cachedIgnorePathFromStep = ref('')
+const suppressAssertInteractionWatch = ref(false)
 
 // 详细信息Tab
 const activeDetailTab = ref('input')
@@ -149,6 +156,15 @@ const compareGroupVisible = ref(false)
 const compareGroups = ref([
   { id: 1, name: '对比组1', enabled: true }
 ])
+const compareGroupRecordId = ref(null)
+const compareGroupConfig = ref({
+  activeTabs: [],
+  apiUrl: '',
+  ipPort: '',
+  headers: [],
+  body: '',
+  envCode: ''
+})
 
 // 多组参数
 const paramGroups = ref([
@@ -301,6 +317,18 @@ function resetForm() {
   presetVariablesStore.setTemplateSingle('')
   presetVariablesStore.setTemplateMulti([])
   presetVariablesStore.setRows([])
+  loadedAssertionUiKey.value = ''
+  cachedRuleTextFromStep.value = ''
+  cachedIgnorePathFromStep.value = ''
+  compareGroupConfig.value = {
+    activeTabs: [],
+    apiUrl: '',
+    ipPort: '',
+    headers: [],
+    body: '',
+    envCode: ''
+  }
+  compareGroupRecordId.value = null
 }
 
 // 设置提取变量步骤的 ref（避免在模板中使用函数式 ref）
@@ -317,6 +345,19 @@ function removeExtractStepRef(stepId) {
   }
 }
 
+/** 步骤详情 rule_text 回填到文本框时的展示（JSON 则格式化缩进） */
+function formatRuleTextForDisplay(raw) {
+  if (raw == null) return ''
+  const text = String(raw).trim()
+  if (!text) return ''
+  if (!(text.startsWith('{') || text.startsWith('['))) return String(raw)
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2)
+  } catch {
+    return String(raw)
+  }
+}
+
 // ========== Watch 定义（在数据定义之后）==========
 
 watch(
@@ -328,6 +369,8 @@ watch(
       return
     }
 
+    suppressAssertInteractionWatch.value = true
+    try {
     // 先确保 paramGroups 已初始化
     if (!paramGroups.value || paramGroups.value.length === 0) {
       resetForm()
@@ -388,27 +431,110 @@ watch(
       }
     }
 
-    // 回填断言配置
-    if (val.assertion) {
-      const backendCompareType = Number(val.assertion.compareType ?? 0)
+    // 回填断言配置（兼容 assertion / api_assertion_detail 多种字段）
+    const assertionPayload =
+      val.assertion ??
+      val.apiAssertion ??
+      val.api_assertion ??
+      val.apiAssertionDetail ??
+      val.api_assertion_detail
+    // 后端字段可能是 number 或 string，必须 Number() 再比，避免 "1" === 1 误判为 script
+    if (assertionPayload) {
+      const a = assertionPayload
+      const backendCompareType = Number(
+        a.compareType ?? a.compare_type ?? 0
+      )
       assertForm.value.compareType = backendCompareType === 1 ? '2' : '1'
+
+      const backendCompareRule = Number(
+        a.compareRule ?? a.compare_rule ?? 2
+      )
       assertForm.value.compareRule =
-        val.assertion.compareRule === 0
+        backendCompareRule === 0
           ? 'overall'
-          : val.assertion.compareRule === 1
+          : backendCompareRule === 1
             ? 'key'
             : 'script'
-      assertForm.value.ruleFormat = val.assertion.ruleFormat === 0 ? 'text' : 'jsonpath'
-      assertForm.value.ignoreNull = String(val.assertion.excludeEmpty ?? 0)
-      assertForm.value.ignoreOrder = String(val.assertion.ignoreOrder ?? 0)
+
+      const backendRuleFormat = Number(a.ruleFormat ?? a.rule_format ?? 1)
+      assertForm.value.ruleFormat = backendRuleFormat === 0 ? 'text' : 'jsonpath'
+
+      const compareGroupPayload = a.compareGroup ?? a.compare_group ?? {}
+      assertForm.value.ignoreNull = String(
+        Number(
+          a.excludeEmpty ??
+          a.exclude_empty ??
+          compareGroupPayload.exclude_empty ??
+          0
+        )
+      )
+      assertForm.value.ignoreOrder = String(
+        Number(
+          a.ignoreOrder ??
+          a.ignore_order ??
+          compareGroupPayload.ignore_order ??
+          0
+        )
+      )
       assertForm.value.ignorePath =
-        val.assertion.ignore_paths ??
-        val.assertion.ignorePath ??
-        val.assertion.ignore_path ??
-        val.assertion.excludePath ??
+        a.ignore_paths ??
+        a.ignorePaths ??
+        a.ignorePath ??
+        a.ignore_path ??
+        a.excludePath ??
+        compareGroupPayload.ignore_paths ??
         ''
-      if (Array.isArray(val.assertion.ruleContext)) {
-        assertTableData.value = val.assertion.ruleContext.map((item) => ({
+      const parseHeadersToRows = (raw) => {
+        if (!raw) return []
+        if (Array.isArray(raw)) return raw
+        if (typeof raw === 'object') {
+          return Object.entries(raw).map(([key, value]) => ({
+            key: String(key),
+            value: String(value ?? '')
+          }))
+        }
+        try {
+          const parsed = JSON.parse(String(raw))
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return Object.entries(parsed).map(([key, value]) => ({
+              key: String(key),
+              value: String(value ?? '')
+            }))
+          }
+        } catch {
+          return []
+        }
+        return []
+      }
+      const parsedCompareHeaders = parseHeadersToRows(compareGroupPayload?.headers)
+      const inferActiveTabs = () => {
+        const tabs = []
+        const apiUrl = String(compareGroupPayload?.api_url ?? '').trim()
+        const ipPort = String(compareGroupPayload?.ip_port ?? '').trim()
+        const body = String(compareGroupPayload?.body ?? '').trim()
+        const envCode = String(compareGroupPayload?.env_code ?? '').trim()
+        if (apiUrl) tabs.push('addr')
+        if (ipPort) tabs.push('ip')
+        if (parsedCompareHeaders.length > 0) tabs.push('headers')
+        if (body) tabs.push('body')
+        if (envCode) tabs.push('env')
+        return tabs
+      }
+      compareGroupConfig.value = {
+        activeTabs: Array.isArray(compareGroupPayload?.active_tabs)
+          ? compareGroupPayload.active_tabs
+          : inferActiveTabs(),
+        apiUrl: String(compareGroupPayload?.api_url ?? ''),
+        ipPort: String(compareGroupPayload?.ip_port ?? ''),
+        headers: parsedCompareHeaders,
+        body: String(compareGroupPayload?.body ?? ''),
+        envCode: String(compareGroupPayload?.env_code ?? '')
+      }
+      const cgId = Number(compareGroupPayload?.id)
+      compareGroupRecordId.value = Number.isFinite(cgId) && cgId > 0 ? cgId : null
+      const ruleContextSrc = a.ruleContext ?? a.rule_context
+      if (Array.isArray(ruleContextSrc)) {
+        assertTableData.value = ruleContextSrc.map((item) => ({
           type:
             Number(item?.json_path_assert_type) === 1 ? 'REGEX'
               : Number(item?.json_path_assert_type) === 2 ? 'HEADER'
@@ -424,10 +550,46 @@ watch(
         assertTableData.value = []
       }
 
+      // rule_text：按对比规则 + 规则形式回填到大文本框（与 NormalAssert 展示逻辑一致）
+      const ruleTextRaw = a.ruleText ?? a.rule_text ?? ''
+      const showAssertionTextArea =
+        assertForm.value.compareRule === 'overall' ||
+        (assertForm.value.compareRule === 'key' && assertForm.value.ruleFormat === 'text')
+      if (showAssertionTextArea && assertForm.value.compareRule !== 'script') {
+        assertForm.value.textContent = formatRuleTextForDisplay(ruleTextRaw)
+      } else {
+        assertForm.value.textContent = ''
+      }
+
       // 如果有脚本代码，可以在这里处理
-      if (val.assertion.scriptCode) {
+      if (a.scriptCode || a.script_code) {
         // TODO: 脚本断言回填
       }
+
+      loadedAssertionUiKey.value = `${assertForm.value.compareType}|${assertForm.value.compareRule}|${assertForm.value.ruleFormat}`
+      cachedRuleTextFromStep.value = String(a.ruleText ?? a.rule_text ?? '')
+      cachedIgnorePathFromStep.value = String(
+        a.ignore_paths ??
+        a.ignorePaths ??
+        a.ignorePath ??
+        a.ignore_path ??
+        a.excludePath ??
+        compareGroupPayload.ignore_paths ??
+        ''
+      )
+    } else {
+      loadedAssertionUiKey.value = ''
+      cachedRuleTextFromStep.value = ''
+      cachedIgnorePathFromStep.value = ''
+      compareGroupConfig.value = {
+        activeTabs: [],
+        apiUrl: '',
+        ipPort: '',
+        headers: [],
+        body: '',
+        envCode: ''
+      }
+      compareGroupRecordId.value = null
     }
 
     // 回填预设变量：按新结构 preset_variable.project_id + preset_variable.template
@@ -492,8 +654,49 @@ watch(
         }
       })
     }
+    } finally {
+      nextTick(() => {
+        suppressAssertInteractionWatch.value = false
+      })
+    }
   },
   { immediate: true }
+)
+
+/** 手动切换比对方式时：非当前步骤原始模式则清空 rule_text 大框，避免键值文本串到整体/A-B */
+watch(
+  [
+    () => assertForm.value.compareType,
+    () => assertForm.value.compareRule,
+    () => assertForm.value.ruleFormat
+  ],
+  ([ct, cr, rf], prevTuple) => {
+    if (suppressAssertInteractionWatch.value) return
+    if (!prevTuple) return
+    if (ct === '2') {
+      assertForm.value.textContent = ''
+    } 
+    const curKey = `${ct}|${cr}|${rf}`
+    const isLoadedMode = loadedAssertionUiKey.value && curKey === loadedAssertionUiKey.value
+    if (isLoadedMode) {
+      // 仅在回到步骤原始断言模式时恢复后端回填值，避免跨模式串值
+      assertForm.value.textContent = ct === '2'
+        ? ''
+        : formatRuleTextForDisplay(cachedRuleTextFromStep.value)
+      assertForm.value.ignorePath = String(cachedIgnorePathFromStep.value || '')
+      return
+    }
+    const usesRuleTextArea =
+      cr === 'overall' || (cr === 'key' && rf === 'text')
+    if (usesRuleTextArea && cr !== 'script') {
+      assertForm.value.textContent = ''
+    }
+    const usesIgnorePathInput =
+      ct === '2' || cr === 'overall' || (cr === 'key' && rf === 'text')
+    if (usesIgnorePathInput && cr !== 'script') {
+      assertForm.value.ignorePath = ''
+    }
+  }
 )
 
 // 每次打开抽屉都拉一次项目列表，展示 name，并持有 id 供保存时传 project_id
@@ -905,8 +1108,91 @@ function normalizeAssertion() {
       }))
       .filter((row) => row.field)
 
+  const safeStringifyObject = (val) => {
+    if (val == null) return '{}'
+    if (typeof val === 'string') return val
+    try {
+      return JSON.stringify(val)
+    } catch {
+      return '{}'
+    }
+  }
+  const normalizeHeaderRows = (rows = []) => {
+    const obj = {}
+    ;(Array.isArray(rows) ? rows : []).forEach((row) => {
+      const key = String(row?.key ?? '').trim()
+      if (!key) return
+      obj[key] = String(row?.value ?? '')
+    })
+    return obj
+  }
+
+  const buildCompareGroupPayload = () => {
+    // 仅在 A/B 模式考虑 compare_group
+    if ((compareTypeMap[assertForm.value.compareType] ?? 0) !== 1) return undefined
+    const cfg = compareGroupConfig.value || {}
+    const tabs = Array.isArray(cfg.activeTabs) ? cfg.activeTabs : []
+    const hasTab = (tab) => tabs.includes(tab)
+    const payload = {}
+
+    if (hasTab('addr')) {
+      const apiUrl = String(cfg.apiUrl ?? '').trim()
+      if (apiUrl) payload.api_url = apiUrl
+    }
+    if (hasTab('ip')) {
+      const ipPort = String(cfg.ipPort ?? '').trim()
+      if (ipPort) payload.ip_port = ipPort
+    }
+    if (hasTab('headers')) {
+      const headerObj = normalizeHeaderRows(cfg.headers)
+      if (Object.keys(headerObj).length > 0) {
+        payload.headers = safeStringifyObject(headerObj)
+      }
+    }
+    if (hasTab('body')) {
+      const body = String(cfg.body ?? '').trim()
+      if (body) payload.body = body
+    }
+    if (hasTab('env')) {
+      const envCode = String(cfg.envCode ?? '').trim()
+      if (envCode) payload.env_code = envCode
+    }
+
+    // compare_group 内断言字段保持默认回传
+    if (Object.keys(payload).length > 0) {
+      const fallbackCompareGroupId = Number(
+        props.step?.assertion?.compare_group?.id ??
+        props.step?.assertion?.compareGroup?.id ??
+        props.step?.api_assertion?.compare_group?.id ??
+        props.step?.api_assertion?.compareGroup?.id ??
+        props.step?.apiAssertion?.compare_group?.id ??
+        props.step?.apiAssertion?.compareGroup?.id ??
+        props.step?.api_assertion_detail?.compare_group?.id ??
+        props.step?.api_assertion_detail?.compareGroup?.id ??
+        props.step?.apiAssertionDetail?.compare_group?.id ??
+        props.step?.apiAssertionDetail?.compareGroup?.id ??
+        0
+      )
+      const finalCompareGroupId = Number(compareGroupRecordId.value || fallbackCompareGroupId || 0)
+      if (Number.isFinite(finalCompareGroupId) && finalCompareGroupId > 0) {
+        payload.id = finalCompareGroupId
+      }
+      payload.exclude_empty = Number(assertForm.value.ignoreNull ?? 0)
+      payload.ignore_order = Number(assertForm.value.ignoreOrder ?? 0)
+      payload.ignore_paths = String(assertForm.value.ignorePath || '')
+      return payload
+    }
+    return undefined
+  }
+
+  const compareGroup = buildCompareGroupPayload()
+  // 选了 A/B 但 compare_group 五项均未填写时，按普通断言传 compare_type=0
+  const compareType = compareGroup
+    ? (compareTypeMap[assertForm.value.compareType] ?? 0)
+    : 0
+
   return {
-    compare_type: compareTypeMap[assertForm.value.compareType] ?? 0,
+    compare_type: compareType,
     compare_rule: compareRuleMap[assertForm.value.compareRule] ?? 2,
     rule_format: ruleFormatMap[assertForm.value.ruleFormat] ?? 1,
     exclude_empty: Number(assertForm.value.ignoreNull ?? 0),
@@ -914,7 +1200,8 @@ function normalizeAssertion() {
     ignore_paths: String(assertForm.value.ignorePath || ''),
     rule_text: assertForm.value.textContent || '',
     rule_context: normalizeRuleContext(Array.isArray(assertTableData.value) ? assertTableData.value : []),
-    script_code: ''
+    script_code: '',
+    ...(compareGroup ? { compare_group: compareGroup } : {})
   }
 }
 
@@ -1320,11 +1607,97 @@ function parseMaybeJson(input) {
   }
 }
 
+function unescapeQuotedText(text) {
+  const s = String(text ?? '')
+  // 后端经常返回多层转义：\\\" 与 \\\\ 等
+  return s
+    .replace(/[“”]/g, '"')
+    .replace(/\\\\\"/g, '"')
+    .replace(/\\\"/g, '"')
+    .replace(/\\\\/g, '\\')
+}
+
+function formatLegacyExpectedString(line) {
+  const raw = unescapeQuotedText(line).trim()
+  if (!raw) return ''
+  // 兼容：路径：；规则：等于；期望："..."；实际："..."
+  const parts = raw
+    .split(/；|;/g)
+    .map((p) => String(p || '').trim())
+    .filter(Boolean)
+
+  const pick = (prefixes) => {
+    const found = parts.find((p) => prefixes.some((k) => p.startsWith(k)))
+    if (!found) return ''
+    const idx = found.indexOf('：') >= 0 ? found.indexOf('：') : found.indexOf(':')
+    const val = idx >= 0 ? found.slice(idx + 1).trim() : found
+    return unescapeQuotedText(val).replace(/^"+|"+$/g, '')
+  }
+
+  const path = pick(['路径：', '路径:'])
+  const rule = pick(['规则：', '规则:'])
+  const expected = pick(['期望：', '期望:'])
+  const actual = pick(['实际：', '实际:'])
+
+  const normalizeJsonText = (t) => {
+    const text = String(t || '').trim()
+    if (!text) return ''
+    const maybe = parseMaybeJson(text)
+    if (maybe && typeof maybe === 'object') {
+      try {
+        return JSON.stringify(maybe)
+      } catch {
+        return text
+      }
+    }
+    return text
+  }
+
+  const expectedText = normalizeJsonText(expected)
+  const actualText = normalizeJsonText(actual)
+
+  const head = `路径: ${path || ''}; 规则: ${rule || ''}`.trim()
+  if (actualText) {
+    return `${head}\n期望: ${expectedText}\n实际: ${actualText}`.trim()
+  }
+  if (expectedText) {
+    return `${head}\n期望: ${expectedText}`.trim()
+  }
+  return head
+}
+
+function toInlineText(val) {
+  if (val == null) return ''
+  if (typeof val === 'string') {
+    const parsed = parseMaybeJson(val)
+    if (parsed && typeof parsed === 'object') {
+      try {
+        return JSON.stringify(parsed)
+      } catch {
+        return String(val)
+      }
+    }
+    return val
+  }
+  if (typeof val === 'object') {
+    try {
+      return JSON.stringify(val)
+    } catch {
+      return String(val)
+    }
+  }
+  return String(val)
+}
+
 function toExpectedLine(item, idx) {
   const path = String(item?.field ?? item?.json_path ?? item?.jsonPath ?? `$.assertion_${idx + 1}`)
   const rule = normalizeRuleLabel(item?.rule ?? item?.compare_rule ?? item?.assert_rule ?? 'eq')
-  const expected = String(item?.expected ?? item?.expected_value ?? item?.expect ?? '')
-  return `路径: ${path}; 规则: ${rule}\\"${expected}\\"`
+  const expected = toInlineText(item?.expected ?? item?.expected_value ?? item?.expect ?? '')
+  const actual = toInlineText(item?.actual ?? item?.actual_value ?? item?.real ?? item?.result ?? '')
+  if (actual) {
+    return `路径: ${path}; 规则: ${rule}\n期望: ${expected}\n实际: ${actual}`
+  }
+  return `路径: ${path}; 规则: ${rule}\n期望: ${expected}`
 }
 
 function formatExpectedResult(expectResult, ruleContext) {
@@ -1334,7 +1707,12 @@ function formatExpectedResult(expectResult, ruleContext) {
       if (item && typeof item === 'object') {
         return toExpectedLine(item, idx)
       }
-      return String(item ?? '')
+      const s = String(item ?? '')
+      if (s.includes('期望') || s.includes('实际') || s.includes('路径')) {
+        const formatted = formatLegacyExpectedString(s)
+        return formatted || s
+      }
+      return s
     })
     return lines.join('\n')
   }
@@ -1349,6 +1727,13 @@ function formatExpectedResult(expectResult, ruleContext) {
     return lines.join('\n')
   }
   return typeof ruleContext === 'string' ? ruleContext : safeStringify(ruleContext ?? [])
+}
+
+function mapAssertTypeToMode(typeVal) {
+  const t = String(typeVal || '').toLowerCase().trim()
+  if (t === 'text') return '文本'
+  if (t === 'jsonpath') return '键值'
+  return '键值'
 }
 
 // 测试一下：调用执行步骤接口并回填响应区
@@ -1444,6 +1829,11 @@ async function handleTest() {
     const assertionResults = Array.isArray(data?.assertion_results) ? data.assertion_results : []
     assertTotalCount.value = assertionResults.length
     assertSuccessCount.value = assertionResults.filter(item => item?.passed === true).length
+    if (assertionResults.length > 0) {
+      executionAssertMode.value = mapAssertTypeToMode(assertionResults[0]?.type)
+    } else {
+      executionAssertMode.value = assertForm.value.ruleFormat === 'text' ? '文本' : '键值'
+    }
 
     responseSuccess.value = (code === 0 || code === 200) && String(data?.status || '') === 'success'
     responseSummaryType.value = responseSuccess.value ? 'success' : 'error'
@@ -1480,6 +1870,7 @@ async function handleTest() {
     responseSummaryDetail.value = '调用 /api/v1/testcases/step/execute 失败，请检查网络或后端日志。'
     responseSummaryExpanded.value = false
     executionResultExpanded.value = false
+    executionAssertMode.value = assertForm.value.ruleFormat === 'text' ? '文本' : '键值'
     executionResultItems.value = [
       { ok: false, text: '路径: $.execute 规则: 等于 期望: "success" 实际: "failed"' }
     ]
@@ -2212,6 +2603,7 @@ function clearBinaryFile() {
       <CompareGroupSettings
         v-model="compareGroups"
         v-model:visible="compareGroupVisible"
+        v-model:group-config="compareGroupConfig"
         :base-method="basicForm.method"
         :base-url="basicForm.url"
       />
@@ -2275,7 +2667,7 @@ function clearBinaryFile() {
         <!-- 响应元信息 -->
         <div class="response-meta" :class="responseSuccess ? 'response-meta--success' : 'response-meta--error'">
           <span class="meta-item">测试站</span>
-          <span class="meta-item meta-tag meta-tag--mode">键值</span>
+          <span class="meta-item meta-tag meta-tag--mode">{{ executionAssertMode }}</span>
           <span class="meta-item meta-tag" :class="assertRateClass">{{ assertRateText }}</span>
           <span class="meta-item" :class="responseStatusClass">状态码: {{ responseStatusCode }}</span>
           <span class="meta-item" :class="responseTimeClass">响应时间: {{ responseTimeMs }}ms</span>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
 export interface CompareGroup {
@@ -8,16 +8,27 @@ export interface CompareGroup {
   enabled: boolean
 }
 
+export type CompareGroupFormData = {
+  activeTabs: string[]
+  apiUrl: string
+  ipPort: string
+  headers: Array<{ key: string, value: string }>
+  body: string
+  envCode: string
+}
+
 const props = defineProps<{
   modelValue: CompareGroup[]
   visible: boolean
   baseMethod?: string
   baseUrl?: string
+  groupConfig?: CompareGroupFormData
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', v: CompareGroup[]): void
   (e: 'update:visible', v: boolean): void
+  (e: 'update:groupConfig', v: CompareGroupFormData): void
 }>()
 
 const innerVisible = computed({
@@ -66,6 +77,59 @@ const handleCopyUrl = async () => {
 
 const bodyText = ref('')
 const bodyCopySuccess = ref(false)
+const ipPortText = ref('')
+const envCodeText = ref('')
+
+function syncFromProps() {
+  const cfg = props.groupConfig
+  if (!cfg) return
+  activeTabs.value = Array.isArray(cfg.activeTabs) ? [...cfg.activeTabs] : []
+  localUrl.value = String(cfg.apiUrl ?? props.baseUrl ?? '')
+  ipPortText.value = String(cfg.ipPort ?? '')
+  envCodeText.value = String(cfg.envCode ?? '')
+  bodyText.value = String(cfg.body ?? '')
+  headerRows.value = Array.isArray(cfg.headers)
+    ? cfg.headers.map((row) => ({
+      key: String(row?.key ?? ''),
+      value: String(row?.value ?? '')
+    }))
+    : []
+}
+
+function buildGroupSnapshot(): CompareGroupFormData {
+  return {
+    activeTabs: [...activeTabs.value],
+    apiUrl: String(localUrl.value || ''),
+    ipPort: String(ipPortText.value || ''),
+    headers: headerRows.value.map((row) => ({
+      key: String(row?.key ?? ''),
+      value: String(row?.value ?? '')
+    })),
+    body: String(bodyText.value || ''),
+    envCode: String(envCodeText.value || '')
+  }
+}
+
+function syncToParent() {
+  emit('update:groupConfig', buildGroupSnapshot())
+}
+
+watch(
+  () => props.visible,
+  (v) => {
+    if (v) syncFromProps()
+  },
+  { immediate: true }
+)
+
+watch(
+  [activeTabs, localUrl, ipPortText, envCodeText, bodyText, headerRows],
+  () => {
+    if (!innerVisible.value) return
+    syncToParent()
+  },
+  { deep: true }
+)
 
 const handleCopyBody = async () => {
   const text = bodyText.value
@@ -108,14 +172,12 @@ const handleFormatBody = () => {
 }
 
 const handleClose = () => {
+  syncToParent()
   innerVisible.value = false
 }
 
 const handleSave = () => {
-  if (activeTabs.value.includes('addr') && !localUrl.value.trim()) {
-    ElMessage.error('请输入接口地址')
-    return
-  }
+  syncToParent()
   innerVisible.value = false
 }
 
@@ -250,11 +312,12 @@ const handleHeaderPreset = (row: HeaderRow, command: HeaderPresetCommand) => {
         <el-row :gutter="16" class="ip-env-input-row">
           <el-col v-if="activeTabs.includes('ip')" :span="14">
             <el-input
+              v-model="ipPortText"
               placeholder="请输入比对目标ip:port，如：192.168.0.1:80，只允许填一个"
             />
           </el-col>
           <el-col v-if="activeTabs.includes('env')" :span="10">
-            <el-input placeholder="请选择环境，可输入" />
+            <el-input v-model="envCodeText" placeholder="请选择环境，可输入" />
           </el-col>
         </el-row>
       </div>
