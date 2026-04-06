@@ -7,6 +7,7 @@ const props = defineProps<{
   collapsed?: boolean
   index?: number
   name?: string
+  config?: Record<string, any>
 }>()
 
 const emit = defineEmits<{
@@ -14,11 +15,12 @@ const emit = defineEmits<{
   (e: 'delete'): void
   (e: 'update:name', value: string): void
   (e: 'compare'): void
+  (e: 'update:config', config: Record<string, any>): void
 }>()
 
 const stepName = ref(props.name || '操作步骤1')
-const duccLink = ref('')
-const version = ref('')
+const duccLink = ref(props.config?.duccLink || props.config?.ducc_url || '')
+const version = ref(props.config?.version || '')
 
 const linkError = ref('')
 const versionError = ref('')
@@ -28,6 +30,22 @@ const versionInvalid = ref(false)
 const isCollapsed = ref(false)
 const isEditingName = ref(false)
 const nameInputRef = ref()
+
+// 监听 config 变化回填
+watch(() => props.config, (config) => {
+  if (config) {
+    duccLink.value = config.duccLink || config.ducc_url || ''
+    version.value = config.version || ''
+  }
+}, { deep: true })
+
+// 数据变化时 emit update:config（与接口扁平字段 ducc_url / version 对应，父层映射为 ducc_url）
+watch([duccLink, version], () => {
+  emit('update:config', {
+    duccLink: duccLink.value,
+    version: version.value
+  })
+})
 
 watch(
   () => props.collapseKey,
@@ -116,6 +134,16 @@ const handleCompare = () => {
     emit('compare')
   }
 }
+
+// 暴露配置数据供父组件收集
+defineExpose({
+  getConfig: () => ({
+    // DUCC 配置使用链接和版本，解析为 namespace/configId/itemId 格式
+    namespace: '',
+    configId: '',
+    itemId: ''
+  })
+})
 </script>
 
 <template>

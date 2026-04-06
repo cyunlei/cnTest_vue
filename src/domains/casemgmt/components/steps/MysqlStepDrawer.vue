@@ -7,22 +7,49 @@ const props = defineProps<{
   collapsed?: boolean
   index?: number
   name?: string
+  config?: Record<string, any>
 }>()
 
 const emit = defineEmits<{
   (e: 'copy'): void
   (e: 'delete'): void
   (e: 'update:name', value: string): void
+  (e: 'update:config', config: Record<string, any>): void
 }>()
 
 // 先做纯展示组件，后续再接入 v-model 数据
 const stepName = ref(props.name || '操作步骤1')
-const jdbcUrl = ref('')
-const username = ref('')
-const password = ref('')
-const resultVar = ref('')
-const sql = ref('')
-const mode = ref<'direct' | 'file'>('direct')
+const jdbcUrl = ref(props.config?.jdbcUrl || '')
+const username = ref(props.config?.username || '')
+const password = ref(props.config?.password || '')
+const resultVar = ref(props.config?.resultVariable || '')
+const sql = ref(props.config?.sql || '')
+const mode = ref<'direct' | 'file'>(props.config?.mode || 'direct')
+
+// 监听 config 变化回填
+watch(() => props.config, (config) => {
+  if (config) {
+    jdbcUrl.value = config.jdbcUrl || ''
+    username.value = config.username || ''
+    password.value = config.password || ''
+    resultVar.value = config.resultVariable || ''
+    sql.value = config.sql || ''
+    mode.value = config.mode || 'direct'
+  }
+}, { deep: true })
+
+// 数据变化时 emit update:config
+watch([jdbcUrl, username, password, resultVar, sql, mode], () => {
+  emit('update:config', {
+    jdbcUrl: jdbcUrl.value,
+    username: username.value,
+    password: password.value,
+    sql: sql.value,
+    storeResult: !!resultVar.value,
+    resultVariable: resultVar.value,
+    mode: mode.value
+  })
+})
 
 const jdbcError = ref('')
 const sqlError = ref('')
@@ -151,6 +178,18 @@ const validatePassword = () => {
   passwordError.value = ''
   passwordInvalid.value = false
 }
+
+// 暴露配置数据供父组件收集
+defineExpose({
+  getConfig: () => ({
+    jdbcUrl: jdbcUrl.value,
+    username: username.value,
+    password: password.value,
+    sql: sql.value,
+    storeResult: !!resultVar.value,
+    resultVariable: resultVar.value
+  })
+})
 </script>
 
 <template>

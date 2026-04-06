@@ -12,6 +12,7 @@ const props = defineProps<{
   name?: string
   modelValue?: string
   useTemplateMode?: boolean
+  config?: Record<string, any>
 }>()
 
 const emit = defineEmits<{
@@ -19,6 +20,7 @@ const emit = defineEmits<{
   (e: 'delete'): void
   (e: 'update:name', value: string): void
   (e: 'update:modelValue', value: string): void
+  (e: 'update:config', config: Record<string, any>): void
 }>()
 
 const stepName = ref(props.name || '操作步骤1')
@@ -27,9 +29,26 @@ const isEditingName = ref(false)
 const nameInputRef = ref()
 
 // 自定义脚本字段
-const language = ref<'beanshell' | 'python' | 'groovy' | 'javascript' | 'qlexpress'>('beanshell')
-const code = ref(props.modelValue || '')
+const language = ref<'beanshell' | 'python' | 'groovy' | 'javascript' | 'qlexpress'>(props.config?.language || 'beanshell')
+const code = ref(props.config?.scriptCode || props.modelValue || '')
 const scriptError = ref('')
+
+// 监听 config 变化回填
+watch(() => props.config, (config) => {
+  if (config) {
+    language.value = config.language || 'beanshell'
+    code.value = config.scriptCode || ''
+  }
+}, { deep: true })
+
+// 数据变化时 emit update:config
+watch([language, code], () => {
+  emit('update:config', {
+    language: language.value,
+    scriptCode: code.value,
+    timeout: 30
+  })
+})
 
 const monacoLanguage = computed(() => {
   if (language.value === 'javascript') return 'javascript'
@@ -155,6 +174,14 @@ const handleImportTemplate = async () => {
     ElMessage.error('导入脚本模板失败，请稍后重试')
   }
 }
+
+// 暴露配置数据供父组件收集
+defineExpose({
+  getConfig: () => ({
+    scriptCode: code.value,
+    timeout: 30 // 默认超时时间，后续可扩展 UI
+  })
+})
 </script>
 
 <template>

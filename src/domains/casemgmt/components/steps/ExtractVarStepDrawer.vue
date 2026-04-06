@@ -20,12 +20,14 @@ const props = defineProps<{
   collapsed?: boolean
   index?: number
   name?: string
+  config?: Record<string, any>
 }>()
 
 const emit = defineEmits<{
   (e: 'copy'): void
   (e: 'delete'): void
   (e: 'update:name', value: string): void
+  (e: 'update:config', config: Record<string, any>): void
   (e: 'quick-add-jsonpath'): void
 }>()
 
@@ -35,6 +37,46 @@ const isEditingName = ref(false)
 const nameInputRef = ref()
 
 const rows = ref<ExtractRow[]>([])
+
+// 监听 config prop 变化，处理 _pendingJsonPaths
+watch(
+  () => props.config,
+  (config) => {
+    if (config?._pendingJsonPaths && Array.isArray(config._pendingJsonPaths)) {
+      // 添加新的 JSONPath 行
+      config._pendingJsonPaths.forEach((path: string) => {
+        const existing = rows.value.find(r => r.path === path)
+        if (!existing) {
+          rows.value.push({
+            id: Date.now() + Math.random(),
+            path: path,
+            name: path.replace(/\$/g, '').replace(/\./g, '_').replace(/\[|\]/g, ''),
+            remark: '',
+            editing: false
+          })
+        }
+      })
+      // 清除 _pendingJsonPaths
+      emit('update:config', { ...config, _pendingJsonPaths: undefined })
+    }
+  },
+  { deep: true }
+)
+
+// 监听 rows 变化，emit config 更新
+watch(
+  rows,
+  (newRows) => {
+    const firstRow = newRows.find(r => r.path && r.name) || newRows[0]
+    emit('update:config', {
+      jsonPath: firstRow?.path || '',
+      variableName: firstRow?.name || '',
+      description: firstRow?.remark || '',
+      _rows: newRows
+    })
+  },
+  { deep: true }
+)
 
 watch(
   () => props.collapseKey,
@@ -180,6 +222,15 @@ const addRowsFromJsonpaths = (paths: string[]) => {
 
 defineExpose({
   addRowsFromJsonpaths,
+  getConfig: () => {
+    // 取第一个有效行作为提取配置
+    const firstRow = rows.value.find(r => r.path && r.name) || rows.value[0]
+    return {
+      jsonPath: firstRow?.path || '',
+      variableName: firstRow?.name || '',
+      description: firstRow?.remark || ''
+    }
+  }
 })
 </script>
 

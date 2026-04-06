@@ -7,12 +7,14 @@ const props = defineProps<{
   collapsed?: boolean
   index?: number
   name?: string
+  config?: Record<string, any>
 }>()
 
 const emit = defineEmits<{
   (e: 'copy'): void
   (e: 'delete'): void
   (e: 'update:name', value: string): void
+  (e: 'update:config', config: Record<string, any>): void
 }>()
 
 const stepName = ref(props.name || '操作步骤1')
@@ -20,11 +22,6 @@ const isCollapsed = ref(false)
 const isEditingName = ref(false)
 const nameInputRef = ref()
 
-// Redis 表单相关
-const redisUrl = ref('')
-const accessMode = ref<'key' | 'batch'>('key') // 按 key 添加 / 批量添加
-// 访问方式：读操作 / 写操作，全部使用小写
-const requestMethod = ref('get')
 const readMethods = [
   'get',
   'hget',
@@ -58,8 +55,23 @@ const writeMethods = [
   'rpushx',
   'flushdb'
 ]
-const singleKey = ref('')
-const batchKeys = ref('')
+
+// 解析批量 key（按行分割）
+const parseBatchKeys = (val: string): string[] => {
+  if (!val) return []
+  return val.split(/\n/)
+    .map(k => k.trim())
+    .filter(k => k.length > 0)
+}
+
+// Redis 表单相关
+const redisUrl = ref(props.config?.redisUrl || '')
+const accessMode = ref<'key' | 'batch'>(props.config?.accessMode || 'key')
+// 访问方式：读操作 / 写操作，全部使用小写
+const requestMethod = ref(props.config?.requestMethod || 'get')
+const singleKey = ref(props.config?.singleKey || '')
+const singleValue = ref(props.config?.singleValue || '')
+const batchKeys = ref(props.config?.batchKeys || '')
 
 const redisUrlError = ref('')
 const redisUrlInvalid = ref(false)
@@ -141,6 +153,49 @@ const validateKey = () => {
   keyError.value = ''
   keyInvalid.value = false
 }
+
+// 监听 config 变化回填
+watch(() => props.config, (config) => {
+  if (config) {
+    redisUrl.value = config.redisUrl || ''
+    accessMode.value = config.accessMode || 'key'
+    requestMethod.value = config.requestMethod || 'get'
+    singleKey.value = config.singleKey || ''
+    singleValue.value = config.singleValue || ''
+    batchKeys.value = config.batchKeys || ''
+  }
+}, { deep: true, immediate: true })
+
+// 数据变化时 emit update:config
+watch([redisUrl, accessMode, requestMethod, singleKey, singleValue, batchKeys], () => {
+  const keyOperations = accessMode.value === 'key'
+    ? [{ access_type: requestMethod.value, key: singleKey.value, value: singleValue.value }]
+    : parseBatchKeys(batchKeys.value).map(k => ({ access_type: requestMethod.value, key: k, value: '' }))
+  emit('update:config', {
+    redisUrl: redisUrl.value,
+    readMode: writeMethods.includes(requestMethod.value) ? 1 : 0,
+    keyOperations,
+    accessMode: accessMode.value,
+    requestMethod: requestMethod.value,
+    singleKey: singleKey.value,
+    singleValue: singleValue.value,
+    batchKeys: batchKeys.value
+  })
+}, { immediate: true })
+
+// 暴露配置数据供父组件收集
+defineExpose({
+  getConfig: () => {
+    const keyOperations = accessMode.value === 'key'
+      ? [{ access_type: requestMethod.value, key: singleKey.value, value: singleValue.value }]
+      : parseBatchKeys(batchKeys.value).map(k => ({ access_type: requestMethod.value, key: k, value: '' }))
+    return {
+      redisUrl: redisUrl.value,
+      readMode: writeMethods.includes(requestMethod.value) ? 1 : 0,
+      keyOperations
+    }
+  }
+})
 </script>
 
 <template>

@@ -67,6 +67,11 @@ const responseSummary = ref('')
 const responseSummaryDetail = ref('')
 const responseSummaryType = ref('success')
 const responseSummaryExpanded = ref(false)
+/** 执行接口返回的 execution_summary，用于标题旁 hover 展示 */
+const executionSummaryText = ref('')
+/** 执行接口 data.pre_operations_log / post_operations_log，前置、后置工具栏 hover */
+const preOperationsLogText = ref('')
+const postOperationsLogText = ref('')
 const executionResultItems = ref([])
 const executionResultExpanded = ref(false)
 
@@ -208,13 +213,14 @@ const preAllCollapsed = ref(false)
 const postCollapseKey = ref(0)
 const postAllCollapsed = ref(false)
 
+// 步骤配置存储（key: 步骤id, value: 配置数据）
+const preStepConfigs = ref(new Map())
+const postStepConfigs = ref(new Map())
+
 // 历史版本对比弹窗（DUCC 使用）
 const duccDiffVisible = ref(false)
 const dummyLeft = ref('v20260302204818')
 const dummyRight = ref('v20260302204843')
-
-// 提取变量步骤的 ref 管理（避免使用函数式 ref）
-const extractStepRefs = ref(new Map())
 
 // 计算当前组
 const currentGroup = computed(() => {
@@ -265,6 +271,16 @@ const ASSERT_TYPE_TO_BACKEND = {
   STATUS: 3
 }
 
+// 前置/后置操作类型映射（前端 type -> 后端 operation_type）
+const OPERATION_TYPE_MAP = {
+  mysql: 0,    // MySQL
+  ducc: 1,     // DUCC
+  redis: 2,    // Redis
+  script: 3,   // 自定义脚本
+  delay: 4,    // 延迟时间
+  extract: 5   // 提取变量
+}
+
 // 重置表单
 function resetForm() {
   basicForm.value = {
@@ -310,6 +326,8 @@ function resetForm() {
   assertTableData.value = []
   preSteps.value = []
   postSteps.value = []
+  preStepConfigs.value.clear()
+  postStepConfigs.value.clear()
 
   // 新建步骤：预设变量区域默认空（清空持久化选择）
   presetVariablesStore.setSelectedModule('')
@@ -331,18 +349,24 @@ function resetForm() {
   compareGroupRecordId.value = null
 }
 
-// 设置提取变量步骤的 ref（避免在模板中使用函数式 ref）
-function setExtractStepRef(el, stepId) {
-  if (el && stepId) {
-    extractStepRefs.value.set(stepId, el)
-  }
+// 处理前置步骤配置更新
+function handlePreStepConfigUpdate(stepId, config) {
+  const prev = preStepConfigs.value.get(stepId) || {}
+  preStepConfigs.value.set(stepId, {
+    ...prev,
+    ...config,
+    _originalId: prev._originalId ?? config._originalId
+  })
 }
 
-// 移除提取变量步骤的 ref
-function removeExtractStepRef(stepId) {
-  if (stepId) {
-    extractStepRefs.value.delete(stepId)
-  }
+// 处理后置步骤配置更新
+function handlePostStepConfigUpdate(stepId, config) {
+  const prev = postStepConfigs.value.get(stepId) || {}
+  postStepConfigs.value.set(stepId, {
+    ...prev,
+    ...config,
+    _originalId: prev._originalId ?? config._originalId
+  })
 }
 
 /** 步骤详情 rule_text 回填到文本框时的展示（JSON 则格式化缩进） */
@@ -616,28 +640,40 @@ watch(
       presetVariablesStore.setTemplateMulti([])
     }
 
-    // 回填前置操作
+    // 回填前置操作（兼容 camelCase / snake_case）
     if (val.preOperations && Array.isArray(val.preOperations)) {
-      preSteps.value = val.preOperations.map(op => {
+      preStepConfigs.value.clear()
+      preSteps.value = val.preOperations.map((op, index) => {
         const typeMap = {
           0: 'mysql',
           2: 'redis',
-          1: 'ducc', // DUCC 类型
+          1: 'ducc',
           3: 'script',
           4: 'delay'
         }
+        const opType = op.operation_type ?? op.operationType
+        const type = typeMap[opType] || 'mysql'
+        const backendOpId = op.operation_id ?? op.id
+        const stepId = backendOpId ?? Date.now() + index
+
+        const config = convertBackendConfigToFrontend(type, op, backendOpId)
+        preStepConfigs.value.set(stepId, config)
+
         return {
-          id: op.id || Date.now() + Math.random(),
-          type: typeMap[op.operationType] || 'mysql',
-          name: op.name || '前置操作',
-          config: op.mysqlConfig || op.redisConfig || op.duccConfig || op.scriptConfig || op.delayConfig
+          id: stepId,
+          type: type,
+          name: op.name || '前置操作'
         }
       })
+    } else {
+      preSteps.value = []
+      preStepConfigs.value.clear()
     }
 
-    // 回填后置操作
+    // 回填后置操作（兼容 camelCase / snake_case）
     if (val.postOperations && Array.isArray(val.postOperations)) {
-      postSteps.value = val.postOperations.map(op => {
+      postStepConfigs.value.clear()
+      postSteps.value = val.postOperations.map((op, index) => {
         const typeMap = {
           0: 'mysql',
           2: 'redis',
@@ -646,13 +682,23 @@ watch(
           4: 'delay',
           5: 'extract'
         }
+        const opType = op.operation_type ?? op.operationType
+        const type = typeMap[opType] || 'extract'
+        const backendOpId = op.operation_id ?? op.id
+        const stepId = backendOpId ?? Date.now() + index + 1000
+
+        const config = convertBackendConfigToFrontend(type, op, backendOpId)
+        postStepConfigs.value.set(stepId, config)
+
         return {
-          id: op.id || Date.now() + Math.random(),
-          type: typeMap[op.operationType] || 'extract',
-          name: op.name || '后置操作',
-          config: op.extractConfig || op.mysqlConfig || op.redisConfig || op.duccConfig || op.scriptConfig || op.delayConfig
+          id: stepId,
+          type: type,
+          name: op.name || '后置操作'
         }
       })
+    } else {
+      postSteps.value = []
+      postStepConfigs.value.clear()
     }
     } finally {
       nextTick(() => {
@@ -753,20 +799,63 @@ function handleTemplateSave(payload) {
 // 前置/后置操作添加下拉：根据 command 新增步骤
 function handlePreActionCommand(command) {
   const index = preSteps.value.length + 1
+  const stepId = Date.now()
   preSteps.value.push({
-    id: Date.now(),
+    id: stepId,
     type: command,
     name: `操作步骤${index}`
   })
+  // 初始化步骤配置
+  preStepConfigs.value.set(stepId, createDefaultStepConfig(command))
 }
 
 function handlePostActionCommand(command) {
   const index = postSteps.value.length + 1
+  const stepId = Date.now()
   postSteps.value.push({
-    id: Date.now(),
+    id: stepId,
     type: command,
     name: `操作步骤${index}`
   })
+  // 初始化步骤配置
+  postStepConfigs.value.set(stepId, createDefaultStepConfig(command))
+}
+
+// 创建默认步骤配置
+function createDefaultStepConfig(command) {
+  const configs = {
+    mysql: {
+      jdbcUrl: '',
+      username: '',
+      password: '',
+      sql: '',
+      storeResult: false,
+      resultVariable: ''
+    },
+    redis: {
+      redisUrl: 'redis://localhost:6379/0',
+      readMode: 0,
+      keyOperations: []
+    },
+    ducc: {
+      duccLink: '',
+      version: ''
+    },
+    script: {
+      scriptCode: '',
+      timeout: 30
+    },
+    delay: {
+      delaySeconds: 1
+    },
+    extract: {
+      extractType: 'jsonPath',
+      jsonPath: '',
+      variableName: '',
+      description: ''
+    }
+  }
+  return configs[command] || {}
 }
 
 // 提取变量步骤里的“快捷添加 JSONPATH”
@@ -791,6 +880,7 @@ function handlePreStepDelete(id) {
   const idx = preSteps.value.findIndex((s) => s && s.id === id)
   if (idx !== -1) {
     preSteps.value.splice(idx, 1)
+    preStepConfigs.value.delete(id)
   }
 }
 
@@ -798,11 +888,17 @@ function handlePreStepCopy(id) {
   const idx = preSteps.value.findIndex((s) => s && s.id === id)
   if (idx !== -1) {
     const step = preSteps.value[idx]
+    const newId = Date.now()
+    const oldConfig = preStepConfigs.value.get(id) || {}
+    // 复制配置时清除 _originalId，因为复制出的步骤是新步骤
+    const newConfig = JSON.parse(JSON.stringify(oldConfig))
+    delete newConfig._originalId
     preSteps.value.splice(idx + 1, 0, {
       ...step,
-      id: Date.now(),
+      id: newId,
       name: (step && step.name ? step.name : `操作步骤${idx + 1}`) + '-copy'
     })
+    preStepConfigs.value.set(newId, newConfig)
   }
 }
 
@@ -810,6 +906,7 @@ function handlePostStepDelete(id) {
   const idx = postSteps.value.findIndex((s) => s && s.id === id)
   if (idx !== -1) {
     postSteps.value.splice(idx, 1)
+    postStepConfigs.value.delete(id)
   }
 }
 
@@ -817,11 +914,95 @@ function handlePostStepCopy(id) {
   const idx = postSteps.value.findIndex((s) => s && s.id === id)
   if (idx !== -1) {
     const step = postSteps.value[idx]
+    const newId = Date.now()
+    const oldConfig = postStepConfigs.value.get(id) || {}
+    // 复制配置时清除 _originalId，因为复制出的步骤是新步骤
+    const newConfig = JSON.parse(JSON.stringify(oldConfig))
+    delete newConfig._originalId
     postSteps.value.splice(idx + 1, 0, {
       ...step,
-      id: Date.now(),
+      id: newId,
       name: (step && step.name ? step.name : `操作步骤${idx + 1}`) + '-copy'
     })
+    postStepConfigs.value.set(newId, newConfig)
+  }
+}
+
+// 将后端配置转换为前端配置格式
+// originalId 是后端返回的操作步骤 id，需要保存以便更新时传回
+// 支持嵌套对象（mysql_config）和平铺字段（jdbc_url）两种格式
+function convertBackendConfigToFrontend(type, op, originalId) {
+  switch (type) {
+    case 'mysql':
+      return {
+        _originalId: originalId,
+        // 优先读取平铺字段，如果不存在则读取嵌套对象
+        jdbcUrl: op.jdbc_url || op.mysqlConfig?.jdbcUrl || op.mysql_config?.jdbc_url || '',
+        username: op.username || op.mysqlConfig?.username || op.mysql_config?.username || '',
+        password: op.password || op.mysqlConfig?.password || op.mysql_config?.password || '',
+        sql: op.sql || op.mysqlConfig?.sql || op.mysql_config?.sql || '',
+        storeResult: op.store_result || op.storeResult || op.mysqlConfig?.storeResult || op.mysql_config?.store_result || false,
+        resultVariable: op.result_variable || op.resultVariable || op.mysqlConfig?.resultVariable || op.mysql_config?.result_variable || ''
+      }
+    case 'redis': {
+      const arr = Array.isArray(op.key_operations)
+        ? op.key_operations
+        : Array.isArray(op.keyOperations)
+          ? op.keyOperations
+          : op.redis_config?.key_operations || op.redisConfig?.keyOperations || []
+      const first = arr[0]
+      const requestMethod = String(first?.access_type || 'get').toLowerCase()
+      let accessMode = 'key'
+      let singleKey = ''
+      let singleValue = ''
+      let batchKeys = ''
+      if (arr.length <= 1) {
+        accessMode = 'key'
+        singleKey = first?.key || ''
+        singleValue = first?.value ?? ''
+      } else {
+        accessMode = 'batch'
+        batchKeys = arr.map((o) => o?.key).filter(Boolean).join('\n')
+      }
+      return {
+        _originalId: originalId,
+        redisUrl: op.redis_url || op.redisConfig?.redisUrl || op.redis_config?.redis_url || 'redis://localhost:6379/0',
+        readMode: op.read_mode ?? op.readMode ?? op.redisConfig?.readMode ?? op.redis_config?.read_mode ?? 0,
+        keyOperations: arr,
+        accessMode,
+        requestMethod,
+        singleKey,
+        singleValue,
+        batchKeys
+      }
+    }
+    case 'script':
+      return {
+        _originalId: originalId,
+        scriptCode: op.script_code || op.scriptCode || op.scriptConfig?.scriptCode || op.script_config?.script_code || '',
+        timeout: op.timeout || op.scriptConfig?.timeout || op.script_config?.timeout || 30
+      }
+    case 'delay':
+      return {
+        _originalId: originalId,
+        delaySeconds: op.delay_seconds || op.delaySeconds || op.delayConfig?.delaySeconds || op.delay_config?.delay_seconds || 1
+      }
+    case 'extract':
+      return {
+        _originalId: originalId,
+        extractType: 'jsonPath',
+        jsonPath: op.json_path || op.jsonPath || op.extractConfig?.jsonPath || op.extract_config?.json_path || '',
+        variableName: op.variable_name || op.variableName || op.extractConfig?.variableName || op.extract_config?.variable_name || '',
+        description: op.description || op.extractConfig?.description || op.extract_config?.description || ''
+      }
+    case 'ducc':
+      return {
+        _originalId: originalId,
+        duccLink: op.ducc_url || op.duccLink || op.duccConfig?.duccUrl || op.ducc_config?.ducc_url || '',
+        version: op.version || op.duccConfig?.version || op.ducc_config?.version || ''
+      }
+    default:
+      return { _originalId: originalId }
   }
 }
 
@@ -858,12 +1039,15 @@ function openJsonDialog(type = 'params') {
 // 处理 JSON / JSONPATH 保存
 function handleJsonSave(selectedItems) {
   if (jsonDialogType.value === 'jsonpath') {
-    // 将选中的 JSONPath 填充到当前提取变量步骤中
+    // 将选中的 JSONPath 填充到当前提取变量步骤 config 中
     const stepId = currentExtractStepId.value
-    const comp = stepId && extractStepRefs.value.get(stepId)
-    if (comp && typeof comp.addRowsFromJsonpaths === 'function') {
+    if (stepId) {
       const paths = (selectedItems || []).map((item) => item.key)
-      comp.addRowsFromJsonpaths(paths)
+      const currentConfig = postStepConfigs.value.get(stepId) || {}
+      postStepConfigs.value.set(stepId, {
+        ...currentConfig,
+        _pendingJsonPaths: paths
+      })
     }
     jsonDialogVisible.value = false
     return
@@ -1072,9 +1256,10 @@ function handleClose() {
   emit('close')
 }
 
-// 组件卸载时清理 refs
+// 组件卸载时清理
 onUnmounted(() => {
-  extractStepRefs.value.clear()
+  preStepConfigs.value.clear()
+  postStepConfigs.value.clear()
 })
 
 function normalizePairsToObject(rows = []) {
@@ -1272,12 +1457,6 @@ function getSelectedTemplateIds() {
   return Array.from(new Set(ids))
 }
 
-function collectOperationIds(steps = []) {
-  return (Array.isArray(steps) ? steps : [])
-    .map((step) => Number(step?.id))
-    .filter((id) => Number.isFinite(id) && id > 0)
-}
-
 function extractVariableRefsFromText(text, bucket) {
   const source = String(text ?? '')
   const regex = /\{\{\s*([^{}]+?)\s*\}\}/g
@@ -1331,6 +1510,11 @@ function buildPresetVariablePayload(group, assertion) {
 // 保存
 function handleSave(action = 'save') {
   const group = currentGroup.value || paramGroups.value[0] || {}
+
+  // 收集前置和后置操作配置（直接从 configs Map 读取）
+  const preOperations = buildPrePostPayload(preSteps, preStepConfigs)
+  const postOperations = buildPrePostPayload(postSteps, postStepConfigs)
+
   const payload = {
     id: props.step?.id || null,
     name: basicForm.value.name,
@@ -1347,11 +1531,96 @@ function handleSave(action = 'save') {
     apiAssertion: normalizeAssertion(),
     // 创建/更新步骤：按后端约定传 preset_variable
     presetVariable: buildPresetVariablePayload(group, normalizeAssertion()),
-    preOperations: preSteps.value || [],
-    postOperations: postSteps.value || [],
+    preOperations,
+    postOperations,
     action
   }
   emit('save', payload)
+}
+
+/** Redis key_operations 单条：与后端约定字段同级且含可选 null 字段 */
+function normalizeRedisKeyOperationForApi(ko) {
+  const o = ko || {}
+  return {
+    access_type: o.access_type ?? o.accessType ?? 'get',
+    key: o.key ?? '',
+    value: o.value ?? '',
+    field: o.field ?? null,
+    start: o.start ?? null,
+    stop: o.stop ?? null,
+    count: o.count ?? null,
+    store_result: !!(o.store_result ?? o.storeResult),
+    result_variable: o.result_variable ?? o.resultVariable ?? ''
+  }
+}
+
+// 将前端步骤数据转换为后端唯一格式：所有类型字段与 operation_type 同层
+// omitOperationId：直接执行 /api/v1/testcases/step/execute 时 step_data 不传 operation_id
+function buildPrePostPayload(stepsRef, configsRef, omitOperationId = false) {
+  const steps = stepsRef.value || []
+  const configs = configsRef.value || new Map()
+
+  return steps.map((step, index) => {
+    const config = configs.get(step.id) || {}
+
+    const base = {
+      ...(!omitOperationId &&
+      config._originalId != null &&
+      config._originalId !== ''
+        ? { operation_id: config._originalId }
+        : {}),
+      operation_type: OPERATION_TYPE_MAP[step.type],
+      name: step.name,
+      sort_order: index,
+      is_active: true
+    }
+
+    switch (step.type) {
+      case 'mysql':
+        return {
+          ...base,
+          jdbc_url: config.jdbcUrl || '',
+          username: config.username || '',
+          password: config.password || '',
+          sql: config.sql || '',
+          store_result: !!config.storeResult,
+          result_variable: config.resultVariable || ''
+        }
+      case 'redis':
+        return {
+          ...base,
+          redis_url: config.redisUrl || 'redis://localhost:6379/0',
+          read_mode: config.readMode ?? 0,
+          key_operations: (config.keyOperations || []).map(normalizeRedisKeyOperationForApi)
+        }
+      case 'script':
+        return {
+          ...base,
+          script_code: config.scriptCode || '',
+          timeout: config.timeout ?? 30
+        }
+      case 'delay':
+        return {
+          ...base,
+          delay_seconds: config.delaySeconds ?? 1
+        }
+      case 'extract':
+        return {
+          ...base,
+          json_path: config.jsonPath || '',
+          variable_name: config.variableName || '',
+          description: config.description || ''
+        }
+      case 'ducc':
+        return {
+          ...base,
+          ducc_url: config.duccUrl || config.duccLink || '',
+          version: config.version || ''
+        }
+      default:
+        return base
+    }
+  })
 }
 
 // 切换基础信息展开/收起
@@ -1504,9 +1773,29 @@ function buildAssertionExecutionItems(assertionResults, responseBody) {
   }).filter(Boolean)
 }
 
+function splitExtractedNameValuePair(entry, idx) {
+  const s = String(entry ?? '')
+  const eq = s.indexOf('=')
+  if (eq < 0) {
+    return { name: `var_${idx + 1}`, value: s }
+  }
+  return {
+    name: s.slice(0, eq).trim() || `var_${idx + 1}`,
+    value: s.slice(eq + 1).trim()
+  }
+}
+
 function buildExtractedVariableItems(extractedVariables) {
   if (!extractedVariables) return []
   if (typeof extractedVariables === 'string') {
+    const raw = String(extractedVariables).trim()
+    // 优先 JSON 解析：["{{a}}=1", "{{b}}=[x,y]"] 值内逗号不能按 split(',') 拆
+    if (raw.startsWith('[') || raw.startsWith('{')) {
+      const parsed = parseMaybeJson(raw)
+      if (parsed && parsed !== extractedVariables) {
+        return buildExtractedVariableItems(parsed)
+      }
+    }
     const parsedList = parseExtractedVariablesString(extractedVariables)
     if (parsedList.length > 0) {
       return parsedList.map((item) => ({
@@ -1522,6 +1811,13 @@ function buildExtractedVariableItems(extractedVariables) {
   }
   if (Array.isArray(extractedVariables)) {
     return extractedVariables.map((item, idx) => {
+      if (typeof item === 'string') {
+        const { name, value } = splitExtractedNameValuePair(item, idx)
+        return {
+          ok: true,
+          text: `提取变量: ${name} 值: ${safeStringify(value)}`
+        }
+      }
       const varName = String(item?.variable_name ?? item?.name ?? `var_${idx + 1}`)
       const value = item?.value ?? item?.var_value ?? item?.result ?? ''
       return {
@@ -1542,7 +1838,18 @@ function buildExtractedVariableItems(extractedVariables) {
 function parseExtractedVariablesString(text) {
   const raw = String(text || '').trim()
   if (!raw) return []
-  // 兼容: "[{{date}}=2026-03-30 22:06:09,{{uid}}=1001]"
+  // 合法 JSON 数组时不要用逗号切分（值内可含逗号，如列表/字典字面量）
+  if (raw.startsWith('[')) {
+    try {
+      const arr = JSON.parse(raw)
+      if (Array.isArray(arr)) {
+        return arr.map((entry, idx) => splitExtractedNameValuePair(entry, idx))
+      }
+    } catch {
+      // 走下方旧格式
+    }
+  }
+  // 兼容: "[{{date}}=2026-03-30 22:06:09,{{uid}}=1001]"（非标准 JSON，只能按逗号拆，值内勿含逗号）
   // 也兼容: "{{date}}=2026-03-30 22:06:09"
   let body = raw
   if (body.startsWith('[') && body.endsWith(']')) {
@@ -1729,6 +2036,58 @@ function formatExpectedResult(expectResult, ruleContext) {
   return typeof ruleContext === 'string' ? ruleContext : safeStringify(ruleContext ?? [])
 }
 
+/**
+ * 将 execution_summary / pre_operations_log / post_operations_log 格式化为多行文本。
+ * 支持：JSON 字符串数组 "[\"行1\",\"行2\"]"、已是数组、普通字符串、对象。
+ */
+function formatExecuteLogListForDisplay(val) {
+  if (val == null || val === '') return ''
+
+  const joinArrayLines = (arr) => {
+    if (!Array.isArray(arr)) return ''
+    return arr
+      .map((item) => {
+        if (item == null) return ''
+        if (typeof item === 'string') return item
+        if (typeof item === 'object') return JSON.stringify(item)
+        return String(item)
+      })
+      .filter((line) => line !== '')
+      .join('\n')
+  }
+
+  if (Array.isArray(val)) {
+    return joinArrayLines(val)
+  }
+
+  if (typeof val === 'object') {
+    return JSON.stringify(val, null, 2)
+  }
+
+  if (typeof val === 'string') {
+    const trimmed = val.trim()
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmed)
+        if (Array.isArray(parsed)) {
+          return joinArrayLines(parsed)
+        }
+        if (parsed && typeof parsed === 'object') {
+          return JSON.stringify(parsed, null, 2)
+        }
+        if (typeof parsed === 'string') {
+          return parsed
+        }
+      } catch {
+        /* 非合法 JSON，按原文展示 */
+      }
+    }
+    return val
+  }
+
+  return String(val)
+}
+
 function mapAssertTypeToMode(typeVal) {
   const t = String(typeVal || '').toLowerCase().trim()
   if (t === 'text') return '文本'
@@ -1749,9 +2108,10 @@ async function handleTest() {
   }
   const group = currentGroup.value || paramGroups.value[0] || {}
   const templateIds = getSelectedTemplateIds()
-  const preOperationIds = collectOperationIds(preSteps.value)
-  const postOperationIds = collectOperationIds(postSteps.value)
   const normalizedAssertion = normalizeAssertion()
+  // 与保存步骤一致：传完整前置/后置配置（扁平 operation 对象数组），供后端执行
+  const preOperationsExecute = buildPrePostPayload(preSteps, preStepConfigs, true)
+  const postOperationsExecute = buildPrePostPayload(postSteps, postStepConfigs, true)
 
   // 未保存场景：按 step_data 执行
   const stepDataPayload = {
@@ -1763,8 +2123,8 @@ async function handleTest() {
     api_input_params_detail: normalizeInputParams(group),
     api_assertion_detail: normalizedAssertion,
     template_id: templateIds,
-    pre_operations_id: preOperationIds,
-    post_operations_id: postOperationIds,
+    pre_operations: preOperationsExecute,
+    post_operations: postOperationsExecute,
     max_wait_time: Number(props.step?.maxWaitTime ?? props.step?.max_wait_time ?? 30)
   }
 
@@ -1772,9 +2132,15 @@ async function handleTest() {
 
   try {
     const resp = await executeStep(executePayload)
-    const code = resp?.data?.code
-    const msg = resp?.data?.msg || ''
-    const data = resp?.data?.data || {}
+    const respData = resp?.data ?? {}
+    const code = respData?.code
+    const msg = respData?.msg || ''
+    // /api/v1/testcases/step/execute：业务字段在 resp.data.data（即 data.execution_summary）；兼容异常结构
+    const inner = respData?.data
+    const data =
+      inner != null && typeof inner === 'object' && !Array.isArray(inner) ? inner : {}
+    const executionSummaryRaw =
+      data?.execution_summary ?? respData?.execution_summary
 
     // 按后端执行接口返回结构精确回填
     const body = data?.response_body ?? {}
@@ -1839,11 +2205,20 @@ async function handleTest() {
     responseSummaryType.value = responseSuccess.value ? 'success' : 'error'
     responseSummary.value = msg || (responseSuccess.value ? '步骤执行成功' : '步骤执行失败')
     responseSummaryDetail.value =
-      data?.execution_summary ||
-      [data?.pre_operations_log, data?.post_operations_log, data?.error_message]
+      (executionSummaryRaw != null && executionSummaryRaw !== ''
+        ? formatExecuteLogListForDisplay(executionSummaryRaw)
+        : '') ||
+      [
+        formatExecuteLogListForDisplay(data?.pre_operations_log),
+        formatExecuteLogListForDisplay(data?.post_operations_log),
+        data?.error_message
+      ]
         .filter(Boolean)
         .join('\n\n') ||
       JSON.stringify(data || {}, null, 2)
+    executionSummaryText.value = formatExecuteLogListForDisplay(executionSummaryRaw)
+    preOperationsLogText.value = formatExecuteLogListForDisplay(data?.pre_operations_log)
+    postOperationsLogText.value = formatExecuteLogListForDisplay(data?.post_operations_log)
     responseSummaryExpanded.value = false
     executionResultExpanded.value = false
     const bodyObject = data?.response_body && typeof data.response_body === 'object'
@@ -1868,6 +2243,9 @@ async function handleTest() {
     responseSummaryType.value = 'error'
     responseSummary.value = '执行步骤失败'
     responseSummaryDetail.value = '调用 /api/v1/testcases/step/execute 失败，请检查网络或后端日志。'
+    executionSummaryText.value = ''
+    preOperationsLogText.value = ''
+    postOperationsLogText.value = ''
     responseSummaryExpanded.value = false
     executionResultExpanded.value = false
     executionAssertMode.value = assertForm.value.ruleFormat === 'text' ? '文本' : '键值'
@@ -2398,6 +2776,40 @@ function clearBinaryFile() {
                     <el-button link type="primary" @click="togglePreCollapseAll">
                       {{ preAllCollapsed ? '展开全部' : '收起全部' }}
                     </el-button>
+                    <el-tooltip
+                      v-if="preOperationsLogText"
+                      placement="top-start"
+                      :show-after="150"
+                      effect="dark"
+                      popper-class="execution-summary-tooltip-popper"
+                    >
+                      <template #content>
+                        <div class="execution-summary-tooltip-content">{{ preOperationsLogText }}</div>
+                      </template>
+                      <span
+                        class="execute-log-hint"
+                        role="button"
+                        tabindex="0"
+                        aria-label="前置执行日志"
+                      >
+                        <svg
+                          class="execute-log-hint__svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                          aria-hidden="true"
+                        >
+                          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.75" />
+                          <path
+                            d="M12 7.5V14"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                          />
+                          <circle cx="12" cy="17.2" r="1.25" fill="currentColor" />
+                        </svg>
+                      </span>
+                    </el-tooltip>
                   </div>
                   <div class="prepost-list">
                     <template v-if="preSteps.length === 0">
@@ -2415,8 +2827,10 @@ function clearBinaryFile() {
                             :index="idx + 1"
                             :collapse-key="preCollapseKey"
                             :collapsed="preAllCollapsed"
+                            :config="preStepConfigs.get(step.id)"
                             @delete="handlePreStepDelete(step.id)"
                             @copy="handlePreStepCopy(step.id)"
+                            @update:config="handlePreStepConfigUpdate(step.id, $event)"
                           />
                           <DuccStepDrawer
                             v-else-if="step && step.type === 'ducc'"
@@ -2424,9 +2838,11 @@ function clearBinaryFile() {
                             :index="idx + 1"
                             :collapse-key="preCollapseKey"
                             :collapsed="preAllCollapsed"
+                            :config="preStepConfigs.get(step.id)"
                             @delete="handlePreStepDelete(step.id)"
                             @copy="handlePreStepCopy(step.id)"
                             @compare="openDuccDiff"
+                            @update:config="handlePreStepConfigUpdate(step.id, $event)"
                           />
                           <RedisStepDrawer
                             v-else-if="step && step.type === 'redis'"
@@ -2434,8 +2850,10 @@ function clearBinaryFile() {
                             :index="idx + 1"
                             :collapse-key="preCollapseKey"
                             :collapsed="preAllCollapsed"
+                            :config="preStepConfigs.get(step.id)"
                             @delete="handlePreStepDelete(step.id)"
                             @copy="handlePreStepCopy(step.id)"
+                            @update:config="handlePreStepConfigUpdate(step.id, $event)"
                           />
                           <ScriptStepDrawer
                             v-else-if="step && step.type === 'script'"
@@ -2443,8 +2861,10 @@ function clearBinaryFile() {
                             :index="idx + 1"
                             :collapse-key="preCollapseKey"
                             :collapsed="preAllCollapsed"
+                            :config="preStepConfigs.get(step.id)"
                             @delete="handlePreStepDelete(step.id)"
                             @copy="handlePreStepCopy(step.id)"
+                            @update:config="handlePreStepConfigUpdate(step.id, $event)"
                           />
                           <DelayStepDrawer
                             v-else-if="step && step.type === 'delay'"
@@ -2452,8 +2872,10 @@ function clearBinaryFile() {
                             :index="idx + 1"
                             :collapse-key="preCollapseKey"
                             :collapsed="preAllCollapsed"
+                            :config="preStepConfigs.get(step.id)"
                             @delete="handlePreStepDelete(step.id)"
                             @copy="handlePreStepCopy(step.id)"
+                            @update:config="handlePreStepConfigUpdate(step.id, $event)"
                           />
                         </template>
                       </div>
@@ -2482,6 +2904,40 @@ function clearBinaryFile() {
                     <el-button link type="primary" @click="togglePostCollapseAll">
                       {{ postAllCollapsed ? '展开全部' : '收起全部' }}
                     </el-button>
+                    <el-tooltip
+                      v-if="postOperationsLogText"
+                      placement="top-start"
+                      :show-after="150"
+                      effect="dark"
+                      popper-class="execution-summary-tooltip-popper"
+                    >
+                      <template #content>
+                        <div class="execution-summary-tooltip-content">{{ postOperationsLogText }}</div>
+                      </template>
+                      <span
+                        class="execute-log-hint"
+                        role="button"
+                        tabindex="0"
+                        aria-label="后置执行日志"
+                      >
+                        <svg
+                          class="execute-log-hint__svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                          aria-hidden="true"
+                        >
+                          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.75" />
+                          <path
+                            d="M12 7.5V14"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                          />
+                          <circle cx="12" cy="17.2" r="1.25" fill="currentColor" />
+                        </svg>
+                      </span>
+                    </el-tooltip>
                   </div>
                   <div class="prepost-list">
                     <template v-if="postSteps.length === 0">
@@ -2499,8 +2955,10 @@ function clearBinaryFile() {
                             :index="idx + 1"
                             :collapse-key="postCollapseKey"
                             :collapsed="postAllCollapsed"
+                            :config="postStepConfigs.get(step.id)"
                             @delete="handlePostStepDelete(step.id)"
                             @copy="handlePostStepCopy(step.id)"
+                            @update:config="handlePostStepConfigUpdate(step.id, $event)"
                           />
                           <DuccStepDrawer
                             v-else-if="step && step.type === 'ducc'"
@@ -2508,9 +2966,11 @@ function clearBinaryFile() {
                             :index="idx + 1"
                             :collapse-key="postCollapseKey"
                             :collapsed="postAllCollapsed"
+                            :config="postStepConfigs.get(step.id)"
                             @delete="handlePostStepDelete(step.id)"
                             @copy="handlePostStepCopy(step.id)"
                             @compare="openDuccDiff"
+                            @update:config="handlePostStepConfigUpdate(step.id, $event)"
                           />
                           <RedisStepDrawer
                             v-else-if="step && step.type === 'redis'"
@@ -2518,8 +2978,10 @@ function clearBinaryFile() {
                             :index="idx + 1"
                             :collapse-key="postCollapseKey"
                             :collapsed="postAllCollapsed"
+                            :config="postStepConfigs.get(step.id)"
                             @delete="handlePostStepDelete(step.id)"
                             @copy="handlePostStepCopy(step.id)"
+                            @update:config="handlePostStepConfigUpdate(step.id, $event)"
                           />
                           <ScriptStepDrawer
                             v-else-if="step && step.type === 'script'"
@@ -2527,8 +2989,10 @@ function clearBinaryFile() {
                             :index="idx + 1"
                             :collapse-key="postCollapseKey"
                             :collapsed="postAllCollapsed"
+                            :config="postStepConfigs.get(step.id)"
                             @delete="handlePostStepDelete(step.id)"
                             @copy="handlePostStepCopy(step.id)"
+                            @update:config="handlePostStepConfigUpdate(step.id, $event)"
                           />
                           <ExtractVarStepDrawer
                             v-else-if="step && step.type === 'extract'"
@@ -2536,9 +3000,10 @@ function clearBinaryFile() {
                             :index="idx + 1"
                             :collapse-key="postCollapseKey"
                             :collapsed="postAllCollapsed"
+                            :config="postStepConfigs.get(step.id)"
                             @delete="handlePostStepDelete(step.id)"
                             @copy="handlePostStepCopy(step.id)"
-                            :ref="el => setExtractStepRef(el, step.id)"
+                            @update:config="handlePostStepConfigUpdate(step.id, $event)"
                           />
                           <DelayStepDrawer
                             v-else-if="step && step.type === 'delay'"
@@ -2546,8 +3011,10 @@ function clearBinaryFile() {
                             :index="idx + 1"
                             :collapse-key="postCollapseKey"
                             :collapsed="postAllCollapsed"
+                            :config="postStepConfigs.get(step.id)"
                             @delete="handlePostStepDelete(step.id)"
                             @copy="handlePostStepCopy(step.id)"
+                            @update:config="handlePostStepConfigUpdate(step.id, $event)"
                           />
                         </template>
                       </div>
@@ -2609,8 +3076,42 @@ function clearBinaryFile() {
       />
       <!-- 第二个容器：响应信息（测试后才显示） -->
       <div v-if="showResponse" class="response-container">
-        <div class="section-header">
+        <div class="section-header section-header--response">
           <span class="section-title">响应信息区域</span>
+          <el-tooltip
+            v-if="executionSummaryText"
+            placement="top-start"
+            :show-after="150"
+            effect="dark"
+            popper-class="execution-summary-tooltip-popper"
+          >
+            <template #content>
+              <div class="execution-summary-tooltip-content">{{ executionSummaryText }}</div>
+            </template>
+            <span
+              class="execute-log-hint"
+              role="button"
+              tabindex="0"
+              aria-label="查看执行摘要"
+            >
+              <svg
+                class="execute-log-hint__svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.75" />
+                <path
+                  d="M12 7.5V14"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                />
+                <circle cx="12" cy="17.2" r="1.25" fill="currentColor" />
+              </svg>
+            </span>
+          </el-tooltip>
         </div>
         <!-- 执行结果列表（按设计稿样式） -->
         <div v-if="executionResultItems.length" class="execution-result-list">
@@ -3186,10 +3687,39 @@ function clearBinaryFile() {
   border-radius: 8px 8px 0 0;
 }
 
+.section-header--response {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .section-title {
   font-size: 14px;
   font-weight: 600;
   color: #303133;
+}
+
+/* 执行摘要 / 前置后置日志：蓝色感叹号 */
+.execute-log-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: help;
+  color: #1677ff;
+  line-height: 0;
+  flex-shrink: 0;
+}
+
+.execute-log-hint:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.execute-log-hint__svg {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .response-tabs {
@@ -3503,5 +4033,22 @@ function clearBinaryFile() {
 
 :deep(.el-textarea__inner) {
   min-height: 32px !important;
+}
+</style>
+
+<style>
+/* Tooltip 挂载到 body，需非 scoped */
+.execution-summary-tooltip-popper {
+  max-width: min(520px, 92vw);
+  padding: 10px 12px !important;
+}
+
+.execution-summary-tooltip-popper .execution-summary-tooltip-content {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #fff;
 }
 </style>

@@ -663,15 +663,15 @@ function transformStepDetailToFrontend(data) {
   // 预设变量
   result.presetVariable = normalizePresetVariablePayload(data.preset_variable)
 
-  // 前置操作
+  // 前置操作（保留接口原始扁平字段 + 嵌套 config，供 HttpStepDrawer 回填）
   if (data.pre_operations && Array.isArray(data.pre_operations)) {
-    result.preOperations = data.pre_operations.map(op => ({
-      id: op.id,
-      position: op.position,
-      positionLabel: op.position_label,
+    result.preOperations = data.pre_operations.map((op) => ({
+      ...op,
+      id: op.operation_id ?? op.id,
+      operation_id: op.operation_id ?? op.id,
       operationType: op.operation_type,
       operationTypeLabel: op.operation_type_label,
-      name: op.name,
+      positionLabel: op.position_label,
       sortOrder: op.sort_order,
       isActive: op.is_active,
       mysqlConfig: op.mysql_config,
@@ -685,13 +685,13 @@ function transformStepDetailToFrontend(data) {
 
   // 后置操作
   if (data.post_operations && Array.isArray(data.post_operations)) {
-    result.postOperations = data.post_operations.map(op => ({
-      id: op.id,
-      position: op.position,
-      positionLabel: op.position_label,
+    result.postOperations = data.post_operations.map((op) => ({
+      ...op,
+      id: op.operation_id ?? op.id,
+      operation_id: op.operation_id ?? op.id,
       operationType: op.operation_type,
       operationTypeLabel: op.operation_type_label,
-      name: op.name,
+      positionLabel: op.position_label,
       sortOrder: op.sort_order,
       isActive: op.is_active,
       mysqlConfig: op.mysql_config,

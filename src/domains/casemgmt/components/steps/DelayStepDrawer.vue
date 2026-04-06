@@ -7,12 +7,14 @@ const props = defineProps<{
   collapsed?: boolean
   index?: number
   name?: string
+  config?: Record<string, any>
 }>()
 
 const emit = defineEmits<{
   (e: 'copy'): void
   (e: 'delete'): void
   (e: 'update:name', value: string): void
+  (e: 'update:config', config: Record<string, any>): void
 }>()
 
 const stepName = ref(props.name || '操作步骤1')
@@ -21,9 +23,23 @@ const isEditingName = ref(false)
 const nameInputRef = ref()
 
 // 延迟时间（秒）
-const delaySeconds = ref<number | null>(null)
+const delaySeconds = ref<number | null>(props.config?.delaySeconds || 1)
 const delayError = ref('')
 const delayInvalid = ref(false)
+
+// 监听 config 变化回填
+watch(() => props.config, (config) => {
+  if (config && config.delaySeconds !== undefined) {
+    delaySeconds.value = config.delaySeconds
+  }
+}, { deep: true })
+
+// 数据变化时 emit update:config
+watch(delaySeconds, (val) => {
+  emit('update:config', {
+    delaySeconds: val || 1
+  })
+})
 
 watch(
   () => props.collapseKey,
@@ -90,6 +106,13 @@ const validateDelay = () => {
   delayError.value = ''
   delayInvalid.value = false
 }
+
+// 暴露配置数据供父组件收集
+defineExpose({
+  getConfig: () => ({
+    delaySeconds: delaySeconds.value || 1
+  })
+})
 </script>
 
 <template>
