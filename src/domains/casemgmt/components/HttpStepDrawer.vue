@@ -17,7 +17,6 @@ import NormalAssert from './Assert/NormalAssert.vue'
 import JsonPathAssert from './Assert/JsonPathAssert.vue'
 import CompareGroupSettings from './Assert/CompareGroupSettings.vue'
 import MysqlStepDrawer from './steps/MysqlStepDrawer.vue'
-import DuccStepDrawer from './steps/DuccStepDrawer.vue'
 import RedisStepDrawer from './steps/RedisStepDrawer.vue'
 import ScriptStepDrawer from './steps/ScriptStepDrawer.vue'
 import DelayStepDrawer from './steps/DelayStepDrawer.vue'
@@ -28,7 +27,7 @@ import ResponseExpectedView from './response/ResponseExpectedView.vue'
 import ResponseActualInputView from './response/ResponseActualInputView.vue'
 import { usePresetVariablesStore } from '../stores/usePresetVariablesStore'
 import { usePresetTemplateStore } from '../stores/usePresetTemplateStore'
-import { executeStep } from '../api'
+import { executeStep, sortOperation } from '../api'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -74,6 +73,7 @@ const preOperationsLogText = ref('')
 const postOperationsLogText = ref('')
 const executionResultItems = ref([])
 const executionResultExpanded = ref(false)
+const operationLogExpanded = ref(false)
 
 /** 步骤详情回填后「原始」比对方式，用于切换整体/A-B/键值时不串用 rule_text */
 const loadedAssertionUiKey = ref('')
@@ -212,15 +212,13 @@ const preCollapseKey = ref(0)
 const preAllCollapsed = ref(false)
 const postCollapseKey = ref(0)
 const postAllCollapsed = ref(false)
+const draggingStepType = ref('')
+const draggingStepIndex = ref(-1)
+const dropFlashStepKey = ref('')
 
 // 步骤配置存储（key: 步骤id, value: 配置数据）
 const preStepConfigs = ref(new Map())
 const postStepConfigs = ref(new Map())
-
-// 历史版本对比弹窗（DUCC 使用）
-const duccDiffVisible = ref(false)
-const dummyLeft = ref('v20260302204818')
-const dummyRight = ref('v20260302204843')
 
 // 计算当前组
 const currentGroup = computed(() => {
@@ -274,7 +272,6 @@ const ASSERT_TYPE_TO_BACKEND = {
 // 前置/后置操作类型映射（前端 type -> 后端 operation_type）
 const OPERATION_TYPE_MAP = {
   mysql: 0,    // MySQL
-  ducc: 1,     // DUCC
   redis: 2,    // Redis
   script: 3,   // 自定义脚本
   delay: 4,    // 延迟时间
@@ -483,6 +480,8 @@ watch(
       const backendRuleFormat = Number(a.ruleFormat ?? a.rule_format ?? 1)
       assertForm.value.ruleFormat = backendRuleFormat === 0 ? 'text' : 'jsonpath'
 
+      // IMPORTANT: A/B 断言组详情来源（包含 compare_group.id）。
+      // 约束：ID 只能来自详情接口回填，不允许从 body 文本解析或推断生成。
       const compareGroupPayload = a.compareGroup ?? a.compare_group ?? {}
       assertForm.value.ignoreNull = String(
         Number(
@@ -554,6 +553,8 @@ watch(
         body: String(compareGroupPayload?.body ?? ''),
         envCode: String(compareGroupPayload?.env_code ?? '')
       }
+      // IMPORTANT: 记录 compare_group.id，供更新接口回传。
+      // 该ID表示后端A/B断言组记录主键，后续保存必须放在 api_assertion.compare_group.id。
       const cgId = Number(compareGroupPayload?.id)
       compareGroupRecordId.value = Number.isFinite(cgId) && cgId > 0 ? cgId : null
       const ruleContextSrc = a.ruleContext ?? a.rule_context
@@ -646,8 +647,8 @@ watch(
       preSteps.value = val.preOperations.map((op, index) => {
         const typeMap = {
           0: 'mysql',
-          2: 'redis',
           1: 'ducc',
+          2: 'redis',
           3: 'script',
           4: 'delay'
         }
@@ -664,7 +665,7 @@ watch(
           type: type,
           name: op.name || '前置操作'
         }
-      })
+      }).filter((step) => step.type !== 'ducc')
     } else {
       preSteps.value = []
       preStepConfigs.value.clear()
@@ -676,8 +677,8 @@ watch(
       postSteps.value = val.postOperations.map((op, index) => {
         const typeMap = {
           0: 'mysql',
-          2: 'redis',
           1: 'ducc',
+          2: 'redis',
           3: 'script',
           4: 'delay',
           5: 'extract'
@@ -695,7 +696,7 @@ watch(
           type: type,
           name: op.name || '后置操作'
         }
-      })
+      }).filter((step) => step.type !== 'ducc')
     } else {
       postSteps.value = []
       postStepConfigs.value.clear()
@@ -835,11 +836,9 @@ function createDefaultStepConfig(command) {
     redis: {
       redisUrl: 'redis://localhost:6379/0',
       readMode: 0,
-      keyOperations: []
-    },
-    ducc: {
-      duccLink: '',
-      version: ''
+      keyOperations: [],
+      storeResult: false,
+      resultVariable: ''
     },
     script: {
       scriptCode: '',
@@ -874,6 +873,58 @@ function togglePreCollapseAll() {
 function togglePostCollapseAll() {
   postAllCollapsed.value = !postAllCollapsed.value
   postCollapseKey.value++
+}
+
+function flashOperationCard(stepType, stepId) {
+  const key = `${stepType}:${stepId}`
+  dropFlashStepKey.value = key
+  setTimeout(() => {
+    if (dropFlashStepKey.value === key) {
+      dropFlashStepKey.value = ''
+    }
+  }, 300)
+}
+
+function handleStepDragStart(stepType, index, event) {
+  draggingStepType.value = stepType
+  draggingStepIndex.value = index
+  if (event && event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', `${stepType}:${index}`)
+  }
+}
+
+async function handleStepDrop(stepType, targetIndex) {
+  if (draggingStepType.value !== stepType) return
+  const fromIndex = draggingStepIndex.value
+  if (fromIndex < 0 || fromIndex === targetIndex) return
+  const listRef = stepType === 'pre' ? preSteps : postSteps
+  const configRef = stepType === 'pre' ? preStepConfigs : postStepConfigs
+  const list = listRef.value || []
+  if (!list[fromIndex] || !list[targetIndex]) return
+  const movedStep = list[fromIndex]
+  const [moved] = list.splice(fromIndex, 1)
+  list.splice(targetIndex, 0, moved)
+  flashOperationCard(stepType, moved?.id)
+  const movedConfig = configRef.value.get(movedStep.id) || {}
+  // 仅已落库的操作步骤（有 _originalId）才调用排序接口。
+  // 新增未保存步骤没有 operation_id，只做本地顺序调整，不调用后端。
+  const operationId = Number(movedConfig?._originalId)
+  if (Number.isFinite(operationId) && operationId > 0) {
+    try {
+      await sortOperation({
+        operation_id: operationId,
+        sort_order: targetIndex + 1
+      })
+    } catch (error) {
+      void error
+    }
+  }
+}
+
+function handleStepDragEnd() {
+  draggingStepType.value = ''
+  draggingStepIndex.value = -1
 }
 
 function handlePreStepDelete(id) {
@@ -968,6 +1019,14 @@ function convertBackendConfigToFrontend(type, op, originalId) {
         _originalId: originalId,
         redisUrl: op.redis_url || op.redisConfig?.redisUrl || op.redis_config?.redis_url || 'redis://localhost:6379/0',
         readMode: op.read_mode ?? op.readMode ?? op.redisConfig?.readMode ?? op.redis_config?.read_mode ?? 0,
+        storeResult:
+          op.store_result || op.storeResult ||
+          op.redisConfig?.storeResult || op.redis_config?.store_result ||
+          first?.store_result || first?.storeResult || false,
+        resultVariable:
+          op.result_variable || op.resultVariable ||
+          op.redisConfig?.resultVariable || op.redis_config?.result_variable ||
+          first?.result_variable || first?.resultVariable || '',
         keyOperations: arr,
         accessMode,
         requestMethod,
@@ -995,19 +1054,9 @@ function convertBackendConfigToFrontend(type, op, originalId) {
         variableName: op.variable_name || op.variableName || op.extractConfig?.variableName || op.extract_config?.variable_name || '',
         description: op.description || op.extractConfig?.description || op.extract_config?.description || ''
       }
-    case 'ducc':
-      return {
-        _originalId: originalId,
-        duccLink: op.ducc_url || op.duccLink || op.duccConfig?.duccUrl || op.ducc_config?.ducc_url || '',
-        version: op.version || op.duccConfig?.version || op.ducc_config?.version || ''
-      }
     default:
       return { _originalId: originalId }
   }
-}
-
-function openDuccDiff() {
-  duccDiffVisible.value = true
 }
 
 
@@ -1345,6 +1394,9 @@ function normalizeAssertion() {
 
     // compare_group 内断言字段保持默认回传
     if (Object.keys(payload).length > 0) {
+      // IMPORTANT: compare_group.id 回传链路（请勿删除）
+      // 优先使用回填缓存 compareGroupRecordId，其次从 props.step 各结构兜底读取。
+      // 目的：保证 update 时 api_assertion.compare_group.id 稳定透传给后端。
       const fallbackCompareGroupId = Number(
         props.step?.assertion?.compare_group?.id ??
         props.step?.assertion?.compareGroup?.id ??
@@ -1548,9 +1600,7 @@ function normalizeRedisKeyOperationForApi(ko) {
     field: o.field ?? null,
     start: o.start ?? null,
     stop: o.stop ?? null,
-    count: o.count ?? null,
-    store_result: !!(o.store_result ?? o.storeResult),
-    result_variable: o.result_variable ?? o.resultVariable ?? ''
+    count: o.count ?? null
   }
 }
 
@@ -1571,7 +1621,8 @@ function buildPrePostPayload(stepsRef, configsRef, omitOperationId = false) {
         : {}),
       operation_type: OPERATION_TYPE_MAP[step.type],
       name: step.name,
-      sort_order: index,
+      // 保存/更新时严格按当前本地顺序传值（从 1 开始）
+      sort_order: index + 1,
       is_active: true
     }
 
@@ -1591,6 +1642,8 @@ function buildPrePostPayload(stepsRef, configsRef, omitOperationId = false) {
           ...base,
           redis_url: config.redisUrl || 'redis://localhost:6379/0',
           read_mode: config.readMode ?? 0,
+          store_result: !!config.storeResult,
+          result_variable: config.resultVariable || '',
           key_operations: (config.keyOperations || []).map(normalizeRedisKeyOperationForApi)
         }
       case 'script':
@@ -1610,12 +1663,6 @@ function buildPrePostPayload(stepsRef, configsRef, omitOperationId = false) {
           json_path: config.jsonPath || '',
           variable_name: config.variableName || '',
           description: config.description || ''
-        }
-      case 'ducc':
-        return {
-          ...base,
-          ducc_url: config.duccUrl || config.duccLink || '',
-          version: config.version || ''
         }
       default:
         return base
@@ -1679,6 +1726,30 @@ const sortedExecutionResultItems = computed(() => {
 const displayExecutionResultItems = computed(() => {
   if (executionResultExpanded.value) return sortedExecutionResultItems.value
   return sortedExecutionResultItems.value.slice(0, 1)
+})
+
+const preOperationLogLines = computed(() => {
+  return String(preOperationsLogText.value || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+})
+
+const postOperationLogLines = computed(() => {
+  return String(postOperationsLogText.value || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+})
+
+const hasOperationLogs = computed(() => {
+  return preOperationLogLines.value.length > 0 || postOperationLogLines.value.length > 0
+})
+
+const collapsedOperationLogSummary = computed(() => {
+  const preCount = preOperationLogLines.value.length
+  const postCount = postOperationLogLines.value.length
+  return `前置步骤执行结果 ${preCount} 条，后置步骤执行结果 ${postCount} 条`
 })
 
 function safeStringify(value) {
@@ -2221,6 +2292,7 @@ async function handleTest() {
     postOperationsLogText.value = formatExecuteLogListForDisplay(data?.post_operations_log)
     responseSummaryExpanded.value = false
     executionResultExpanded.value = false
+    operationLogExpanded.value = false
     const bodyObject = data?.response_body && typeof data.response_body === 'object'
       ? data.response_body
       : {}
@@ -2248,6 +2320,7 @@ async function handleTest() {
     postOperationsLogText.value = ''
     responseSummaryExpanded.value = false
     executionResultExpanded.value = false
+    operationLogExpanded.value = false
     executionAssertMode.value = assertForm.value.ruleFormat === 'text' ? '文本' : '键值'
     executionResultItems.value = [
       { ok: false, text: '路径: $.execute 规则: 等于 期望: "success" 实际: "failed"' }
@@ -2766,7 +2839,6 @@ function clearBinaryFile() {
                       <template #dropdown>
                         <el-dropdown-menu>
                           <el-dropdown-item command="mysql">MySQL</el-dropdown-item>
-                          <el-dropdown-item command="ducc">DUCC</el-dropdown-item>
                           <el-dropdown-item command="redis">REDIS</el-dropdown-item>
                           <el-dropdown-item command="script">自定义脚本</el-dropdown-item>
                           <el-dropdown-item command="delay">延迟时间</el-dropdown-item>
@@ -2821,6 +2893,17 @@ function clearBinaryFile() {
                           v-for="(step, idx) in preSteps"
                           :key="step && step.id"
                         >
+                          <div
+                            class="step-draggable-item"
+                            :class="{
+                              'is-dragging': draggingStepType === 'pre' && draggingStepIndex === idx,
+                              'is-drop-flash': dropFlashStepKey === `pre:${step.id}`
+                            }"
+                            @dragstart="handleStepDragStart('pre', idx, $event)"
+                            @dragover.prevent
+                            @drop.prevent="handleStepDrop('pre', idx)"
+                            @dragend="handleStepDragEnd"
+                          >
                           <MysqlStepDrawer
                             v-if="step && step.type === 'mysql'"
                             v-model:name="step.name"
@@ -2830,18 +2913,6 @@ function clearBinaryFile() {
                             :config="preStepConfigs.get(step.id)"
                             @delete="handlePreStepDelete(step.id)"
                             @copy="handlePreStepCopy(step.id)"
-                            @update:config="handlePreStepConfigUpdate(step.id, $event)"
-                          />
-                          <DuccStepDrawer
-                            v-else-if="step && step.type === 'ducc'"
-                            v-model:name="step.name"
-                            :index="idx + 1"
-                            :collapse-key="preCollapseKey"
-                            :collapsed="preAllCollapsed"
-                            :config="preStepConfigs.get(step.id)"
-                            @delete="handlePreStepDelete(step.id)"
-                            @copy="handlePreStepCopy(step.id)"
-                            @compare="openDuccDiff"
                             @update:config="handlePreStepConfigUpdate(step.id, $event)"
                           />
                           <RedisStepDrawer
@@ -2877,6 +2948,7 @@ function clearBinaryFile() {
                             @copy="handlePreStepCopy(step.id)"
                             @update:config="handlePreStepConfigUpdate(step.id, $event)"
                           />
+                          </div>
                         </template>
                       </div>
                     </template>
@@ -2893,7 +2965,6 @@ function clearBinaryFile() {
                       <template #dropdown>
                         <el-dropdown-menu>
                           <el-dropdown-item command="mysql">MySQL</el-dropdown-item>
-                          <el-dropdown-item command="ducc">DUCC</el-dropdown-item>
                           <el-dropdown-item command="redis">REDIS</el-dropdown-item>
                           <el-dropdown-item command="script">自定义脚本</el-dropdown-item>
                           <el-dropdown-item command="delay">延迟时间</el-dropdown-item>
@@ -2949,6 +3020,17 @@ function clearBinaryFile() {
                           v-for="(step, idx) in postSteps"
                           :key="step && step.id"
                         >
+                          <div
+                            class="step-draggable-item"
+                            :class="{
+                              'is-dragging': draggingStepType === 'post' && draggingStepIndex === idx,
+                              'is-drop-flash': dropFlashStepKey === `post:${step.id}`
+                            }"
+                            @dragstart="handleStepDragStart('post', idx, $event)"
+                            @dragover.prevent
+                            @drop.prevent="handleStepDrop('post', idx)"
+                            @dragend="handleStepDragEnd"
+                          >
                           <MysqlStepDrawer
                             v-if="step && step.type === 'mysql'"
                             v-model:name="step.name"
@@ -2958,18 +3040,6 @@ function clearBinaryFile() {
                             :config="postStepConfigs.get(step.id)"
                             @delete="handlePostStepDelete(step.id)"
                             @copy="handlePostStepCopy(step.id)"
-                            @update:config="handlePostStepConfigUpdate(step.id, $event)"
-                          />
-                          <DuccStepDrawer
-                            v-else-if="step && step.type === 'ducc'"
-                            v-model:name="step.name"
-                            :index="idx + 1"
-                            :collapse-key="postCollapseKey"
-                            :collapsed="postAllCollapsed"
-                            :config="postStepConfigs.get(step.id)"
-                            @delete="handlePostStepDelete(step.id)"
-                            @copy="handlePostStepCopy(step.id)"
-                            @compare="openDuccDiff"
                             @update:config="handlePostStepConfigUpdate(step.id, $event)"
                           />
                           <RedisStepDrawer
@@ -3016,6 +3086,7 @@ function clearBinaryFile() {
                             @copy="handlePostStepCopy(step.id)"
                             @update:config="handlePostStepConfigUpdate(step.id, $event)"
                           />
+                          </div>
                         </template>
                       </div>
                     </template>
@@ -3032,39 +3103,6 @@ function clearBinaryFile() {
           </div>
         </div>
       </div>
-
-      <!-- DUCC 历史版本对比弹窗 -->
-      <el-dialog
-        v-model="duccDiffVisible"
-        title="历史版本对比"
-        width="80%"
-      >
-        <div class="ducc-diff-dialog">
-          <div class="ducc-diff-header">
-            <el-select v-model="dummyLeft" class="ducc-diff-select" size="small">
-              <el-option label="v20260302204818" value="v20260302204818" />
-            </el-select>
-            <el-select v-model="dummyRight" class="ducc-diff-select" size="small">
-              <el-option label="v20260302204843" value="v20260302204843" />
-            </el-select>
-          </div>
-          <div class="ducc-diff-body">
-            <div class="ducc-diff-panel">
-              <pre class="ducc-diff-code">"label": "14",
-"desc": "商城",
-"enabled": false</pre>
-            </div>
-            <div class="ducc-diff-panel">
-              <pre class="ducc-diff-code">"label": "14",
-"desc": "商城",
-"enabled": true</pre>
-            </div>
-          </div>
-        </div>
-        <template #footer>
-          <el-button @click="duccDiffVisible = false">取消</el-button>
-        </template>
-      </el-dialog>
 
       <!-- A/B 对比组设置弹窗 -->
       <CompareGroupSettings
@@ -3130,6 +3168,68 @@ function clearBinaryFile() {
             >
               {{ executionResultExpanded ? '收起' : '展开' }}
             </span>
+          </div>
+        </div>
+
+        <div
+          v-if="hasOperationLogs"
+          class="execution-result-list"
+        >
+          <div class="execution-result-item execution-result-item--ok">
+            <span class="execution-result-icon">i</span>
+            <el-tooltip
+              placement="top-start"
+              :show-after="150"
+              effect="dark"
+              popper-class="execution-summary-tooltip-popper"
+            >
+              <template #content>
+                <div class="execution-summary-tooltip-content">{{ collapsedOperationLogSummary }}</div>
+              </template>
+              <span class="execution-result-text">{{ collapsedOperationLogSummary }}</span>
+            </el-tooltip>
+            <span
+              class="execution-result-toggle"
+              @click="operationLogExpanded = !operationLogExpanded"
+            >
+              {{ operationLogExpanded ? '收起' : '展开' }}
+            </span>
+          </div>
+          <div
+            v-if="operationLogExpanded && preOperationLogLines.length"
+            class="execution-result-item execution-result-item--ok operation-log-detail-item"
+          >
+            <span class="execution-result-icon">i</span>
+            <el-tooltip
+              placement="top-start"
+              :show-after="150"
+              effect="dark"
+              popper-class="execution-summary-tooltip-popper"
+            >
+              <template #content>
+                <div class="execution-summary-tooltip-content">前置步骤执行结果（pre_operations_log）：
+{{ preOperationsLogText }}</div>
+              </template>
+              <span class="execution-result-text operation-log-detail-text">前置步骤执行结果（pre_operations_log）：{{ preOperationsLogText }}</span>
+            </el-tooltip>
+          </div>
+          <div
+            v-if="operationLogExpanded && postOperationLogLines.length"
+            class="execution-result-item execution-result-item--ok operation-log-detail-item"
+          >
+            <span class="execution-result-icon">i</span>
+            <el-tooltip
+              placement="top-start"
+              :show-after="150"
+              effect="dark"
+              popper-class="execution-summary-tooltip-popper"
+            >
+              <template #content>
+                <div class="execution-summary-tooltip-content">后置步骤执行结果（post_operations_log）：
+{{ postOperationsLogText }}</div>
+              </template>
+              <span class="execution-result-text operation-log-detail-text">后置步骤执行结果（post_operations_log）：{{ postOperationsLogText }}</span>
+            </el-tooltip>
           </div>
         </div>
 
@@ -3478,6 +3578,23 @@ function clearBinaryFile() {
   width: 100%;
 }
 
+.step-draggable-item {
+  cursor: default;
+}
+
+.step-draggable-item.is-dragging {
+  opacity: 0.65;
+}
+
+.step-draggable-item.is-drop-flash {
+  animation: operation-drop-flash 0.3s ease-out;
+}
+
+@keyframes operation-drop-flash {
+  0% { background: #d9f7be; }
+  100% { background: transparent; }
+}
+
 /* 前置/后置操作 - 添加按钮更圆润 */
 .prepost-toolbar :deep(.el-button--primary) {
   border-radius: 16px;
@@ -3720,6 +3837,15 @@ function clearBinaryFile() {
   width: 18px;
   height: 18px;
   display: block;
+}
+
+.operation-log-detail-item {
+  align-items: flex-start;
+}
+
+.operation-log-detail-text {
+  display: inline-block;
+  max-width: 100%;
 }
 
 .response-tabs {
@@ -3968,45 +4094,6 @@ function clearBinaryFile() {
 /* 工具类 */
 .w-100 {
   width: 100% !important;
-}
-
-.ducc-diff-dialog {
-  display: flex;
-  flex-direction: column;
-  height: 60vh;
-}
-
-.ducc-diff-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.ducc-diff-select {
-  width: 260px;
-}
-
-.ducc-diff-body {
-  display: flex;
-  gap: 12px;
-  flex: 1;
-  overflow: hidden;
-}
-
-.ducc-diff-panel {
-  flex: 1;
-  border: 1px solid #ebeef5;
-  border-radius: 4px;
-  padding: 8px;
-  background: #fdfdfd;
-  overflow: auto;
-}
-
-.ducc-diff-code {
-  margin: 0;
-  font-family: Menlo, Monaco, Consolas, 'Courier New', monospace;
-  font-size: 12px;
-  white-space: pre;
 }
 
 /* 覆盖 Element Plus 默认样式 */

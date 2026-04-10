@@ -7,7 +7,7 @@ import AppPagination from '@/shared/ui/organisms/AppPagination.vue'
 import HttpStepDrawer from '../components/HttpStepDrawer.vue'
 import StepExecuteDrawer from '../components/StepExecuteDrawer.vue'
 import CaseSidebar from '../components/CaseSidebar.vue'
-import { createStep, deleteStep, executeStep, fetchStepList, fetchStepDetail, fetchTestcaseDetail, updateStep } from '../api'
+import { createStep, deleteStep, executeTestcase, fetchStepList, fetchStepDetail, fetchTestcaseDetail, sortStep, updateStep } from '../api'
 import { STEP_TYPE, ENV_CODE, HTTP_METHOD } from '../types'
 import { fetchProjectList } from '@/domains/project/api'
 
@@ -61,8 +61,18 @@ const showStepTypeDialog = ref(false)
 const selectedStepType = ref(null)
 const draggingStepId = ref('')
 const dragOverStepId = ref('')
+const dropFlashStepId = ref('')
 const showStepExecDrawer = ref(false)
 const executingStep = ref(null)
+
+function flashStepRow(stepId) {
+  dropFlashStepId.value = String(stepId || '')
+  setTimeout(() => {
+    if (dropFlashStepId.value === String(stepId || '')) {
+      dropFlashStepId.value = ''
+    }
+  }, 300)
+}
 
 function normalizePresetVariableIds(value) {
   return (Array.isArray(value) ? value : [])
@@ -235,6 +245,11 @@ async function loadStepList() {
         hasValidDistinctSortOrder
           ? item.sort_order - sortOrderBase + 1
           : index + 1,
+      // 列表展示顺序：优先使用后端返回的 display_sort_order
+      displaySortOrder:
+        Number(item.display_sort_order) > 0
+          ? Number(item.display_sort_order)
+          : (hasValidDistinctSortOrder ? item.sort_order - sortOrderBase + 1 : index + 1),
       stepRaw: item
     }))
   } catch (error) {
@@ -325,6 +340,21 @@ async function handleCopyStep(step) {
 async function handleExecuteStep(step) {
   executingStep.value = step || null
   showStepExecDrawer.value = true
+  const stepId = Number(step?.id)
+  if (!Number.isFinite(stepId) || stepId <= 0) return
+  try {
+    const resp = await executeTestcase({ step_ids: [stepId] })
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+    if (code !== 0 && code !== 200) {
+      ElMessage.error(msg || '执行步骤失败')
+      return
+    }
+    ElMessage.success(msg || '执行已触发')
+  } catch (error) {
+    void error
+    ElMessage.error('执行步骤失败')
+  }
 }
 
 function closeStepExecDrawer() {
@@ -334,7 +364,7 @@ function closeStepExecDrawer() {
 async function confirmExecuteStep(stepId) {
   if (!Number.isFinite(stepId) || stepId <= 0) return
   try {
-    const resp = await executeStep({ step_id: stepId })
+    const resp = await executeTestcase({ step_ids: [stepId] })
     const code = resp?.data?.code
     const msg = resp?.data?.msg
     if (code !== 0 && code !== 200) {
@@ -380,30 +410,25 @@ async function handleRowDrop(targetStep) {
   }
 
   const movedStep = stepList.value[fromIndex]
-  const targetSortOrder = toIndex
-
+  const targetSortOrder = toIndex + 1
   const newList = [...stepList.value]
   const [moved] = newList.splice(fromIndex, 1)
   newList.splice(toIndex, 0, moved)
-  // 本地先更新顺序，提升交互流畅度
+  // 仅本地换序；sort_order 在保存步骤时按当前列表顺序计算
   stepList.value = newList.map((item, idx) => ({
     ...item,
-    order: idx + 1
+    order: idx + 1,
+    displaySortOrder: idx + 1
   }))
-
+  flashStepRow(movedStep.id)
   try {
-    // 只更新被拖动的这一步，避免一次拖动触发 N 次 update
-    await updateStep({
+    await sortStep({
       step_id: Number(movedStep.id),
       sort_order: targetSortOrder
     })
-    ElMessage.success('步骤顺序已更新')
-    // 回源刷新，使用后端最终顺序
     await loadStepList()
   } catch (error) {
     void error
-    ElMessage.error('更新步骤顺序失败，请重试')
-    // 失败后回源刷新，避免前后端顺序不一致
     await loadStepList()
   } finally {
     handleRowDragEnd()
@@ -520,6 +545,23 @@ async function saveHttpStep(stepData) {
     if (stepData.action === 'saveAndContinue') {
       // 更新场景：保留当前抽屉输入状态，避免“保存并继续”后被详情回拉覆盖导致看起来被清空
       if (isUpdate) {
+        // 关键：更新成功后回拉详情，只用于拿到前置/后置操作最新 operation_id。
+        // 否则新保存出来的操作在前端仍无 _originalId，后续拖动不会触发 operation/sort。
+        let latestPreOperations = stepData.preOperations || []
+        let latestPostOperations = stepData.postOperations || []
+        try {
+          const detailResp = await fetchStepDetail({ step_id: stepId })
+          const detailCode = detailResp?.data?.code
+          const detailData = detailResp?.data?.data
+          if ((detailCode === 0 || detailCode === 200) && detailData) {
+            const detailFrontend = transformStepDetailToFrontend(detailData)
+            latestPreOperations = detailFrontend?.preOperations || latestPreOperations
+            latestPostOperations = detailFrontend?.postOperations || latestPostOperations
+          }
+        } catch (error) {
+          void error
+        }
+
         editingHttpStep.value = {
           ...(editingHttpStep.value || {}),
           id: stepId,
@@ -536,8 +578,8 @@ async function saveHttpStep(stepData) {
           inputParams: stepData.apiInputParams || {},
           assertion: stepData.apiAssertion || {},
           presetVariable: stepData.presetVariable,
-          preOperations: stepData.preOperations || [],
-          postOperations: stepData.postOperations || []
+          preOperations: latestPreOperations,
+          postOperations: latestPostOperations
         }
         showHttpStepDrawer.value = true
         return
@@ -643,6 +685,8 @@ function transformStepDetailToFrontend(data) {
     if (!assertion) {
       // no-op
     } else {
+    // IMPORTANT: compare_group 必须在此透传给抽屉。
+    // A/B 断言更新依赖 compare_group.id；若这里丢失，后续 update 将无法回传组ID。
     result.assertion = {
       compareType: assertion.compare_type ?? 0,
       compareRule: assertion.compare_rule ?? 2,
@@ -835,7 +879,8 @@ function closeStepTypeDialog() {
                 draggable="true"
                 :class="{
                   'is-dragging': draggingStepId === String(step.id),
-                  'is-drag-over': dragOverStepId === String(step.id)
+                  'is-drag-over': dragOverStepId === String(step.id),
+                  'is-drop-flash': dropFlashStepId === String(step.id)
                 }"
                 @dragstart="handleRowDragStart(step)"
                 @dragover.prevent="handleRowDragOver(step)"
@@ -848,7 +893,7 @@ function closeStepTypeDialog() {
                 <td class="col-detail">{{ step.detail }}</td>
                 <td class="col-type"><span class="type-tag jsf">{{ step.type }}</span></td>
                 <td class="col-group">{{ step.inputGroup }}</td>
-                <td class="col-order">{{ step.order }}</td>
+                <td class="col-order">{{ step.displaySortOrder }}</td>
                 <td class="col-action">
                   <button class="action-icon-btn" title="删除" @click.stop="handleDeleteStep(step)">
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
@@ -900,6 +945,8 @@ function closeStepTypeDialog() {
     <StepExecuteDrawer
       v-model:visible="showStepExecDrawer"
       :step="executingStep"
+      :testcase-id="caseDetail.id"
+      :testcase-name="caseDetail.name"
       @close="closeStepExecDrawer"
       @execute="confirmExecuteStep"
     />
@@ -992,6 +1039,14 @@ function closeStepTypeDialog() {
 .step-table tbody tr:hover { background: #f7fbff; }
 .step-table tbody tr.is-dragging { opacity: 0.55; }
 .step-table tbody tr.is-drag-over { background: #e6f7ff; }
+.step-table tbody tr.is-drop-flash {
+  animation: step-drop-flash 0.3s ease-out;
+}
+
+@keyframes step-drop-flash {
+  0% { background: #d9f7be; }
+  100% { background: transparent; }
+}
 .step-pagination { display: flex; justify-content: flex-end; margin: 0 0 10px; }
 .type-tag { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
 .type-tag.jsf { background: #f6ffed; color: #52c41a; }

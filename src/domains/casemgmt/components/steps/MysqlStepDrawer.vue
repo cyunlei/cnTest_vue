@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick } from 'vue'
+import { ElMessage } from 'element-plus'
 import { EditPen, Delete, CopyDocument, ArrowDown } from '@element-plus/icons-vue'
+import { testConnection } from '../../api'
 
 const props = defineProps<{
   collapseKey?: number
@@ -59,6 +61,7 @@ const jdbcInvalid = ref(false)
 const sqlInvalid = ref(false)
 const usernameInvalid = ref(false)
 const passwordInvalid = ref(false)
+const testingConnection = ref(false)
 
 // 折叠状态（默认展开）
 const isCollapsed = ref(false)
@@ -179,6 +182,36 @@ const validatePassword = () => {
   passwordInvalid.value = false
 }
 
+const canShowConnectionTest = computed(() => {
+  return !isEmptyLike(jdbcUrl.value) && !isEmptyLike(username.value) && !isEmptyLike(password.value)
+})
+
+const handleTestConnection = async () => {
+  if (!canShowConnectionTest.value || testingConnection.value) return
+  testingConnection.value = true
+  try {
+    const resp = await testConnection({
+      type: 'mysql',
+      jdbc_url: jdbcUrl.value.trim(),
+      username: username.value.trim(),
+      password: password.value
+    })
+    const body = resp?.data || {}
+    const msg = body?.msg || '连接测试完成'
+    const connected = body?.data?.connected === true
+    if (connected || Number(body?.code) === 200) {
+      ElMessage.success(msg)
+      return
+    }
+    ElMessage.error(msg)
+  } catch (error: any) {
+    const msg = error?.response?.data?.msg || error?.message || '连接测试失败'
+    ElMessage.error(msg)
+  } finally {
+    testingConnection.value = false
+  }
+}
+
 // 暴露配置数据供父组件收集
 defineExpose({
   getConfig: () => ({
@@ -195,7 +228,7 @@ defineExpose({
 <template>
   <div class="mysql-step">
     <!-- 标题行 -->
-    <div class="mysql-step__header">
+    <div class="mysql-step__header" draggable="true">
       <div class="left">
         <el-icon class="collapse-arrow" :class="{ 'is-collapsed': isCollapsed }" @click="toggleCollapse">
           <ArrowDown />
@@ -255,7 +288,7 @@ defineExpose({
       <div class="mysql-step__row">
         <el-form label-position="top" class="mysql-form jdbc-row">
           <el-row :gutter="12">
-            <el-col :span="12">
+            <el-col :span="canShowConnectionTest ? 10 : 12">
             <el-form-item>
               <template #label>
                 <span class="required-star">*</span>JDBC URL
@@ -269,7 +302,7 @@ defineExpose({
               <div v-if="jdbcError" class="field-error">{{ jdbcError }}</div>
               </el-form-item>
             </el-col>
-            <el-col :span="6">
+            <el-col :span="canShowConnectionTest ? 5 : 6">
               <el-form-item>
                 <template #label>
                   <span class="required-star">*</span>用户名
@@ -283,7 +316,7 @@ defineExpose({
                 <div v-if="usernameError" class="field-error">{{ usernameError }}</div>
               </el-form-item>
             </el-col>
-            <el-col :span="6">
+            <el-col :span="canShowConnectionTest ? 5 : 6">
               <el-form-item>
                 <template #label>
                   <span class="required-star">*</span>密码
@@ -297,6 +330,20 @@ defineExpose({
                   @blur="validatePassword"
                 />
                 <div v-if="passwordError" class="field-error">{{ passwordError }}</div>
+              </el-form-item>
+            </el-col>
+            <el-col v-if="canShowConnectionTest" :span="4" class="connection-test-col">
+              <el-form-item label=" ">
+                <div class="connection-test-btn-wrap">
+                  <el-button
+                    type="primary"
+                    size="small"
+                    :loading="testingConnection"
+                    @click="handleTestConnection"
+                  >
+                    测试连通
+                  </el-button>
+                </div>
               </el-form-item>
             </el-col>
           </el-row>
@@ -351,6 +398,11 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
+  cursor: grab;
+}
+
+.mysql-step__header:active {
+  cursor: grabbing;
 }
 
 .mysql-step__header .left {
@@ -432,6 +484,17 @@ defineExpose({
 
 .jdbc-row :deep(.el-form-item) {
   margin-bottom: 0;
+}
+
+.connection-test-col :deep(.el-form-item__label) {
+  color: transparent;
+  user-select: none;
+}
+
+.connection-test-btn-wrap {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .required-star {

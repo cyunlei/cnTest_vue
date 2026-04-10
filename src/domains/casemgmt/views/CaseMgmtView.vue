@@ -16,6 +16,7 @@ import {
   updateSuite,
   deleteSuite,
   fetchTestcaseList,
+  sortTestcase,
   createTestcase,
   updateTestcase
 } from '../api'
@@ -48,6 +49,23 @@ const showCustomHeaderModal = ref(false)
 // 选中的用例
 const selectedCases = ref([])
 const isBatchOperationDisabled = computed(() => selectedCases.value.length === 0)
+const draggingCaseId = ref('')
+const dragOverCaseId = ref('')
+const dropFlashCaseId = ref('')
+const caseListInCurrentSuiteScope = ref(false)
+
+const canDragCaseSort = computed(() => {
+  return caseListInCurrentSuiteScope.value && caseData.value.length > 1
+})
+
+function flashCaseRow(caseId) {
+  dropFlashCaseId.value = String(caseId || '')
+  setTimeout(() => {
+    if (dropFlashCaseId.value === String(caseId || '')) {
+      dropFlashCaseId.value = ''
+    }
+  }, 300)
+}
 
 // 同步用例表单
 const syncCaseForm = ref({
@@ -319,6 +337,8 @@ const editingSuite = ref(null)
 const defaultParentSuiteId = ref(null)
 const defaultParentSuite = ref(null)
 const currentSuite = ref(null)
+const sidebarRefreshKey = ref(0)
+const suiteUpsertSignal = ref(null)
 
 // 新增用例集弹窗
 function openAddSuiteModal(parentSuite) {
@@ -365,6 +385,46 @@ async function createSuiteFromModal(payload) {
     }
     ElMessage.success(msg || (isEdit ? '编辑用例集成功' : '新增用例集成功'))
     closeAddSuiteModal()
+    if (isEdit) {
+      suiteUpsertSignal.value = {
+        type: 'edit',
+        suite: {
+          id: payload.suite_id,
+          name: payload.name,
+          parent_id: payload.parent_id ?? null,
+          remark: payload.remark || '',
+          tags: payload.tags || '',
+          group: payload.group || ''
+        },
+        ts: Date.now()
+      }
+      return
+    }
+
+    const createdId = Number(
+      resp?.data?.data?.id ??
+      resp?.data?.data?.suite_id ??
+      resp?.data?.data?.suiteId
+    )
+    if (Number.isFinite(createdId) && createdId > 0) {
+      suiteUpsertSignal.value = {
+        type: 'create',
+        suite: {
+          id: createdId,
+          name: payload.name,
+          parent_id: payload.parent_id ?? null,
+          remark: payload.remark || '',
+          tags: payload.tags || '',
+          group: payload.group || '',
+          testcase_count: 0,
+          step_count: 0
+        },
+        ts: Date.now()
+      }
+    } else {
+      // 仅在后端未返回新ID时兜底刷新
+      sidebarRefreshKey.value += 1
+    }
   } catch (error) {
     void error
     ElMessage.error('新增用例集异常')
@@ -382,7 +442,7 @@ async function deleteSuiteFromSidebar(suite) {
       return
     }
     ElMessage.success(msg || '删除用例集成功')
-    // TODO: 可根据需要让左侧树刷新一次
+    sidebarRefreshKey.value += 1
   } catch (error) {
     void error
     ElMessage.error('删除用例集异常')
@@ -523,6 +583,7 @@ function confirmCustomHeader() {
 
 async function loadTestcases(options = { withParentId: true }) {
   try {
+    caseListInCurrentSuiteScope.value = Boolean(options.withParentId && currentSuite.value?.id)
     const currentProjectId = projectStore.currentProjectId
     const params = {
       project_id: currentProjectId,
@@ -590,6 +651,7 @@ async function loadTestcases(options = { withParentId: true }) {
   } catch (error) {
     void error
     caseData.value = []
+    caseListInCurrentSuiteScope.value = false
   }
 }
 
@@ -689,6 +751,59 @@ function toggleSelectAll(event) {
   }
 }
 
+function handleCaseRowDragStart(row) {
+  if (!canDragCaseSort.value) return
+  draggingCaseId.value = String(row.id)
+}
+
+function handleCaseRowDragOver(row) {
+  if (!canDragCaseSort.value) return
+  if (!draggingCaseId.value) return
+  const toId = String(row.id)
+  if (toId === draggingCaseId.value) return
+  dragOverCaseId.value = toId
+}
+
+function handleCaseRowDragEnd() {
+  draggingCaseId.value = ''
+  dragOverCaseId.value = ''
+}
+
+function handleCaseRowDrop(targetRow) {
+  if (!canDragCaseSort.value) {
+    handleCaseRowDragEnd()
+    return
+  }
+  const fromId = draggingCaseId.value
+  const toId = String(targetRow.id)
+  if (!fromId || !toId || fromId === toId) {
+    handleCaseRowDragEnd()
+    return
+  }
+  const fromIndex = caseData.value.findIndex(row => String(row.id) === fromId)
+  const toIndex = caseData.value.findIndex(row => String(row.id) === toId)
+  if (fromIndex < 0 || toIndex < 0) {
+    handleCaseRowDragEnd()
+    return
+  }
+  const newList = [...caseData.value]
+  const [moved] = newList.splice(fromIndex, 1)
+  newList.splice(toIndex, 0, moved)
+  caseData.value = newList
+  const movedCase = caseData.value[toIndex]
+  flashCaseRow(movedCase?.id)
+  const targetSortOrder = toIndex + 1
+  sortTestcase({
+    testcase_id: Number(movedCase.id),
+    sort_order: targetSortOrder
+  })
+    .catch(() => {})
+    .finally(async () => {
+      await reloadCurrentTestcases()
+      handleCaseRowDragEnd()
+    })
+}
+
 // 跳转到用例配置页面（增加过渡态，避免生硬跳转和重复点击）
 async function goToCaseConfig(id) {
   if (!id || navigatingCaseId.value === id) return
@@ -717,6 +832,8 @@ async function goToCaseConfig(id) {
     <div class="page-container">
       <!-- 左侧树 -->
       <CaseSidebar
+        :refresh-token="sidebarRefreshKey"
+        :suite-upsert-signal="suiteUpsertSignal"
         @openAddSuiteModal="openAddSuiteModal"
         @openAddCaseModal="openAddCaseModal"
         @editSuite="openEditSuiteModal"
@@ -923,7 +1040,21 @@ async function goToCaseConfig(id) {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="row in caseData" :key="row.id">
+              <tr
+                v-for="row in caseData"
+                :key="row.id"
+                :draggable="canDragCaseSort"
+                :class="{
+                  'is-dragging': draggingCaseId === String(row.id),
+                  'is-drag-over': dragOverCaseId === String(row.id),
+                  'is-drop-flash': dropFlashCaseId === String(row.id),
+                  'is-drag-disabled': !canDragCaseSort
+                }"
+                @dragstart="handleCaseRowDragStart(row)"
+                @dragover.prevent="handleCaseRowDragOver(row)"
+                @drop.prevent="handleCaseRowDrop(row)"
+                @dragend="handleCaseRowDragEnd"
+              >
                 <td class="col-checkbox">
                   <input 
                     type="checkbox" 
@@ -2116,6 +2247,31 @@ th {
 
 td {
   font-size: 14px;
+}
+
+tbody tr {
+  cursor: move;
+}
+
+tbody tr.is-drag-disabled {
+  cursor: default;
+}
+
+tbody tr.is-dragging {
+  opacity: 0.55;
+}
+
+tbody tr.is-drag-over {
+  background: #e6f7ff;
+}
+
+tbody tr.is-drop-flash {
+  animation: case-drop-flash 0.3s ease-out;
+}
+
+@keyframes case-drop-flash {
+  0% { background: #d9f7be; }
+  100% { background: transparent; }
 }
 
 .link {

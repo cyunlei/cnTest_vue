@@ -187,7 +187,7 @@ defineExpose({
 <template>
   <div class="script-step">
     <!-- 标题行：与 MySQL / DUCC / Redis 一致 -->
-    <div class="script-step__header">
+    <div class="script-step__header" draggable="true">
       <div class="left">
         <el-icon class="collapse-arrow" :class="{ 'is-collapsed': isCollapsed }" @click="toggleCollapse">
           <ArrowDown />
@@ -313,6 +313,11 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
+  cursor: grab;
+}
+
+.script-step__header:active {
+  cursor: grabbing;
 }
 
 .script-step__header .left {

@@ -71,6 +71,47 @@ export function executeStep(data) {
 }
 
 /**
+ * 执行测试用例（可按步骤ID子集执行）
+ * POST /api/v1/testcases/execute
+ * Content-Type: application/json
+ * @param {{ testcase_id?: number|string, step_ids: Array<number|string>, task_id?: number|string }} data
+ * @returns {Promise<import('axios').AxiosResponse<import('../types').ApiResponse<any>>>}
+ */
+export function executeTestcase(data) {
+  return create(`${TESTCASE_BASE_URL}/execute`, data)
+}
+
+/**
+ * 查询测试用例执行批次列表
+ * GET /api/v1/testcases/execution/list
+ * @param {{ testcase_id?: number|string, page?: number, page_size?: number }} [params]
+ * @returns {Promise<import('axios').AxiosResponse<import('../types').ApiResponse<any>>>}
+ */
+export function fetchExecutionList(params = {}) {
+  return fetch(`${TESTCASE_BASE_URL}/execution/list`, params)
+}
+
+/**
+ * 查询测试用例执行详情（包含步骤结果）
+ * GET /api/v1/testcases/execution/detail
+ * @param {{ execution_id?: number|string, testcase_id?: number|string }} params
+ * @returns {Promise<import('axios').AxiosResponse<import('../types').ApiResponse<any>>>}
+ */
+export function fetchExecutionDetail(params) {
+  return fetch(`${TESTCASE_BASE_URL}/execution/detail`, params)
+}
+
+/**
+ * 调整测试步骤顺序
+ * POST /api/v1/testcases/step/sort
+ * @param {{ step_id: number|string, sort_order: number }} data
+ * @returns {Promise<import('axios').AxiosResponse<import('../types').ApiResponse<any>>>}
+ */
+export function sortStep(data) {
+  return create(`${STEP_BASE_URL}/sort`, data)
+}
+
+/**
  * 删除测试步骤
  * POST /api/v1/testcases/step/delete
  * Content-Type: application/json
@@ -79,6 +120,23 @@ export function executeStep(data) {
  */
 export function deleteStep(data) {
   return create(`${STEP_BASE_URL}/delete`, data)
+}
+
+/**
+ * 测试前置/后置数据库连通性
+ * POST /api/v1/testcases/connection/test
+ * Content-Type: application/json
+ * @param {{
+ *   type: 'mysql' | 'redis',
+ *   jdbc_url?: string,
+ *   username?: string,
+ *   password?: string,
+ *   redis_url?: string
+ * }} data
+ * @returns {Promise<import('axios').AxiosResponse<import('../types').ApiResponse<any>>>}
+ */
+export function testConnection(data) {
+  return create('/api/v1/testcases/connection/test', data)
 }
 
 // ======== 用例集 API ========
@@ -160,6 +218,16 @@ export function fetchTestcaseList(params = {}) {
 }
 
 /**
+ * 调整测试用例顺序
+ * POST /api/v1/testcases/sort
+ * @param {{ testcase_id: number|string, sort_order: number }} data
+ * @returns {Promise<import('axios').AxiosResponse<import('../types').ApiResponse<any>>>}
+ */
+export function sortTestcase(data) {
+  return create(`${TESTCASE_BASE_URL}/sort`, data)
+}
+
+/**
  * 查询测试用例详情
  * GET /api/v1/testcases/detail
  * @param {import('../types').FetchTestcaseDetailParams} params
@@ -219,4 +287,14 @@ export function fetchTemplateVariableDetail(params = {}) {
  */
 export function updateTemplateVariable(data) {
   return create(`${TEMPLATE_VARIABLE_BASE_URL}/update`, data)
+}
+
+/**
+ * 调整前置/后置操作顺序
+ * POST /api/v1/testcases/operation/sort
+ * @param {{ operation_id: number|string, sort_order: number }} data
+ * @returns {Promise<import('axios').AxiosResponse<import('../types').ApiResponse<any>>>}
+ */
+export function sortOperation(data) {
+  return create('/api/v1/testcases/operation/sort', data)
 }

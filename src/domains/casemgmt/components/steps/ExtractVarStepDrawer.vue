@@ -237,7 +237,7 @@ defineExpose({
 <template>
   <div class="extract-step">
     <!-- 标题行 -->
-    <div class="extract-step__header">
+    <div class="extract-step__header" draggable="true">
       <div class="left">
         <el-icon class="collapse-arrow" :class="{ 'is-collapsed': isCollapsed }" @click="toggleCollapse">
           <ArrowDown />
@@ -388,6 +388,11 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
+  cursor: grab;
+}
+
+.extract-step__header:active {
+  cursor: grabbing;
 }
 
 .extract-step__header .left {

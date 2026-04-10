@@ -6,6 +6,16 @@ import { fetchSuiteList } from '../api'
 import { useProjectStore } from '@/domains/project/stores/useProjectStore'
 
 const route = useRoute()
+const props = defineProps({
+  refreshToken: {
+    type: Number,
+    default: 0
+  },
+  suiteUpsertSignal: {
+    type: Object,
+    default: null
+  }
+})
 const emit = defineEmits([
   'openAddSuiteModal',
   'openAddCaseModal',
@@ -104,6 +114,36 @@ async function loadRootSuites() {
   selectedSuiteId.value = null
 }
 
+async function refreshTreeKeepState() {
+  const prevSelectedId = selectedSuiteId.value
+  const prevExpandedIds = [...expandedKeys.value]
+  const roots = await loadSuites()
+  treeData.value = roots
+
+  // 保留原有展开状态（仅保留本次仍存在的节点）
+  const rootIdSet = new Set(roots.map((item) => item.id))
+  const nextExpanded = prevExpandedIds.filter((id) => rootIdSet.has(id))
+  for (const id of nextExpanded) {
+    const node = roots.find((item) => item.id === id)
+    if (node) {
+      // 按需重新加载展开节点的子树
+      node.children = await loadSuites(node.id)
+    }
+  }
+  expandedKeys.value = nextExpanded
+
+  // 保留原选中；如果已不存在则清空
+  if (prevSelectedId != null) {
+    const matched = roots.find((item) => item.id === prevSelectedId)
+    if (matched) {
+      selectedSuiteId.value = matched.id
+      emit('selectSuite', matched)
+      return
+    }
+  }
+  selectedSuiteId.value = null
+}
+
 async function loadChildSuites(node) {
   node.children = await loadSuites(node.id)
 }
@@ -197,6 +237,67 @@ async function handleClickNode(node) {
 
 function isSelected(node) {
   return selectedSuiteId.value === node.id
+}
+
+function findNodeById(nodes, id) {
+  if (!Array.isArray(nodes)) return null
+  for (const node of nodes) {
+    if (node.id === id) return node
+    if (Array.isArray(node.children) && node.children.length > 0) {
+      const found = findNodeById(node.children, id)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+function applySuiteUpsert(signal) {
+  if (!signal || !signal.suite) return
+  const incoming = signal.suite
+  const suiteId = Number(incoming.id)
+  if (!Number.isFinite(suiteId) || suiteId <= 0) return
+
+  if (signal.type === 'edit') {
+    const target = findNodeById(treeData.value, suiteId)
+    if (!target) return
+    target.name = incoming.name ?? target.name
+    target.parent_id = incoming.parent_id ?? target.parent_id
+    target.remark = incoming.remark ?? target.remark
+    target.tags = incoming.tags ?? target.tags
+    target.group = incoming.group ?? target.group
+    return
+  }
+
+  if (signal.type === 'create') {
+    // 已存在则忽略，避免重复插入
+    if (findNodeById(treeData.value, suiteId)) return
+    const suiteNode = {
+      id: suiteId,
+      name: incoming.name || '',
+      parent_id: incoming.parent_id ?? null,
+      remark: incoming.remark || '',
+      tags: incoming.tags || '',
+      group: incoming.group || '',
+      testcase_count: incoming.testcase_count ?? 0,
+      step_count: incoming.step_count ?? 0,
+      count: `(${incoming.testcase_count ?? 0}|${incoming.step_count ?? 0})`,
+      children: null
+    }
+    const parentId = Number(incoming.parent_id)
+    if (Number.isFinite(parentId) && parentId > 0) {
+      const parentNode = findNodeById(treeData.value, parentId)
+      if (!parentNode) return
+      if (!Array.isArray(parentNode.children)) {
+        parentNode.children = []
+      }
+      parentNode.children.unshift(suiteNode)
+      if (!expandedKeys.value.includes(parentId)) {
+        expandedKeys.value.push(parentId)
+      }
+      return
+    }
+    treeData.value.unshift(suiteNode)
+  }
 }
 
 // 展开状态 + 树形列表 -> 扁平列表，支持任意层级
@@ -451,6 +552,22 @@ watch(showActionMenu, (val) => {
     })
   }
 })
+
+watch(
+  () => props.refreshToken,
+  async (next, prev) => {
+    if (next === prev) return
+    await refreshTreeKeepState()
+  }
+)
+
+watch(
+  () => props.suiteUpsertSignal,
+  (signal) => {
+    applySuiteUpsert(signal)
+  },
+  { deep: false }
+)
 </script>
 
 <template>

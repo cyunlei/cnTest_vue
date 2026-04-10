@@ -1,5 +1,46 @@
 # Kimi Code CLI 执行日志
 
+## 2026-04-03: 用例集最小回归清单与 compare_group.id 注释规范补充
+
+### 任务
+1. 补充“新增/编辑/删除用例集”的最小回归自测清单；
+2. 为 A/B 断言 `compare_group.id` 更新链路补充注释规范，避免后续改动导致 ID 透传链路断裂。
+
+### 执行内容
+
+#### 1. 新增最小回归自测清单文档
+**新建文件:** `src/domains/casemgmt/CASE_SUITE_MIN_REGRESSION_CHECKLIST.md`
+
+- 覆盖“新增用例集 / 编辑用例集 / 删除用例集”三条主流程；
+- 覆盖左侧树即时更新（不刷新整页）与展开态保持；
+- 增补 A/B 断言 `compare_group.id` 回传链路与“保存并继续”行为检查项。
+
+#### 2. 补充 compare_group.id 注释规范（关键链路）
+**修改文件:** `src/domains/casemgmt/views/CaseConfigView.vue`
+
+- 在 `transformStepDetailToFrontend()` 中增加关键注释，明确 `compare_group` 必须透传到抽屉；
+- 约束说明：若该处丢失 `compare_group.id`，更新请求将无法正确回传组 ID。
+
+**修改文件:** `src/domains/casemgmt/components/HttpStepDrawer.vue`
+
+- 在详情回填处增加注释，明确 `compare_group.id` 来源仅允许来自详情接口；
+- 在保存归一化处增加注释，明确 `compareGroupRecordId` 优先、`props.step` 多路径兜底；
+- 约束目标：确保 `api_assertion.compare_group.id` 在 update 场景稳定透传。
+
+### 文件变更汇总
+
+```
+新建: src/domains/casemgmt/CASE_SUITE_MIN_REGRESSION_CHECKLIST.md
+修改: src/domains/casemgmt/views/CaseConfigView.vue
+修改: src/domains/casemgmt/components/HttpStepDrawer.vue
+```
+
+### 验证结果
+✅ 回归清单已落盘并可直接用于本地自测
+✅ `compare_group.id` 关键链路已补充注释约束，便于后续维护防回归
+
+---
+
 ## 2026-03-16: 测试步骤 API 层与类型定义（按 AiExecytionManual 规范）
 
 ### 任务

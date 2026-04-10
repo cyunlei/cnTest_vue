@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick } from 'vue'
+import { ElMessage } from 'element-plus'
 import { EditPen, Delete, CopyDocument, ArrowDown } from '@element-plus/icons-vue'
+import { testConnection } from '../../api'
 
 const props = defineProps<{
   collapseKey?: number
@@ -72,11 +74,13 @@ const requestMethod = ref(props.config?.requestMethod || 'get')
 const singleKey = ref(props.config?.singleKey || '')
 const singleValue = ref(props.config?.singleValue || '')
 const batchKeys = ref(props.config?.batchKeys || '')
+const resultVar = ref(props.config?.resultVariable || '')
 
 const redisUrlError = ref('')
 const redisUrlInvalid = ref(false)
 const keyError = ref('')
 const keyInvalid = ref(false)
+const testingConnection = ref(false)
 
 const isEmptyLike = (val: string) => {
   return !val || /^[\s\u3000]*$/.test(val)
@@ -154,6 +158,47 @@ const validateKey = () => {
   keyInvalid.value = false
 }
 
+const canShowConnectionTest = computed(() => !isEmptyLike(redisUrl.value))
+
+const buildRedisKeyOperations = () => {
+  if (accessMode.value === 'key') {
+    return [{
+      access_type: requestMethod.value,
+      key: singleKey.value,
+      value: singleValue.value
+    }]
+  }
+  return parseBatchKeys(batchKeys.value).map((k) => ({
+    access_type: requestMethod.value,
+    key: k,
+    value: ''
+  }))
+}
+
+const handleTestConnection = async () => {
+  if (!canShowConnectionTest.value || testingConnection.value) return
+  testingConnection.value = true
+  try {
+    const resp = await testConnection({
+      type: 'redis',
+      redis_url: redisUrl.value.trim()
+    })
+    const body = resp?.data || {}
+    const msg = body?.msg || '连接测试完成'
+    const connected = body?.data?.connected === true
+    if (connected || Number(body?.code) === 200) {
+      ElMessage.success(msg)
+      return
+    }
+    ElMessage.error(msg)
+  } catch (error: any) {
+    const msg = error?.response?.data?.msg || error?.message || '连接测试失败'
+    ElMessage.error(msg)
+  } finally {
+    testingConnection.value = false
+  }
+}
+
 // 监听 config 变化回填
 watch(() => props.config, (config) => {
   if (config) {
@@ -163,17 +208,18 @@ watch(() => props.config, (config) => {
     singleKey.value = config.singleKey || ''
     singleValue.value = config.singleValue || ''
     batchKeys.value = config.batchKeys || ''
+    resultVar.value = config.resultVariable || ''
   }
 }, { deep: true, immediate: true })
 
 // 数据变化时 emit update:config
-watch([redisUrl, accessMode, requestMethod, singleKey, singleValue, batchKeys], () => {
-  const keyOperations = accessMode.value === 'key'
-    ? [{ access_type: requestMethod.value, key: singleKey.value, value: singleValue.value }]
-    : parseBatchKeys(batchKeys.value).map(k => ({ access_type: requestMethod.value, key: k, value: '' }))
+watch([redisUrl, accessMode, requestMethod, singleKey, singleValue, batchKeys, resultVar], () => {
+  const keyOperations = buildRedisKeyOperations()
   emit('update:config', {
     redisUrl: redisUrl.value,
     readMode: writeMethods.includes(requestMethod.value) ? 1 : 0,
+    storeResult: !!resultVar.value,
+    resultVariable: resultVar.value,
     keyOperations,
     accessMode: accessMode.value,
     requestMethod: requestMethod.value,
@@ -186,12 +232,12 @@ watch([redisUrl, accessMode, requestMethod, singleKey, singleValue, batchKeys], 
 // 暴露配置数据供父组件收集
 defineExpose({
   getConfig: () => {
-    const keyOperations = accessMode.value === 'key'
-      ? [{ access_type: requestMethod.value, key: singleKey.value, value: singleValue.value }]
-      : parseBatchKeys(batchKeys.value).map(k => ({ access_type: requestMethod.value, key: k, value: '' }))
+    const keyOperations = buildRedisKeyOperations()
     return {
       redisUrl: redisUrl.value,
       readMode: writeMethods.includes(requestMethod.value) ? 1 : 0,
+      storeResult: !!resultVar.value,
+      resultVariable: resultVar.value,
       keyOperations
     }
   }
@@ -201,7 +247,7 @@ defineExpose({
 <template>
   <div class="redis-step">
     <!-- 标题行，与 MYSQL/DUCC 一致 -->
-    <div class="redis-step__header">
+    <div class="redis-step__header" draggable="true">
       <div class="left">
         <el-icon class="collapse-arrow" :class="{ 'is-collapsed': isCollapsed }" @click="toggleCollapse">
           <ArrowDown />
@@ -263,8 +309,28 @@ defineExpose({
               @blur="validateRedisUrl"
             />
           </div>
+          <div v-if="canShowConnectionTest" class="connection-test-wrap">
+            <el-button
+              type="primary"
+              size="small"
+              :loading="testingConnection"
+              @click="handleTestConnection"
+            >
+              测试连通
+            </el-button>
+          </div>
         </div>
         <div v-if="redisUrlError" class="field-error">{{ redisUrlError }}</div>
+      </div>
+
+      <!-- 结果变量（放在 Redis 地址下面，模式上面） -->
+      <div class="redis-step__row">
+        <div class="field-row">
+          <div class="field-label">结果变量</div>
+          <div class="field-input">
+            <el-input v-model="resultVar" placeholder="请填写结果变量名" />
+          </div>
+        </div>
       </div>
 
       <!-- 模式选择：按 key / 批量添加 -->
@@ -344,6 +410,7 @@ defineExpose({
         </div>
         <div v-if="keyError" class="field-error">{{ keyError }}</div>
       </div>
+
     </div>
   </div>
 </template>
@@ -364,6 +431,11 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
+  cursor: grab;
+}
+
+.redis-step__header:active {
+  cursor: grabbing;
 }
 
 .redis-step__header .left {
@@ -432,6 +504,13 @@ defineExpose({
 .field-row {
   display: flex;
   align-items: flex-start;
+}
+
+.connection-test-wrap {
+  margin-left: 12px;
+  display: flex;
+  justify-content: flex-end;
+  min-width: 88px;
 }
 
 .field-label {

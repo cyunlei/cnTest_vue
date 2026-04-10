@@ -118,7 +118,7 @@ defineExpose({
 <template>
   <div class="delay-step">
     <!-- 标题行：与其它步骤保持一致 -->
-    <div class="delay-step__header">
+    <div class="delay-step__header" draggable="true">
       <div class="left">
         <el-icon class="collapse-arrow" :class="{ 'is-collapsed': isCollapsed }" @click="toggleCollapse">
           <ArrowDown />
@@ -206,6 +206,11 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
+  cursor: grab;
+}
+
+.delay-step__header:active {
+  cursor: grabbing;
 }
 
 .delay-step__header .left {
