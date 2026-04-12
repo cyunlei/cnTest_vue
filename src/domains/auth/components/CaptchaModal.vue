@@ -7,7 +7,7 @@
  * 交互方式: 用户根据提示点击图片上的目标位置（如红色圆圈）
  */
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
+import { useMessage } from '@/shared/ui'
 import { getCaptcha, verifyCaptcha, refreshCaptcha } from '@/domains/verification/api'
 
 // ======== Props ========
@@ -21,6 +21,9 @@ const props = defineProps({
 
 // ======== Emits ========
 const emit = defineEmits(['update:visible', 'verified', 'cancel'])
+
+// ======== Hooks ========
+const { showSuccess, showWarning, showError } = useMessage()
 
 // ======== State ========
 const captchaKey = ref('')
@@ -91,10 +94,10 @@ async function fetchCaptcha() {
       captchaNaturalWidth.value = body.data.challenge?.width || 400
       captchaNaturalHeight.value = body.data.challenge?.height || 300
     } else {
-      ElMessage.warning(body.msg || '获取验证码失败')
+      showWarning(body.msg || '获取验证码失败')
     }
   } catch (err) {
-    ElMessage.error(err?.message || '获取验证码失败')
+    showError(err?.message || '获取验证码失败')
   } finally {
     loading.value = false
   }
@@ -122,10 +125,10 @@ async function handleRefresh() {
       captchaImage.value = body.data.challenge?.image_base64 || ''
       captchaTip.value = body.data.challenge?.tip || '请点击所有的目标位置'
     } else {
-      ElMessage.warning(body.msg || '刷新验证码失败')
+      showWarning(body.msg || '刷新验证码失败')
     }
   } catch (err) {
-    ElMessage.error(err?.message || '刷新验证码失败')
+    showError(err?.message || '刷新验证码失败')
   } finally {
     loading.value = false
   }
@@ -230,13 +233,13 @@ function handleMouseMove(e) {
  */
 async function handleVerify() {
   if (!isReady.value) {
-    ElMessage.warning('请按照提示点击所有目标位置')
+    showWarning('请按照提示点击所有目标位置')
     return
   }
-  
+
   verifying.value = true
   const elapsedMs = Date.now() - startTime.value
-  
+
   try {
     const res = await verifyCaptcha({
       captcha_key: captchaKey.value,
@@ -246,13 +249,13 @@ async function handleVerify() {
     })
     const body = res.data
     if (body.code === 200 && body.data?.success) {
-      ElMessage.success('验证成功')
+      showSuccess('验证成功')
       emit('verified', body.data.temp_token)
       closeModal()
     } else {
-      ElMessage.warning(body.msg || '验证失败，请重试')
+      showWarning(body.msg || '验证失败，请重试')
       selectedPoints.value = []
-      
+
       // 如果返回了新验证码，直接使用
       if (body.data?.new_captcha) {
         captchaKey.value = body.data.new_captcha.captcha_key
@@ -264,7 +267,7 @@ async function handleVerify() {
       }
     }
   } catch (err) {
-    ElMessage.error(err?.message || '验证失败')
+    showError(err?.message || '验证失败')
     selectedPoints.value = []
     handleRefresh()
   } finally {

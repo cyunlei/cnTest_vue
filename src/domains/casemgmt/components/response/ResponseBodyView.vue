@@ -1,6 +1,7 @@
 <script setup lang="ts">
+const { showSuccess, showWarning, showError } = useMessage()
 import { computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { useMessage } from '@/shared/ui'
 
 const props = defineProps<{
   modelValue: string

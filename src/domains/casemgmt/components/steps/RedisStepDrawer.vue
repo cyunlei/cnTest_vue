@@ -1,6 +1,7 @@
 <script setup lang="ts">
+const { showSuccess, showWarning, showError } = useMessage()
 import { computed, ref, watch, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
+import { useMessage } from '@/shared/ui'
 import { EditPen, Delete, CopyDocument, ArrowDown } from '@element-plus/icons-vue'
 import { testConnection } from '../../api'
 

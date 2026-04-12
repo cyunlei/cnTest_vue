@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, ref, watch, nextTick, defineAsyncComponent } from 'vue'
+import { useMessage } from '@/shared/ui'
 import { EditPen, Delete, CopyDocument, ArrowDown } from '@element-plus/icons-vue'
-import MonacoEditor from './MonacoEditor.vue'
-import CodeMirrorEditor from './CodeMirrorEditor.vue'
+
+// 动态导入编辑器组件（代码分割）
+const MonacoEditor = defineAsyncComponent(() => import('./MonacoEditor.vue'))
+const CodeMirrorEditor = defineAsyncComponent(() => import('./CodeMirrorEditor.vue'))
+
+const { showSuccess, showWarning, showError } = useMessage()
 
 const props = defineProps<{
   collapseKey?: number

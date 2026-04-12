@@ -5,8 +5,8 @@
  */
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import { useAuthStore } from '../stores/useAuthStore'
+import { useMessage } from '@/shared/ui'
 import { createUser, sendEmailCode, loginByEmailCode, checkAccountExist } from '../api'
 import { useCountdown, useFormValidator, ValidationRules, useDebounce } from '@/shared/composables'
 
@@ -16,6 +16,7 @@ const emit = defineEmits(['switchPanel'])
 // ======== Hooks ========
 const router = useRouter()
 const authStore = useAuthStore()
+const { showSuccess, showWarning, showError } = useMessage()
 const { countdown, isCounting, start: startCountdown } = useCountdown({ seconds: 60 })
 
 // ======== 表单验证 ========
@@ -87,7 +88,7 @@ const debouncedCheckUsername = useDebounce(async () => {
  */
 async function handleSendCode() {
   if (!emailValidator.validate()) {
-    ElMessage.warning(emailValidator.error.value)
+    showWarning(emailValidator.error.value)
     return
   }
 
@@ -96,13 +97,13 @@ async function handleSendCode() {
     const res = await sendEmailCode({ email: emailValidator.value.value.trim() })
     const body = res.data
     if (body.code === 200) {
-      ElMessage.success(body.msg || '验证码已发送')
+      showSuccess(body.msg || '验证码已发送')
       startCountdown()
     } else {
-      ElMessage.warning(body.msg || '发送失败')
+      showWarning(body.msg || '发送失败')
     }
   } catch (e) {
-    ElMessage.error(e?.message || '发送失败')
+    showError(e?.message || '发送失败')
   } finally {
     codeSending.value = false
   }
@@ -114,7 +115,7 @@ async function handleSendCode() {
 async function handleRegister() {
   // 检查协议
   if (!agreed.value) {
-    ElMessage.warning('请先阅读并同意服务条款与隐私协议')
+    showWarning('请先阅读并同意服务条款与隐私协议')
     return
   }
 
@@ -125,17 +126,17 @@ async function handleRegister() {
     usernameValidator,
     passwordValidator
   ]
-  
+
   for (const validator of validators) {
     if (!validator.validate()) {
-      ElMessage.warning(validator.error.value)
+      showWarning(validator.error.value)
       return
     }
   }
 
   // 检查账号是否存在提示
   if (emailCheckMsg.value || usernameCheckMsg.value) {
-    ElMessage.warning(emailCheckMsg.value || usernameCheckMsg.value)
+    showWarning(emailCheckMsg.value || usernameCheckMsg.value)
     return
   }
 
@@ -152,14 +153,14 @@ async function handleRegister() {
     const res = await createUser(params)
     const body = res.data
     if (body.code === 200) {
-      ElMessage.success(body.msg || '注册成功')
+      showSuccess(body.msg || '注册成功')
       // 尝试自动登录
       await autoLogin(params.email, params.code)
     } else {
-      ElMessage.warning(body.msg || body.detail || '注册失败')
+      showWarning(body.msg || body.detail || '注册失败')
     }
   } catch (err) {
-    ElMessage.error(err?.message || '请求失败')
+    showError(err?.message || '请求失败')
   } finally {
     loading.value = false
   }

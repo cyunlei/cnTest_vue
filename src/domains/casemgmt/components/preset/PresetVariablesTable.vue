@@ -75,13 +75,16 @@
 <script setup lang="ts">
 import { computed, ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
 import { Plus, QuestionFilled } from '@element-plus/icons-vue'
 import { usePresetVariablesStore } from '../../stores/usePresetVariablesStore'
 import { usePresetTemplateStore } from '../../stores/usePresetTemplateStore'
 import PresetVarTableCore from './PresetVarTableCore.vue'
 import { fetchTemplateVariableList, fetchTemplateVariableDetail, updateTemplateVariable } from '../../api'
 import { fetchProjectList } from '@/domains/project/api'
+import { useMessage } from '@/shared/ui'
+
+const { showSuccess, showWarning, showError } = useMessage()
 
 // 类型映射：
 // 0: 普通变量
@@ -350,7 +353,7 @@ const handleSaveTemplate = async () => {
     : (Array.isArray(templateSelectValue.value) ? templateSelectValue.value[0] : templateSelectValue.value)
 
   if (templateId === '' || templateId == null) {
-    ElMessage.warning('请先选择变量模板')
+    showWarning('请先选择变量模板')
     return
   }
 
@@ -369,11 +372,11 @@ const handleSaveTemplate = async () => {
   })
 
   if (resp?.data?.code === 200) {
-    ElMessage.success(resp?.data?.msg || '保存成功')
+    showSuccess(resp?.data?.msg || '保存成功')
     // 保存后重新拉一次详情，确保与后端一致
     void loadTemplateVariables(templateId as any)
   } else {
-    ElMessage.warning(resp?.data?.msg || '保存失败')
+    showWarning(resp?.data?.msg || '保存失败')
   }
 
   // 兼容既有事件（如果外部还有监听）

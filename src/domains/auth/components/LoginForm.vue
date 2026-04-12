@@ -6,19 +6,25 @@
  */
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import { useAuthStore } from '../stores/useAuthStore'
+import { useMessage } from '@/shared/ui'
 import { loginByPassword, loginByEmailCode } from '../api'
 import { sendEmailCode } from '@/domains/verification/api'
 import { useCountdown, useFormValidator, ValidationRules } from '@/shared/composables'
 // [验证码已临时禁用] import CaptchaModal from './CaptchaModal.vue'
 
 // ======== Emits ========
+/**
+ * @typedef {Object} LoginFormEmits
+ * @property {() => void} switchPanel - 切换到注册面板
+ */
+/** @type {import('vue').DefineEmits<LoginFormEmits>} */
 const emit = defineEmits(['switchPanel'])
 
 // ======== Hooks ========
 const router = useRouter()
 const authStore = useAuthStore()
+const { showSuccess, showWarning, showError } = useMessage()
 const { countdown, isCounting, start: startCountdown } = useCountdown({ seconds: 60 })
 
 // ======== 表单验证 ========
@@ -66,7 +72,7 @@ function switchLoginType(type) {
  */
 async function handleSendCode() {
   if (!emailValidator.validate()) {
-    ElMessage.warning(emailValidator.error.value)
+    showWarning(emailValidator.error.value)
     return
   }
 
@@ -75,13 +81,13 @@ async function handleSendCode() {
     const res = await sendEmailCode({ email: emailValidator.value.value.trim() })
     const body = res.data
     if (body.code === 200) {
-      ElMessage.success(body.msg || '验证码已发送')
+      showSuccess(body.msg || '验证码已发送')
       startCountdown()
     } else {
-      ElMessage.warning(body.msg || '发送失败')
+      showWarning(body.msg || '发送失败')
     }
   } catch (e) {
-    ElMessage.error(e?.message || '发送失败')
+    showError(e?.message || '发送失败')
   } finally {
     codeSending.value = false
   }
@@ -94,7 +100,7 @@ async function handleLogin() {
   if (loginType.value === 'email') {
     // 邮箱验证码登录
     if (!emailValidator.validate() || !codeValidator.validate()) {
-      ElMessage.warning(emailValidator.error.value || codeValidator.error.value)
+      showWarning(emailValidator.error.value || codeValidator.error.value)
       return
     }
     await doEmailLogin({
@@ -104,7 +110,7 @@ async function handleLogin() {
   } else {
     // 账号密码登录 - 先校验表单
     if (!accountValidator.validate() || !passwordValidator.validate()) {
-      ElMessage.warning(accountValidator.error.value || passwordValidator.error.value)
+      showWarning(accountValidator.error.value || passwordValidator.error.value)
       return
     }
     // [验证码已临时禁用] 弹出验证码校验
@@ -147,13 +153,13 @@ async function doEmailLogin(params) {
     const body = res.data
     if (body.code === 200 && body.data) {
       authStore.loginSuccess(body.data)
-      ElMessage.success(body.msg || '登录成功')
+      showSuccess(body.msg || '登录成功')
       router.push('/dashboard')
     } else {
-      ElMessage.warning(body.msg || body.detail || '登录失败')
+      showWarning(body.msg || body.detail || '登录失败')
     }
   } catch (err) {
-    ElMessage.error(err?.message || '请求失败，请检查网络')
+    showError(err?.message || '请求失败，请检查网络')
   } finally {
     loading.value = false
   }
@@ -169,13 +175,13 @@ async function doPasswordLogin(params) {
     const body = res.data
     if (body.code === 200 && body.data) {
       authStore.loginSuccess(body.data)
-      ElMessage.success(body.msg || '登录成功')
+      showSuccess(body.msg || '登录成功')
       router.push('/dashboard')
     } else {
-      ElMessage.warning(body.msg || body.detail || '登录失败')
+      showWarning(body.msg || body.detail || '登录失败')
     }
   } catch (err) {
-    ElMessage.error(err?.message || '请求失败，请检查网络')
+    showError(err?.message || '请求失败，请检查网络')
   } finally {
     loading.value = false
   }

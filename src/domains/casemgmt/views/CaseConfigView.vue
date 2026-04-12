@@ -1,7 +1,7 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, defineAsyncComponent, shallowRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { useMessage } from '@/shared/ui'
 import AppHeader from '@/shared/ui/organisms/AppHeader.vue'
 import AppPagination from '@/shared/ui/organisms/AppPagination.vue'
 import HttpStepDrawer from '../components/HttpStepDrawer.vue'
@@ -11,24 +11,25 @@ import { createStep, deleteStep, executeTestcase, fetchStepList, fetchStepDetail
 import { STEP_TYPE, ENV_CODE, HTTP_METHOD } from '../types'
 import { fetchProjectList } from '@/domains/project/api'
 
-// 更多步骤类型组件
-import HttpStepType from '../components/step-types/HttpStepType.vue'
-import MysqlStepType from '../components/step-types/MysqlStepType.vue'
-import RedisStepType from '../components/step-types/RedisStepType.vue'
-import JmqStepType from '../components/step-types/JmqStepType.vue'
-import DubboStepType from '../components/step-types/DubboStepType.vue'
-import KafkaStepType from '../components/step-types/KafkaStepType.vue'
-import R2mStepType from '../components/step-types/R2mStepType.vue'
-import FmqStepType from '../components/step-types/FmqStepType.vue'
-import JarStepType from '../components/step-types/JarStepType.vue'
-import ShellStepType from '../components/step-types/ShellStepType.vue'
-import LoopStepType from '../components/step-types/LoopStepType.vue'
-import ConditionStepType from '../components/step-types/ConditionStepType.vue'
-import StardbStepType from '../components/step-types/StardbStepType.vue'
-import ScheduleJobStepType from '../components/step-types/ScheduleJobStepType.vue'
+// 动态导入步骤类型组件（代码分割，按需加载）
+const HttpStepType = defineAsyncComponent(() => import('../components/step-types/HttpStepType.vue'))
+const MysqlStepType = defineAsyncComponent(() => import('../components/step-types/MysqlStepType.vue'))
+const RedisStepType = defineAsyncComponent(() => import('../components/step-types/RedisStepType.vue'))
+const JmqStepType = defineAsyncComponent(() => import('../components/step-types/JmqStepType.vue'))
+const DubboStepType = defineAsyncComponent(() => import('../components/step-types/DubboStepType.vue'))
+const KafkaStepType = defineAsyncComponent(() => import('../components/step-types/KafkaStepType.vue'))
+const R2mStepType = defineAsyncComponent(() => import('../components/step-types/R2mStepType.vue'))
+const FmqStepType = defineAsyncComponent(() => import('../components/step-types/FmqStepType.vue'))
+const JarStepType = defineAsyncComponent(() => import('../components/step-types/JarStepType.vue'))
+const ShellStepType = defineAsyncComponent(() => import('../components/step-types/ShellStepType.vue'))
+const LoopStepType = defineAsyncComponent(() => import('../components/step-types/LoopStepType.vue'))
+const ConditionStepType = defineAsyncComponent(() => import('../components/step-types/ConditionStepType.vue'))
+const StardbStepType = defineAsyncComponent(() => import('../components/step-types/StardbStepType.vue'))
+const ScheduleJobStepType = defineAsyncComponent(() => import('../components/step-types/ScheduleJobStepType.vue'))
 
 const route = useRoute()
 const router = useRouter()
+const { showSuccess, showWarning, showError } = useMessage()
 const caseId = computed(() => route.params.id)
 const projectId = computed(() => {
   const raw = route.query.project_id
@@ -126,7 +127,7 @@ async function loadProjects() {
       })
     }
   } catch (error) {
-    ElMessage.error('加载项目列表失败')
+    showError('加载项目列表失败')
   } finally {
     projectLoading.value = false
   }
@@ -198,7 +199,7 @@ async function loadCaseDetail() {
     }
   } catch (error) {
     void error
-    ElMessage.error('加载用例详情失败')
+    showError('加载用例详情失败')
   }
 }
 
@@ -256,7 +257,7 @@ async function loadStepList() {
     void error
     stepList.value = []
     stepTotal.value = 0
-    ElMessage.error('加载步骤列表失败')
+    showError('加载步骤列表失败')
   }
 }
 
@@ -308,14 +309,14 @@ async function handleDeleteStep(step) {
     const code = resp?.data?.code
     const msg = resp?.data?.msg
     if (code !== 0 && code !== 200) {
-      ElMessage.error(msg || '删除步骤失败')
+      showError(msg || '删除步骤失败')
       return
     }
-    ElMessage.success(msg || '删除步骤成功')
+    showSuccess(msg || '删除步骤成功')
     await loadStepList()
   } catch (error) {
     void error
-    ElMessage.error('删除步骤失败')
+    showError('删除步骤失败')
   }
 }
 
@@ -326,14 +327,14 @@ async function handleCopyStep(step) {
     const code = resp?.data?.code
     const msg = resp?.data?.msg
     if (code !== 0 && code !== 200) {
-      ElMessage.error(msg || '复制步骤失败')
+      showError(msg || '复制步骤失败')
       return
     }
-    ElMessage.success(msg || '复制步骤成功')
+    showSuccess(msg || '复制步骤成功')
     await loadStepList()
   } catch (error) {
     void error
-    ElMessage.error('复制步骤失败')
+    showError('复制步骤失败')
   }
 }
 
@@ -347,13 +348,13 @@ async function handleExecuteStep(step) {
     const code = resp?.data?.code
     const msg = resp?.data?.msg
     if (code !== 0 && code !== 200) {
-      ElMessage.error(msg || '执行步骤失败')
+      showError(msg || '执行步骤失败')
       return
     }
-    ElMessage.success(msg || '执行已触发')
+    showSuccess(msg || '执行已触发')
   } catch (error) {
     void error
-    ElMessage.error('执行步骤失败')
+    showError('执行步骤失败')
   }
 }
 
@@ -368,14 +369,14 @@ async function confirmExecuteStep(stepId) {
     const code = resp?.data?.code
     const msg = resp?.data?.msg
     if (code !== 0 && code !== 200) {
-      ElMessage.error(msg || '执行步骤失败')
+      showError(msg || '执行步骤失败')
       return
     }
-    ElMessage.success(msg || '执行已触发')
+    showSuccess(msg || '执行已触发')
     closeStepExecDrawer()
   } catch (error) {
     void error
-    ElMessage.error('执行步骤失败')
+    showError('执行步骤失败')
   }
 }
 
@@ -535,11 +536,11 @@ async function saveHttpStep(stepData) {
     const msg = resp?.data?.msg
 
     if (code !== 0 && code !== 200) {
-      ElMessage.error(msg || (isUpdate ? '更新步骤失败' : '保存步骤失败'))
+      showError(msg || (isUpdate ? '更新步骤失败' : '保存步骤失败'))
       return
     }
 
-    ElMessage.success(msg || (isUpdate ? '更新步骤成功' : '保存步骤成功'))
+    showSuccess(msg || (isUpdate ? '更新步骤成功' : '保存步骤成功'))
     await loadStepList()
 
     if (stepData.action === 'saveAndContinue') {
@@ -604,7 +605,7 @@ async function saveHttpStep(stepData) {
     closeHttpStepDrawer()
   } catch (error) {
     void error
-    ElMessage.error('保存步骤异常')
+    showError('保存步骤异常')
   }
 }
 
@@ -622,7 +623,7 @@ async function openStepDrawer(step) {
     const code = resp?.data?.code
     const data = resp?.data?.data
     if ((code !== 0 && code !== 200) || !data) {
-      ElMessage.error('获取步骤详情失败')
+      showError('获取步骤详情失败')
       return
     }
     // 将后端数据转换为前端格式并回填抽屉
@@ -630,7 +631,7 @@ async function openStepDrawer(step) {
     showHttpStepDrawer.value = true
   } catch (error) {
     void error
-    ElMessage.error('获取步骤详情失败')
+    showError('获取步骤详情失败')
   }
 }
 
@@ -768,7 +769,7 @@ function handleStepTypeSelect(stepType) {
   }
   stepList.value.push(newStep)
   stepTotal.value += 1
-  ElMessage.success(`已添加 ${typeOption.label} 步骤`)
+  showSuccess(`已添加 ${typeOption.label} 步骤`)
 }
 
 // 打开步骤类型配置对话框

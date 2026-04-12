@@ -41,8 +41,9 @@
 </template>
 
 <script setup lang="ts">
+const { showSuccess, showWarning, showError } = useMessage()
 import { ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { useMessage } from '@/shared/ui'
 import PresetVarTableCore from './PresetVarTableCore.vue'
 
 export type PresetVarType = number

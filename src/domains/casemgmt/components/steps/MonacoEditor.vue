@@ -1,6 +1,10 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import * as monaco from 'monaco-editor'
+import { onMounted, onBeforeUnmount, ref, watch, shallowRef } from 'vue'
+// 按需导入 Monaco Editor 核心和所需语言
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
+import 'monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution'
+import 'monaco-editor/esm/vs/basic-languages/python/python.contribution'
+import 'monaco-editor/esm/vs/basic-languages/shell/shell.contribution'
 
 const props = defineProps<{
   modelValue: string
@@ -13,12 +17,13 @@ const emit = defineEmits<{
 }>()
 
 const containerRef = ref<HTMLElement | null>(null)
-let editor: monaco.editor.IStandaloneCodeEditor | null = null
+// 使用 shallowRef 优化大型对象
+const editor = shallowRef<monaco.editor.IStandaloneCodeEditor | null>(null)
 
 onMounted(() => {
   if (!containerRef.value) return
 
-  editor = monaco.editor.create(containerRef.value, {
+  editor.value = monaco.editor.create(containerRef.value, {
     value: props.modelValue || '',
     language: props.language,
     automaticLayout: true,
@@ -29,15 +34,15 @@ onMounted(() => {
   })
 
   // 默认聚焦到第一行
-  editor.focus()
-  const model = editor.getModel()
+  editor.value?.focus()
+  const model = editor.value?.getModel()
   if (model) {
-    editor.setPosition({ lineNumber: 1, column: 1 })
+    editor.value?.setPosition({ lineNumber: 1, column: 1 })
   }
 
-  editor.onDidChangeModelContent(() => {
-    if (!editor) return
-    const value = editor.getValue()
+  editor.value?.onDidChangeModelContent(() => {
+    if (!editor.value) return
+    const value = editor.value.getValue()
     emit('update:modelValue', value)
 
     const currentModel = editor.getModel()
@@ -57,8 +62,8 @@ onMounted(() => {
 watch(
   () => props.modelValue,
   (val) => {
-    if (editor && editor.getValue() !== val) {
-      editor.setValue(val || '')
+    if (editor.value && editor.value.getValue() !== val) {
+      editor.value.setValue(val || '')
     }
   },
 )
@@ -66,8 +71,8 @@ watch(
 watch(
   () => props.language,
   (lang) => {
-    if (!editor) return
-    const model = editor.getModel()
+    if (!editor.value) return
+    const model = editor.value.getModel()
     if (model) {
       monaco.editor.setModelLanguage(model, lang)
     }
@@ -75,9 +80,9 @@ watch(
 )
 
 onBeforeUnmount(() => {
-  if (editor) {
-    editor.dispose()
-    editor = null
+  if (editor.value) {
+    editor.value.dispose()
+    editor.value = null
   }
 })
 </script>

@@ -23,7 +23,7 @@
 </template>
 
 <script>
-import { ElMessage } from 'element-plus'
+import { useMessage } from '@/shared/ui'
 
 export default {
   name: 'RawContent',

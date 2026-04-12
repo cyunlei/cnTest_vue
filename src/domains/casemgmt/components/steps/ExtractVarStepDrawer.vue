@@ -1,6 +1,7 @@
 <script setup lang="ts">
+const { showSuccess, showWarning, showError } = useMessage()
 import { computed, ref, watch, nextTick, defineExpose } from 'vue'
-import { ElMessage } from 'element-plus'
+import { useMessage } from '@/shared/ui'
 import { EditPen, Delete, CopyDocument, ArrowDown, Plus } from '@element-plus/icons-vue'
 
 type ExtractRow = {

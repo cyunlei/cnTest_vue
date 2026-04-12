@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { useMessage } from '@/shared/ui'
 import { Plus, Delete } from '@element-plus/icons-vue'
 
 export interface JsonPathAssertRow {
@@ -159,7 +159,8 @@ function saveEdit(row: JsonPathAssertRow) {
   const requireExpected = !NO_EXPECTED_RULES.includes(ruleLabel)
 
   if (!field || !ruleLabel || (requireExpected && !expected)) {
-    ElMessage.error('字段、规则、期望值均不能为空')
+    const { showError } = useMessage()
+    showError('字段、规则、期望值均不能为空')
     return
   }
 

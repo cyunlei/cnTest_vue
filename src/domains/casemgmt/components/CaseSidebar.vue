@@ -1,11 +1,19 @@
 <script setup>
-import { ref, onMounted, watch, nextTick, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick, computed, shallowRef } from 'vue'
 import { useRoute } from 'vue-router'
 import { fetchProjectList } from '@/domains/project/api'
 import { fetchSuiteList } from '../api'
 import { useProjectStore } from '@/domains/project/stores/useProjectStore'
 
 const route = useRoute()
+
+// ======== Props ========
+/**
+ * @typedef {Object} CaseSidebarProps
+ * @property {number} [refreshToken] - 刷新令牌（变化时触发树刷新）
+ * @property {import('../types').SuiteUpsertSignal|null} [suiteUpsertSignal] - 用例集操作信号
+ */
+/** @type {import('vue').DefineProps<CaseSidebarProps>} */
 const props = defineProps({
   refreshToken: {
     type: Number,
@@ -16,6 +24,18 @@ const props = defineProps({
     default: null
   }
 })
+
+// ======== Emits ========
+/**
+ * @typedef {Object} CaseSidebarEmits
+ * @property {(parentNode: import('../types').SuiteEntity|null) => void} openAddSuiteModal - 打开新增用例集弹窗
+ * @property {(suiteNode: import('../types').SuiteEntity|null) => void} openAddCaseModal - 打开新增用例弹窗
+ * @property {(node: import('../types').SuiteEntity) => void} editSuite - 编辑用例集
+ * @property {(node: import('../types').SuiteEntity) => void} deleteSuite - 删除用例集
+ * @property {(node: import('../types').SuiteEntity|null) => void} selectSuite - 选中用例集
+ * @property {(project: {id: number, name: string}) => void} projectChanged - 项目切换
+ */
+/** @type {import('vue').DefineEmits<CaseSidebarEmits>} */
 const emit = defineEmits([
   'openAddSuiteModal',
   'openAddCaseModal',
@@ -56,7 +76,7 @@ const actionDropdownStyle = ref({})
 const modules = ref([])
 
 // 用例集树数据
-const treeData = ref([])
+const treeData = shallowRef([])
 const selectedSuiteId = ref(null)
 
 // 通用加载函数：
@@ -184,6 +204,13 @@ onMounted(() => {
   void loadModules()
 })
 
+onUnmounted(() => {
+  // 清理所有定时器，防止内存泄漏
+  if (actionMenuCloseTimer) clearTimeout(actionMenuCloseTimer)
+  if (nodeMoreCloseTimer) clearTimeout(nodeMoreCloseTimer)
+  if (moduleDropdownCloseTimer) clearTimeout(moduleDropdownCloseTimer)
+})
+
 const expandedKeys = ref([])
 
 async function toggleExpand(node) {
@@ -285,6 +312,8 @@ function applySuiteUpsert(signal) {
     }
     const parentId = Number(incoming.parent_id)
     if (Number.isFinite(parentId) && parentId > 0) {
+      // 触发树更新：创建新对象
+      treeData.value = [...treeData.value]
       const parentNode = findNodeById(treeData.value, parentId)
       if (!parentNode) return
       if (!Array.isArray(parentNode.children)) {
@@ -296,23 +325,40 @@ function applySuiteUpsert(signal) {
       }
       return
     }
-    treeData.value.unshift(suiteNode)
+    treeData.value = [suiteNode, ...treeData.value]
   }
 }
 
 // 展开状态 + 树形列表 -> 扁平列表，支持任意层级
+// 优化：使用缓存避免重复计算
+let flatNodesCache = null
+let cacheKey = ''
+
 const flatNodes = computed(() => {
+  // 生成缓存键（基于 treeData 和 expandedKeys）
+  const currentKey = `${treeData.value.length}-${expandedKeys.value.join(',')}`
+
+  // 如果缓存有效，直接返回
+  if (flatNodesCache && cacheKey === currentKey) {
+    return flatNodesCache
+  }
+
   const result = []
   function walk(nodes, level) {
     if (!Array.isArray(nodes)) return
     for (const n of nodes) {
       result.push({ node: n, level })
-      if (expandedKeys.value.includes(n.id)) {
+      if (expandedKeys.value.includes(n.id) && n.children) {
         walk(n.children, level + 1)
       }
     }
   }
   walk(treeData.value, 0)
+
+  // 更新缓存
+  flatNodesCache = result
+  cacheKey = currentKey
+
   return result
 })
 

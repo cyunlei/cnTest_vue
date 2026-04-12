@@ -20,7 +20,7 @@ import {
   createTestcase,
   updateTestcase
 } from '../api'
-import { ElMessage } from 'element-plus'
+import { useMessage } from '@/shared/ui'
 import { useProjectStore } from '@/domains/project/stores/useProjectStore'
 import { getCaseTypeLabel, getPriorityLabel } from '../types'
 import { withGlobalLoading } from '@/shared/composables'
@@ -28,6 +28,7 @@ import { withGlobalLoading } from '@/shared/composables'
 const router = useRouter()
 const route = useRoute()
 const projectStore = useProjectStore()
+const { showSuccess, showWarning, showError } = useMessage()
 
 const activeTab = ref('scenario')
 const searchKeyword = ref('')
@@ -306,11 +307,11 @@ async function handleSaveCase(payload) {
     const msg = resp?.data?.msg
 
     if (code !== 0 && code !== 200) {
-      ElMessage.error(msg || (isEdit ? '编辑用例失败' : '新增用例失败'))
+      showError(msg || (isEdit ? '编辑用例失败' : '新增用例失败'))
       return
     }
 
-    ElMessage.success(msg || (isEdit ? '编辑用例成功' : '新增用例成功'))
+    showSuccess(msg || (isEdit ? '编辑用例成功' : '新增用例成功'))
     showAddCaseModal.value = false
     // 新增/编辑成功后刷新当前用例列表
     await loadTestcases()
@@ -327,7 +328,7 @@ async function handleSaveCase(payload) {
     }
   } catch (error) {
     void error
-    ElMessage.error('保存用例异常')
+    showError('保存用例异常')
   }
 }
 
@@ -380,10 +381,10 @@ async function createSuiteFromModal(payload) {
     const code = resp?.data?.code
     const msg = resp?.data?.msg
     if (code !== 0 && code !== 200) {
-      ElMessage.error(msg || (isEdit ? '编辑用例集失败' : '新增用例集失败'))
+      showError(msg || (isEdit ? '编辑用例集失败' : '新增用例集失败'))
       return
     }
-    ElMessage.success(msg || (isEdit ? '编辑用例集成功' : '新增用例集成功'))
+    showSuccess(msg || (isEdit ? '编辑用例集成功' : '新增用例集成功'))
     closeAddSuiteModal()
     if (isEdit) {
       suiteUpsertSignal.value = {
@@ -427,7 +428,7 @@ async function createSuiteFromModal(payload) {
     }
   } catch (error) {
     void error
-    ElMessage.error('新增用例集异常')
+    showError('新增用例集异常')
   }
 }
 
@@ -438,14 +439,14 @@ async function deleteSuiteFromSidebar(suite) {
     const code = resp?.data?.code
     const msg = resp?.data?.msg
     if (code !== 0 && code !== 200) {
-      ElMessage.error(msg || '删除用例集失败')
+      showError(msg || '删除用例集失败')
       return
     }
-    ElMessage.success(msg || '删除用例集成功')
+    showSuccess(msg || '删除用例集成功')
     sidebarRefreshKey.value += 1
   } catch (error) {
     void error
-    ElMessage.error('删除用例集异常')
+    showError('删除用例集异常')
   }
 }
 

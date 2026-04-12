@@ -149,8 +149,9 @@
 </template>
 
 <script setup lang="ts">
+const { showSuccess, showWarning, showError } = useMessage()
 import { ref, watch, computed, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
+import { useMessage } from '@/shared/ui'
 import { Plus } from '@element-plus/icons-vue'
 
 export type PresetVarType = number

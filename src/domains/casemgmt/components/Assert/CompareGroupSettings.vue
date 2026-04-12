@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { useMessage } from '@/shared/ui'
 
 export interface CompareGroup {
   id: number | string
@@ -167,7 +167,9 @@ const handleFormatBody = () => {
     // 使用 4 空格缩进美化，只在当前输入框内显示
     bodyText.value = JSON.stringify(parsed, null, 4)
   } catch {
-    ElMessage.error('JSON 格式不正确，请检查后再试')
+    const { showError } = useMessage()
+// ...
+showError('JSON 格式不正确，请检查后再试')
   }
 }
 

@@ -463,4 +463,11 @@ export const HTTP_METHOD = {
  * @typedef {ApiResponse<TestcaseEntity>} TestcaseMutationResponse
  */
 
+/**
+ * 用例集操作信号（父子通信）
+ * @typedef {Object} SuiteUpsertSignal
+ * @property {'create'|'edit'} type - 操作类型
+ * @property {SuiteEntity} suite - 用例集数据
+ */
+
 export {}

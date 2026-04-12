@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(grep -l ElMessage src/domains/casemgmt/views/*.vue src/domains/casemgmt/components/*/*.vue)",
+      "Bash(grep:*)"
     ]
   }
 }
