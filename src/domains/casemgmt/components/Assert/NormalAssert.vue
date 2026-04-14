@@ -1,5 +1,4 @@
 <script setup lang="ts">
-const { showSuccess, showWarning, showError } = useMessage()
 import { computed, ref, watch } from 'vue'
 import ScriptStepDrawer from '../steps/ScriptStepDrawer.vue'
 import { ElMessageBox } from 'element-plus'

@@ -49,6 +49,108 @@ const stepListMap = ref(new Map())
 const stepListLoading = ref(new Set())
 const expandedStepDetails = ref(new Set())
 
+// 步骤详情标签页状态
+const stepDetailTabs = ref(new Map())
+
+function getStepTabKey(rowId, stepId) {
+  return `${rowId}-${stepId}`
+}
+
+function getActiveRequestTab(rowId, stepId) {
+  return stepDetailTabs.value.get(`req-${getStepTabKey(rowId, stepId)}`) || 'body'
+}
+
+function setActiveRequestTab(rowId, stepId, tab) {
+  stepDetailTabs.value.set(`req-${getStepTabKey(rowId, stepId)}`, tab)
+}
+
+function getActiveResponseTab(rowId, stepId) {
+  return stepDetailTabs.value.get(`resp-${getStepTabKey(rowId, stepId)}`) || 'body'
+}
+
+function setActiveResponseTab(rowId, stepId, tab) {
+  stepDetailTabs.value.set(`resp-${getStepTabKey(rowId, stepId)}`, tab)
+}
+
+// 步骤列表筛选和搜索状态
+const stepSearchKeyword = ref('')
+const stepFilterIncorrect = ref(false)
+const stepExpandedAll = ref(false)
+const selectedSteps = ref(new Set())
+
+// 失败原因标注
+const failureReasonOptions = [
+  { label: '工具平台问题', value: 'platform' },
+  { label: '环境问题', value: 'environment' },
+  { label: '物料问题', value: 'material' },
+  { label: '数据问题', value: 'data' },
+  { label: '其他', value: 'other' }
+]
+const showFailureReasonPopover = ref(false)
+const selectedFailureReason = ref('')
+const failureReasonNote = ref('')
+
+function toggleStepSelection(rowId, stepId) {
+  const key = `${rowId}-${stepId}`
+  if (selectedSteps.value.has(key)) {
+    selectedSteps.value.delete(key)
+  } else {
+    selectedSteps.value.add(key)
+  }
+}
+
+function toggleExpandAllSteps(rowId) {
+  const steps = stepListMap.value.get(rowId) || []
+  const allExpanded = steps.every(step => expandedStepDetails.value.has(`${rowId}-${step.id || step.step_id}`))
+
+  if (allExpanded) {
+    // 全部收起
+    steps.forEach(step => {
+      expandedStepDetails.value.delete(`${rowId}-${step.id || step.step_id}`)
+    })
+    stepExpandedAll.value = false
+  } else {
+    // 全部展开
+    steps.forEach(step => {
+      expandedStepDetails.value.add(`${rowId}-${step.id || step.step_id}`)
+    })
+    stepExpandedAll.value = true
+  }
+}
+
+function handleStepSearch() {
+  // 搜索功能触发重新渲染
+  stepExpandedAll.value = false
+}
+
+function handleStepReset() {
+  stepSearchKeyword.value = ''
+  stepFilterIncorrect.value = false
+  stepExpandedAll.value = false
+}
+
+function submitFailureReason() {
+  // 提交失败原因标注
+  showFailureReasonPopover.value = false
+  selectedFailureReason.value = ''
+  failureReasonNote.value = ''
+}
+
+function openFullscreen(step) {
+  // 全屏展示步骤详情
+  console.log('Fullscreen:', step)
+}
+
+function openLogWindow(step) {
+  // 新窗口打开执行日志
+  console.log('Log:', step)
+}
+
+function retryStep(step) {
+  // 步骤重试
+  console.log('Retry:', step)
+}
+
 function formatDate(date) {
   const year = date.getFullYear()
   const month = `${date.getMonth() + 1}`.padStart(2, '0')
@@ -135,6 +237,38 @@ function stopResize() {
   document.removeEventListener('mouseup', stopResize)
 }
 
+// 步骤表格列宽调整
+const stepTableRef = ref(null)
+const stepResizingCol = ref(null)
+const stepStartX = ref(0)
+const stepStartWidth = ref(0)
+
+function initStepResize(e, colIndex) {
+  const th = e.target.closest('th')
+  if (!th) return
+
+  stepResizingCol.value = th
+  stepStartX.value = e.clientX
+  stepStartWidth.value = th.offsetWidth
+
+  document.addEventListener('mousemove', handleStepResize)
+  document.addEventListener('mouseup', stopStepResize)
+}
+
+function handleStepResize(e) {
+  if (!stepResizingCol.value) return
+  const diff = e.clientX - stepStartX.value
+  const newWidth = Math.max(40, stepStartWidth.value + diff)
+  stepResizingCol.value.style.width = `${newWidth}px`
+  stepResizingCol.value.style.minWidth = `${newWidth}px`
+}
+
+function stopStepResize() {
+  stepResizingCol.value = null
+  document.removeEventListener('mousemove', handleStepResize)
+  document.removeEventListener('mouseup', stopStepResize)
+}
+
 function toggleStepDetail(stepKey) {
   if (expandedStepDetails.value.has(stepKey)) {
     expandedStepDetails.value.delete(stepKey)
@@ -150,6 +284,24 @@ function formatJson(obj) {
   } catch {
     return String(obj)
   }
+}
+
+/**
+ * 获取步骤的期望值
+ * 支持多种可能的字段名：expected_response / expect_result / expected_result / expectResult
+ */
+function getStepExpectedResponse(step) {
+  if (!step) return ''
+  return step.expected_response ?? step.expect_result ?? step.expected_result ?? step.expectResult ?? ''
+}
+
+/**
+ * 获取步骤的实际入参
+ * 支持多种可能的字段名：actual_input / request_body / actual_request / input_params
+ */
+function getStepActualInput(step) {
+  if (!step) return ''
+  return step.actual_input ?? step.request_body ?? step.actual_request ?? step.input_params ?? ''
 }
 
 async function toggleExpand(rowId, batchId) {
@@ -411,154 +563,248 @@ async function loadExecutionBatches() {
                   <div class="step-list-container">
                     <div v-if="stepListLoading.has(row.id)" class="step-loading">加载步骤中...</div>
                     <div v-else-if="(stepListMap.get(row.id) || []).length === 0" class="step-empty">暂无步骤</div>
-                    <table v-else class="step-list-table">
-                      <thead>
-                        <tr>
-                          <th class="step-col-expand"></th>
-                          <th class="step-col-name">步骤名称</th>
-                          <th class="step-col-params">入参组</th>
-                          <th class="step-col-content">执行内容</th>
-                          <th class="step-col-compare-type">比对类型</th>
-                          <th class="step-col-compare-result">比对结果</th>
-                          <th class="step-col-duration">耗时(ms)</th>
-                          <th class="step-col-actions">操作</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <template v-for="step in stepListMap.get(row.id) || []" :key="step.id || step.step_id">
-                          <!-- 步骤主行 -->
-                          <tr class="step-row">
-                            <td class="step-col-expand">
-                              <svg
-                                viewBox="0 0 1024 1024"
-                                width="17.5"
-                                height="17.5"
-                                class="step-expand-icon"
-                                :class="{ 'is-expanded': expandedStepDetails.has(`${row.id}-${step.id || step.step_id}`) }"
-                                @click="toggleStepDetail(`${row.id}-${step.id || step.step_id}`)"
-                              >
-                                <path v-if="!expandedStepDetails.has(`${row.id}-${step.id || step.step_id}`)" fill="currentColor" d="M512 128C300.8 128 128 300.8 128 512s172.8 384 384 384 384-172.8 384-384S723.2 128 512 128z m0 64c176.8 0 320 143.2 320 320S688.8 832 512 832 192 688.8 192 512s143.2-320 320-320z M512 320a32 32 0 0 1 32 32v128h128a32 32 0 1 1 0 64h-128v128a32 32 0 1 1-64 0v-128h-128a32 32 0 1 1 0-64h128v-128a32 32 0 0 1 32-32z"/>
-                                <path v-else fill="currentColor" d="M512 128C300.8 128 128 300.8 128 512s172.8 384 384 384 384-172.8 384-384S723.2 128 512 128z m0 64c176.8 0 320 143.2 320 320S688.8 832 512 832 192 688.8 192 512s143.2-320 320-320z M320 512a32 32 0 0 1 32-32h320a32 32 0 1 1 0 64h-320a32 32 0 0 1-32-32z"/>
-                              </svg>
-                            </td>
-                            <td class="step-col-name">
-                              <a href="javascript:;" class="name-link">{{ step.step_name || '-' }}</a>
-                            </td>
-                            <td class="step-col-params">
-                              <span v-if="step.input_params_groups && step.input_params_groups.length > 0" class="param-group-tag">
-                                {{ step.input_params_groups[0].group_name || '第1组' }}
-                              </span>
-                              <span v-else>-</span>
-                            </td>
-                            <td class="step-col-content">
-                              <span class="http-method">{{ step.request_method || 'POST' }}</span>
-                              <span class="http-url" :title="step.request_url">{{ step.request_url || '-' }}</span>
-                            </td>
-                            <td class="step-col-compare-type">
-                              <span class="compare-type-tag" :class="{ 'ab-test': step.compare_type === 1 }">
-                                {{ step.compare_type === 1 ? 'A/B测试' : '正常比对' }}
-                              </span>
-                            </td>
-                            <td class="step-col-compare-result">
-                              <span
-                                class="compare-result-tag"
-                                :class="{
-                                  'result-pass': step.status === 'success',
-                                  'result-fail': step.status === 'failed' || step.status === 'error',
-                                  'result-pending': step.status === 'pending' || step.status === 'running'
-                                }"
-                              >
-                                {{ step.status === 'success' ? '通过' : step.status === 'failed' ? '失败' : step.status === 'error' ? '错误' : step.status === 'running' ? '执行中' : '待执行' }}
-                              </span>
-                            </td>
-                            <td class="step-col-duration">{{ step.duration_ms ?? step.response_time_ms ?? '-' }}</td>
-                            <td class="step-col-actions">
-                              <a href="javascript:;" class="action-link" @click="toggleStepDetail(`${row.id}-${step.id || step.step_id}`)">查看结果</a>
-                            </td>
+                    <div v-else class="step-list-wrapper">
+                      <!-- 第一行：工具栏 -->
+                      <div class="step-toolbar">
+                        <div class="step-toolbar-left">
+                          <input
+                            v-model="stepSearchKeyword"
+                            type="text"
+                            class="step-search-input"
+                            placeholder="搜索步骤"
+                            @keyup.enter="handleStepSearch"
+                          />
+                          <button class="step-btn step-btn--primary" @click="handleStepSearch">搜索</button>
+                          <button class="step-btn" @click="handleStepReset">重置</button>
+                          <label class="step-checkbox-label">
+                            <input v-model="stepFilterIncorrect" type="checkbox" />
+                            不正确
+                          </label>
+                          <button class="step-btn" @click="toggleExpandAllSteps(row.id)">展开全部</button>
+                        </div>
+                        <div class="step-toolbar-right">
+                          <span class="step-toolbar-icon" title="全屏" @click="openFullscreen">
+                            <svg viewBox="0 0 1024 1024" width="16" height="16">
+                              <path fill="currentColor" d="M160 96h192a32 32 0 0 1 0 64H192v128a32 32 0 0 1-64 0V128a32 32 0 0 1 32-32z m576 0h128a32 32 0 0 1 32 32v192a32 32 0 0 1-64 0V192h-128a32 32 0 0 1 0-64zM160 608a32 32 0 0 1 32 32v128h128a32 32 0 0 1 0 64H160a32 32 0 0 1-32-32v-192a32 32 0 0 1 32-32z m704 0a32 32 0 0 1 32 32v192a32 32 0 0 1-32 32h-192a32 32 0 0 1 0-64h128v-128a32 32 0 0 1 32-32z"/>
+                            </svg>
+                          </span>
+                          <span class="step-toolbar-icon" title="日志" @click="openLogWindow">
+                            <svg viewBox="0 0 1024 1024" width="16" height="16">
+                              <path fill="currentColor" d="M832 192v640H192V192h640z m-64 64H256v512h512V256z M384 384h256v64H384v-64z M384 512h256v64H384v-64z M384 640h128v64H384v-64z"/>
+                            </svg>
+                          </span>
+                          <span class="step-toolbar-icon" title="步骤重试" @click="retryStep">
+                            <svg viewBox="0 0 1024 1024" width="16" height="16">
+                              <path fill="currentColor" d="M832 512a32 32 0 0 0-32 32c0 158.784-129.216 288-288 288s-288-129.216-288-288 129.216-288 288-288c66.208 0 127.264 22.688 176.128 60.672L544 448h224V224l-73.6 73.6C629.856 241.472 545.152 192 448 192 264.96 192 128 328.96 128 512s136.96 320 320 320 320-136.96 320-320a32 32 0 0 0-32-32z"/>
+                            </svg>
+                          </span>
+                          <div class="step-failure-reason">
+                            <select v-model="selectedFailureReason" class="step-failure-select">
+                              <option value="">失败原因标注</option>
+                              <option v-for="option in failureReasonOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                            </select>
+                            <div v-if="selectedFailureReason === 'other'" class="failure-reason-popover">
+                              <textarea v-model="failureReasonNote" placeholder="详细原因描述" class="failure-reason-textarea"></textarea>
+                              <div class="failure-reason-actions">
+                                <button class="step-btn" @click="selectedFailureReason = ''">关闭</button>
+                                <button class="step-btn step-btn--primary" @click="submitFailureReason">提交</button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- 步骤列表表格 -->
+                      <table class="step-list-table" ref="stepTableRef">
+                        <thead>
+                          <tr>
+                            <th class="step-col-checkbox resizable">
+                              <span class="th-content"><input type="checkbox" /></span>
+                              <span class="resize-handle" @mousedown="initStepResize($event, 0)"></span>
+                            </th>
+                            <th class="step-col-name resizable">
+                              <span class="th-content">步骤名称</span>
+                              <span class="resize-handle" @mousedown="initStepResize($event, 1)"></span>
+                            </th>
+                            <th class="step-col-params resizable">
+                              <span class="th-content">入参组</span>
+                              <span class="resize-handle" @mousedown="initStepResize($event, 2)"></span>
+                            </th>
+                            <th class="step-col-content resizable">
+                              <span class="th-content">执行内容</span>
+                              <span class="resize-handle" @mousedown="initStepResize($event, 3)"></span>
+                            </th>
+                            <th class="step-col-time resizable">
+                              <span class="th-content">执行时间</span>
+                              <span class="resize-handle" @mousedown="initStepResize($event, 4)"></span>
+                            </th>
+                            <th class="step-col-compare-type resizable">
+                              <span class="th-content">比对类型</span>
+                              <span class="resize-handle" @mousedown="initStepResize($event, 5)"></span>
+                            </th>
+                            <th class="step-col-compare-result resizable">
+                              <span class="th-content">比对结果</span>
+                              <span class="resize-handle" @mousedown="initStepResize($event, 6)"></span>
+                            </th>
+                            <th class="step-col-fail-reason resizable">
+                              <span class="th-content">失败原因</span>
+                              <span class="resize-handle" @mousedown="initStepResize($event, 7)"></span>
+                            </th>
+                            <th class="step-col-duration resizable">
+                              <span class="th-content">耗时(ms)</span>
+                              <span class="resize-handle" @mousedown="initStepResize($event, 8)"></span>
+                            </th>
+                            <th class="step-col-actions resizable">
+                              <span class="th-content">操作</span>
+                              <span class="resize-handle" @mousedown="initStepResize($event, 9)"></span>
+                            </th>
                           </tr>
-                          <!-- 步骤详情展开行 -->
-                          <tr v-if="expandedStepDetails.has(`${row.id}-${step.id || step.step_id}`)" class="step-detail-row">
-                            <td colspan="8" class="step-detail-cell">
-                              <div class="step-detail-panel">
-                                <!-- 执行状态信息 -->
-                                <div class="detail-info-bar">
-                                  <div class="info-item">
-                                    <span class="info-label">执行时间:</span>
-                                    <span class="info-value">{{ step.start_time || '-' }} ~ {{ step.end_time || '-' }}</span>
+                        </thead>
+                        <tbody>
+                          <template v-for="step in stepListMap.get(row.id) || []" :key="step.id || step.step_id">
+                            <!-- 步骤主行 -->
+                            <tr class="step-row">
+                              <td class="step-col-checkbox">
+                                <input
+                                  type="checkbox"
+                                  :checked="selectedSteps.has(`${row.id}-${step.id || step.step_id}`)"
+                                  @change="toggleStepSelection(row.id, step.id || step.step_id)"
+                                />
+                              </td>
+                              <td class="step-col-name">
+                                <span class="step-expand-icon-wrapper" @click="toggleStepDetail(`${row.id}-${step.id || step.step_id}`)">
+                                  <svg
+                                    v-if="!expandedStepDetails.has(`${row.id}-${step.id || step.step_id}`)"
+                                    viewBox="0 0 1024 1024"
+                                    width="14"
+                                    height="14"
+                                    class="step-expand-icon"
+                                  >
+                                    <path fill="currentColor" d="M512 128C300.8 128 128 300.8 128 512s172.8 384 384 384 384-172.8 384-384S723.2 128 512 128z m0 64c176.8 0 320 143.2 320 320S688.8 832 512 832 192 688.8 192 512s143.2-320 320-320z M512 320a32 32 0 0 1 32 32v128h128a32 32 0 1 1 0 64h-128v128a32 32 0 1 1-64 0v-128h-128a32 32 0 1 1 0-64h128v-128a32 32 0 0 1 32-32z"/>
+                                  </svg>
+                                  <svg
+                                    v-else
+                                    viewBox="0 0 1024 1024"
+                                    width="14"
+                                    height="14"
+                                    class="step-expand-icon"
+                                  >
+                                    <path fill="currentColor" d="M512 128C300.8 128 128 300.8 128 512s172.8 384 384 384 384-172.8 384-384S723.2 128 512 128z m0 64c176.8 0 320 143.2 320 320S688.8 832 512 832 192 688.8 192 512s143.2-320 320-320z M320 512a32 32 0 0 1 32-32h320a32 32 0 1 1 0 64h-320a32 32 0 0 1-32-32z"/>
+                                  </svg>
+                                </span>
+                                <a href="javascript:;" class="name-link">{{ step.step_name || '-' }}</a>
+                              </td>
+                              <td class="step-col-params">
+                                <span v-if="step.input_params_groups && step.input_params_groups.length > 0" class="param-group-tag">
+                                  {{ step.input_params_groups[0].group_name || '第1组' }}
+                                </span>
+                                <span v-else>-</span>
+                              </td>
+                              <td class="step-col-content">
+                                <span class="http-method">{{ step.request_method || 'POST' }}</span>
+                                <span class="http-url" :title="step.request_url">{{ step.request_url || '-' }}</span>
+                              </td>
+                              <td class="step-col-time">{{ step.start_time || '-' }}</td>
+                              <td class="step-col-compare-type">
+                                <span class="compare-type-tag" :class="{ 'ab-test': step.compare_type === 1 }">
+                                  {{ step.compare_type === 1 ? 'A/B测试' : '正常比对' }}
+                                </span>
+                              </td>
+                              <td class="step-col-compare-result">
+                                <span
+                                  class="compare-result-tag"
+                                  :class="{
+                                    'result-pass': step.status === 'success',
+                                    'result-fail': step.status === 'failed' || step.status === 'error',
+                                    'result-pending': step.status === 'pending' || step.status === 'running'
+                                  }"
+                                >
+                                  {{ step.status === 'success' ? '通过' : step.status === 'failed' ? '失败' : step.status === 'error' ? '错误' : step.status === 'running' ? '执行中' : '待执行' }}
+                                </span>
+                              </td>
+                              <td class="step-col-fail-reason">{{ step.failure_reason || '-' }}</td>
+                              <td class="step-col-duration">{{ step.duration_ms ?? step.response_time_ms ?? '-' }}</td>
+                              <td class="step-col-actions">
+                                <a href="javascript:;" class="action-link" @click="toggleStepDetail(`${row.id}-${step.id || step.step_id}`)">查看结果</a>
+                              </td>
+                            </tr>
+                            <!-- 步骤详情展开行 -->
+                            <tr v-if="expandedStepDetails.has(`${row.id}-${step.id || step.step_id}`)" class="step-detail-row">
+                              <td colspan="10" class="step-detail-cell">
+                                <div class="step-detail-panel">
+                                  <!-- 第4行：执行内容（土黄色背景） -->
+                                  <div class="step-execution-content">
+                                    <span class="execution-content-label">执行内容：</span>
+                                    <span class="execution-content-value" :title="`${step.request_method} ${step.request_url}`">{{ step.request_method }} {{ step.request_url }}</span>
                                   </div>
-                                  <div class="info-item">
-                                    <span class="info-label">状态码:</span>
-                                    <span class="info-value status-code" :class="{ 'status-success': step.response_status_code >= 200 && step.response_status_code < 300, 'status-error': step.response_status_code >= 400 }">{{ step.response_status_code || '-' }}</span>
-                                  </div>
-                                  <div class="info-item" v-if="step.error_message">
-                                    <span class="info-label error">失败原因:</span>
-                                    <span class="info-value error-text">{{ step.error_message }}</span>
-                                  </div>
-                                </div>
 
-                                <!-- 请求信息 -->
-                                <div class="detail-section">
-                                  <div class="detail-section-header">
-                                    <span class="detail-section-title">请求信息</span>
-                                    <span class="detail-section-url">{{ step.request_method }} {{ step.request_url }}</span>
-                                  </div>
-                                  <div class="detail-tabs">
-                                    <div class="detail-tab active">Body</div>
-                                    <div class="detail-tab">Headers</div>
-                                    <div class="detail-tab">Params</div>
-                                  </div>
-                                  <pre class="json-code request-code"><code>{{ formatJson(step.request_body) }}</code></pre>
-                                </div>
-
-                                <!-- 响应信息 -->
-                                <div class="detail-section">
-                                  <div class="detail-section-header">
-                                    <span class="detail-section-title">响应信息</span>
-                                  </div>
-                                  <div class="detail-tabs">
-                                    <div class="detail-tab active">Body</div>
-                                    <div class="detail-tab">Headers</div>
-                                  </div>
-                                  <pre class="json-code response-code"><code>{{ formatJson(step.response_body) }}</code></pre>
-                                </div>
-
-                                <!-- 断言结果 -->
-                                <div class="detail-section" v-if="step.assertion_results && step.assertion_results.length > 0">
-                                  <div class="detail-section-header">
-                                    <span class="detail-section-title">断言结果</span>
-                                  </div>
-                                  <div class="assertion-list">
-                                    <div
-                                      v-for="(assertion, idx) in step.assertion_results"
-                                      :key="idx"
-                                      class="assertion-item"
-                                      :class="{ 'assertion-pass': assertion.passed, 'assertion-fail': !assertion.passed }"
-                                    >
-                                      <div class="assertion-header">
-                                        <span class="assertion-type">{{ assertion.type }}</span>
-                                        <span class="assertion-status">{{ assertion.passed ? '✓ 通过' : '✗ 失败' }}</span>
+                                  <!-- 第5行：断言规则 -->
+                                  <div v-if="step.assertion_rules && step.assertion_rules.length > 0" class="step-assertion-rules">
+                                    <div class="assertion-rules-header">断言规则：</div>
+                                    <div class="assertion-rules-list">
+                                      <div
+                                        v-for="(rule, idx) in step.assertion_rules"
+                                        :key="idx"
+                                        class="assertion-rule-item"
+                                        :class="{ 'rule-pass': rule.passed, 'rule-fail': !rule.passed }"
+                                      >
+                                        <span class="rule-path">{{ rule.path }}</span>
+                                        <span class="rule-operator">{{ rule.operator }}</span>
+                                        <span class="rule-expected">{{ rule.expected }}</span>
+                                        <span v-if="rule.actual !== undefined" class="rule-actual">实际: {{ rule.actual }}</span>
                                       </div>
-                                      <div v-if="assertion.error_message" class="assertion-error">{{ assertion.error_message }}</div>
-                                      <div v-if="assertion.logs && assertion.logs.length > 0" class="assertion-logs">
-                                        <div v-for="(log, logIdx) in assertion.logs" :key="logIdx" class="log-item">{{ log }}</div>
+                                    </div>
+                                  </div>
+
+                                  <!-- 第6行：前置/后置提取变量结果 -->
+                                  <div v-if="step.extracted_variables && Object.keys(step.extracted_variables).length > 0" class="step-extracted-vars">
+                                    <div class="extracted-vars-header">前置/后置提取变量结果：</div>
+                                    <pre class="json-code vars-code"><code>{{ formatJson(step.extracted_variables) }}</code></pre>
+                                  </div>
+
+                                  <!-- 第7行：响应值、期望值、实际入参三列对比 -->
+                                  <div class="step-comparison-section">
+                                    <div class="comparison-header">
+                                      <div class="comparison-col">
+                                        <span>响应值</span>
+                                        <span class="comparison-actions">
+                                          <a href="javascript:;" class="comparison-link" @click="openFullscreen(step)">全屏</a>
+                                          <span class="comparison-divider">|</span>
+                                          <a href="javascript:;" class="comparison-link">DIFF结果</a>
+                                        </span>
+                                      </div>
+                                      <div class="comparison-col">期望值</div>
+                                      <div class="comparison-col">实际入参</div>
+                                    </div>
+                                    <div class="comparison-content">
+                                      <div class="comparison-col">
+                                        <pre class="json-code"><code>{{ formatJson(step.response_body) }}</code></pre>
+                                      </div>
+                                      <div class="comparison-col">
+                                        <pre class="json-code expected-code"><code>{{ formatJson(getStepExpectedResponse(step)) }}</code></pre>
+                                      </div>
+                                      <div class="comparison-col">
+                                        <pre class="json-code actual-code"><code>{{ formatJson(getStepActualInput(step)) }}</code></pre>
                                       </div>
                                     </div>
                                   </div>
                                 </div>
+                              </td>
+                            </tr>
+                          </template>
+                        </tbody>
+                      </table>
 
-                                <!-- 变量提取 -->
-                                <div class="detail-section" v-if="step.extracted_variables && Object.keys(step.extracted_variables).length > 0">
-                                  <div class="detail-section-header">
-                                    <span class="detail-section-title">变量提取</span>
-                                  </div>
-                                  <pre class="json-code vars-code"><code>{{ formatJson(step.extracted_variables) }}</code></pre>
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        </template>
-                      </tbody>
-                    </table>
+                      <!-- 分页 -->
+                      <div class="step-pagination">
+                        <AppPagination
+                          :current-page="1"
+                          :page-size="20"
+                          :total="(stepListMap.get(row.id) || []).length"
+                          :page-size-options="[20, 50, 100]"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </td>
               </tr>
@@ -1083,6 +1329,29 @@ async function loadExecutionBatches() {
   background: #f5f7fa;
   color: #606266;
   font-weight: 500;
+  position: relative;
+  padding-right: 6px !important;
+}
+
+.step-list-table th.resizable .th-content {
+  display: inline-flex;
+  align-items: center;
+}
+
+.step-list-table th .resize-handle {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 60%;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.2s;
+}
+
+.step-list-table th .resize-handle:hover {
+  background: #1677ff;
 }
 
 .step-row:hover {
@@ -1413,6 +1682,14 @@ async function loadExecutionBatches() {
   background: #fffbe6;
 }
 
+.json-code.headers-code {
+  background: #f0f5ff;
+}
+
+.json-code.params-code {
+  background: #fff2e8;
+}
+
 .json-code code {
   font-family: inherit;
 }
@@ -1496,5 +1773,403 @@ async function loadExecutionBatches() {
   margin-bottom: 0;
 }
 
+/* 步骤列表包装器 */
+.step-list-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 步骤工具栏 */
+.step-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #fafafa;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+}
+
+.step-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.step-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.step-search-input {
+  height: 28px;
+  width: 150px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.step-search-input:focus {
+  border-color: #40a9ff;
+  outline: none;
+}
+
+.step-btn {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.step-btn:hover {
+  border-color: #40a9ff;
+  color: #40a9ff;
+}
+
+.step-btn--primary {
+  background: #1890ff;
+  border-color: #1890ff;
+  color: #fff;
+}
+
+.step-btn--primary:hover {
+  background: #40a9ff;
+  border-color: #40a9ff;
+  color: #fff;
+}
+
+.step-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #595959;
+  cursor: pointer;
+}
+
+.step-toolbar-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: #595959;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.step-toolbar-icon:hover {
+  background: #e6f7ff;
+  color: #1890ff;
+}
+
+/* 失败原因标注 */
+.step-failure-reason {
+  position: relative;
+}
+
+.step-failure-select {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 12px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.step-failure-select:focus {
+  border-color: #40a9ff;
+  outline: none;
+}
+
+.failure-reason-popover {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  width: 240px;
+}
+
+.failure-reason-textarea {
+  width: 100%;
+  height: 80px;
+  padding: 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 12px;
+  resize: none;
+  box-sizing: border-box;
+}
+
+.failure-reason-textarea:focus {
+  border-color: #40a9ff;
+  outline: none;
+}
+
+.failure-reason-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* 步骤表格列宽调整 */
+.step-col-checkbox {
+  width: 40px;
+  text-align: center !important;
+}
+
+.step-col-name {
+  min-width: 120px;
+}
+
+.step-col-params {
+  width: 70px;
+  text-align: center !important;
+}
+
+.step-col-content {
+  min-width: 200px;
+  max-width: 300px;
+}
+
+.step-col-time {
+  width: 150px;
+}
+
+.step-col-compare-type {
+  width: 80px;
+  text-align: center !important;
+}
+
+.step-col-compare-result {
+  width: 70px;
+  text-align: center !important;
+}
+
+.step-col-fail-reason {
+  width: 100px;
+}
+
+.step-col-duration {
+  width: 70px;
+  text-align: center !important;
+}
+
+.step-col-actions {
+  width: 80px;
+  text-align: center !important;
+}
+
+/* 步骤展开图标 */
+.step-expand-icon-wrapper {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+  cursor: pointer;
+  color: #8c8c8c;
+}
+
+.step-expand-icon-wrapper:hover {
+  color: #1890ff;
+}
+
+.step-expand-icon {
+  transition: transform 0.2s;
+}
+
+/* 步骤执行内容（土黄色背景） */
+.step-execution-content {
+  padding: 8px 12px;
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.execution-content-label {
+  color: #8c8c8c;
+  margin-right: 4px;
+}
+
+.execution-content-value {
+  color: #262626;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+/* 断言规则 */
+.step-assertion-rules {
+  margin-bottom: 12px;
+}
+
+.assertion-rules-header {
+  font-size: 12px;
+  font-weight: 500;
+  color: #262626;
+  margin-bottom: 8px;
+}
+
+.assertion-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.assertion-rule-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  background: #fafafa;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.assertion-rule-item.rule-pass {
+  background: #f6ffed;
+  border-color: #b7eb8f;
+}
+
+.assertion-rule-item.rule-fail {
+  background: #fff2f0;
+  border-color: #ffccc7;
+}
+
+.rule-path {
+  color: #1890ff;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+.rule-operator {
+  color: #8c8c8c;
+}
+
+.rule-expected {
+  color: #52c41a;
+}
+
+.rule-actual {
+  color: #ff4d4f;
+  margin-left: auto;
+}
+
+/* 提取变量 */
+.step-extracted-vars {
+  margin-bottom: 12px;
+}
+
+.extracted-vars-header {
+  font-size: 12px;
+  font-weight: 500;
+  color: #262626;
+  margin-bottom: 8px;
+}
+
+/* 三列对比区域 */
+.step-comparison-section {
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.comparison-header {
+  display: flex;
+  background: #fafafa;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.comparison-header .comparison-col {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #262626;
+  border-right: 1px solid #e8e8e8;
+}
+
+.comparison-header .comparison-col:last-child {
+  border-right: none;
+}
+
+.comparison-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.comparison-link {
+  color: #1890ff;
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.comparison-link:hover {
+  text-decoration: underline;
+}
+
+.comparison-divider {
+  color: #d9d9d9;
+  font-size: 11px;
+}
+
+.comparison-content {
+  display: flex;
+}
+
+.comparison-content .comparison-col {
+  flex: 1;
+  border-right: 1px solid #e8e8e8;
+}
+
+.comparison-content .comparison-col:last-child {
+  border-right: none;
+}
+
+.comparison-content .json-code {
+  max-height: 400px;
+  min-height: 150px;
+  background: #f6ffed;
+}
+
+.comparison-content .expected-code {
+  background: #e6f7ff;
+}
+
+.comparison-content .actual-code {
+  background: #fff2e8;
+}
+
+/* 步骤分页 */
+.step-pagination {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 0;
+}
 </style>
 

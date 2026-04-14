@@ -2,15 +2,15 @@
 /**
  * 通用输入对话框组件 - 只封装输入步骤
  * 输入 → 解析 → 触发事件（外部处理结果展示）
- * 
+ *
  * Props:
  * - title: 弹窗标题
  * - placeholder: 输入框占位符
  * - actionButtonText: 操作按钮文字（如"解析"、"生成"）
  * - parseFunction: 解析函数，接收输入内容，返回参数数组
  * - persistedContent: 持久化的输入内容
- */   
-import { ref, watch } from 'vue'
+ */
+import { ref, watch, computed } from 'vue'
 
 const props = defineProps({
   modelValue: {
@@ -48,6 +48,31 @@ const content = ref('')
 
 // 解析错误信息
 const parseError = ref('')
+
+// 检测内容是否是有效的 JSON
+const isValidJson = computed(() => {
+  const text = content.value.trim()
+  if (!text) return false
+  try {
+    JSON.parse(text)
+    return true
+  } catch (e) {
+    return false
+  }
+})
+
+// 格式化 JSON
+function formatJson() {
+  const text = content.value.trim()
+  if (!text) return
+  try {
+    const parsed = JSON.parse(text)
+    content.value = JSON.stringify(parsed, null, 2)
+    parseError.value = ''
+  } catch (e) {
+    parseError.value = 'JSON 格式错误，无法格式化'
+  }
+}
 
 // 监听弹窗打开
 watch(() => props.modelValue, (val) => {
@@ -128,9 +153,19 @@ async function handleParse() {
     
     <template #footer>
       <div class="dialog-footer">
-        <el-button @click="handleParse" :disabled="!content.trim()">
-          {{ actionButtonText }}
-        </el-button>
+        <div class="dialog-left">
+          <el-button @click="handleParse" :disabled="!content.trim()">
+            {{ actionButtonText }}
+          </el-button>
+          <el-button
+            v-if="isValidJson"
+            @click="formatJson"
+            type="info"
+            plain
+          >
+            格式化
+          </el-button>
+        </div>
         <div class="dialog-right">
           <el-button @click="closeDialog">取消</el-button>
         </div>
@@ -154,6 +189,11 @@ async function handleParse() {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.dialog-left {
+  display: flex;
+  gap: 12px;
 }
 
 .dialog-right {

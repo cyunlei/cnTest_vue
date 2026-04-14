@@ -1,9 +1,27 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run:*)",
-      "Bash(grep -l ElMessage src/domains/casemgmt/views/*.vue src/domains/casemgmt/components/*/*.vue)",
-      "Bash(grep:*)"
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(pytest:*)",
+      "Bash(find:*)",
+      "Bash(rm:*)",
+      "Bash(export DJANGO_SETTINGS_MODULE=*)",
+      "Bash(ls:*)",
+      "Bash(pwd)",
+      "Bash(cat:*)",
+      "Bash(echo:*)",
+      "Bash(git:*)",
+      "Bash(grep:*)",
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)",
+      "sed(*)"
     ]
+  },
+  "autoApprove": {
+    "commands": true,
+    "fileEdits": true,
+    "toolUse": true
   }
 }

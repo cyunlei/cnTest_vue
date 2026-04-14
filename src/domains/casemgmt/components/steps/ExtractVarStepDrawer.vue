@@ -39,11 +39,46 @@ const nameInputRef = ref()
 
 const rows = ref<ExtractRow[]>([])
 
-// 监听 config prop 变化，处理 _pendingJsonPaths
+ // 监听 config prop 变化，处理 _pendingJsonPaths 和已有数据
 watch(
   () => props.config,
   (config) => {
-    if (config?._pendingJsonPaths && Array.isArray(config._pendingJsonPaths)) {
+    if (!config) return
+
+    // 处理多行数据（_rows）
+    if (config._rows && Array.isArray(config._rows) && config._rows.length > 0 && rows.value.length === 0) {
+      rows.value = config._rows.map((row: any) => ({
+        id: row.id || Date.now() + Math.random(),
+        path: row.path || '',
+        name: row.name || '',
+        remark: row.remark || '',
+        editing: false,
+        pathError: '',
+        pathInvalid: false,
+        nameError: '',
+        nameInvalid: false
+      }))
+      return
+    }
+
+    // 处理从后端返回的已有数据（单行）
+    if ((config.jsonPath || config.variableName) && rows.value.length === 0) {
+      rows.value.push({
+        id: Date.now() + Math.random(),
+        path: config.jsonPath || '',
+        name: config.variableName || '',
+        remark: config.description || '',
+        editing: false,
+        pathError: '',
+        pathInvalid: false,
+        nameError: '',
+        nameInvalid: false
+      })
+      return
+    }
+
+    // 处理快捷添加的 JSONPath
+    if (config._pendingJsonPaths && Array.isArray(config._pendingJsonPaths)) {
       // 添加新的 JSONPath 行
       config._pendingJsonPaths.forEach((path: string) => {
         const existing = rows.value.find(r => r.path === path)
@@ -53,7 +88,11 @@ watch(
             path: path,
             name: path.replace(/\$/g, '').replace(/\./g, '_').replace(/\[|\]/g, ''),
             remark: '',
-            editing: false
+            editing: false,
+            pathError: '',
+            pathInvalid: false,
+            nameError: '',
+            nameInvalid: false
           })
         }
       })
@@ -61,7 +100,7 @@ watch(
       emit('update:config', { ...config, _pendingJsonPaths: undefined })
     }
   },
-  { deep: true }
+  { deep: true, immediate: true }
 )
 
 // 监听 rows 变化，emit config 更新
@@ -224,12 +263,13 @@ const addRowsFromJsonpaths = (paths: string[]) => {
 defineExpose({
   addRowsFromJsonpaths,
   getConfig: () => {
-    // 取第一个有效行作为提取配置
+    // 取第一个有效行作为主配置
     const firstRow = rows.value.find(r => r.path && r.name) || rows.value[0]
     return {
       jsonPath: firstRow?.path || '',
       variableName: firstRow?.name || '',
-      description: firstRow?.remark || ''
+      description: firstRow?.remark || '',
+      _rows: rows.value
     }
   }
 })

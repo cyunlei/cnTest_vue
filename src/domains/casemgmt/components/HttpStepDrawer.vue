@@ -68,6 +68,16 @@ const responseSummaryType = ref('success')
 const responseSummaryExpanded = ref(false)
 /** 执行接口返回的 execution_summary，用于标题旁 hover 展示 */
 const executionSummaryText = ref('')
+
+// 响应分组数据（支持多组入参执行结果）
+const responseGroups = ref([])
+const currentResponseGroupIndex = ref(0)
+
+// 当前选中的响应组
+const currentResponseGroup = computed(() => {
+  if (responseGroups.value.length === 0) return null
+  return responseGroups.value[currentResponseGroupIndex.value] || responseGroups.value[0]
+})
 /** 执行接口 data.pre_operations_log / post_operations_log，前置、后置工具栏 hover */
 const preOperationsLogText = ref('')
 const postOperationsLogText = ref('')
@@ -411,43 +421,127 @@ watch(
     basicForm.value.projectId = val.projectId || null
     basicForm.value.expectedResult = val.expectedResult || ''
 
-    // 回填入参配置
-    if (val.inputParams) {
-      const inputParams = val.inputParams
+    // 回填入参配置（支持数组形式和多分组）
+    const apiInputParams = val.apiInputParams || val.api_input_params || val.inputParams
+    if (apiInputParams) {
+      // 如果是数组形式（新的数据格式）
+      if (Array.isArray(apiInputParams) && apiInputParams.length > 0) {
+        // 清空现有的默认分组
+        paramGroups.value = []
 
-      // 处理 params (对象转数组)
-      if (inputParams.params && Object.keys(inputParams.params).length > 0) {
-        group.params = Object.entries(inputParams.params).map(([key, value]) => ({
-          key,
-          value: String(value)
-        }))
-      } else {
-        group.params = []
-      }
+        // 遍历每个分组数据
+        apiInputParams.forEach((inputParams, index) => {
+          const groupId = index + 1
+          const isUse = inputParams.is_use === 1 || inputParams.is_use === '1' || inputParams.is_use === true
 
-      // 处理 headers (对象转数组)
-      if (inputParams.header && Object.keys(inputParams.header).length > 0) {
-        group.headers = Object.entries(inputParams.header).map(([key, value]) => ({
-          key,
-          value: String(value)
-        }))
-      } else {
-        group.headers = []
-      }
-
-      // 处理 body
-      if (inputParams.body) {
-        const body = inputParams.body
-        if (body.raw && body.raw.raw_context) {
-          try {
-            // 尝试解析并格式化 JSON
-            const parsed = JSON.parse(body.raw.raw_context)
-            group.bodyData.raw = JSON.stringify(parsed, null, 2)
-          } catch {
-            // 如果不是 JSON，直接显示原始内容
-            group.bodyData.raw = body.raw.raw_context
+          // 构建 bodyData
+          const bodyData = {
+            contentType: 'raw',
+            raw: '',
+            rawType: 'json',
+            formData: [],
+            urlencoded: [],
+            binary: null
           }
-          group.bodyData.contentType = 'raw'
+
+          if (inputParams.body) {
+            const body = inputParams.body
+            if (body.raw) {
+              bodyData.contentType = 'raw'
+              bodyData.rawType = body.raw.raw_type === 0 ? 'json' :
+                                 body.raw.raw_type === 1 ? 'text' :
+                                 body.raw.raw_type === 2 ? 'xml' : 'html'
+              bodyData.raw = body.raw.raw_context || ''
+            } else if (body.form_data) {
+              bodyData.contentType = 'formData'
+              bodyData.formData = body.form_data
+            } else if (body.urlencoded) {
+              bodyData.contentType = 'x-www-form-urlencoded'
+              bodyData.urlencoded = body.urlencoded
+            }
+          }
+
+          // 构建分组对象
+          const newGroup = {
+            id: groupId,
+            name: inputParams.group_name || `第${groupId}组`,
+            checked: isUse,
+            params: [],
+            headers: [],
+            body: '',
+            ipport: inputParams.ip_port || '',
+            encrypt: inputParams.is_encrypted || false,
+            bodyData
+          }
+
+          // 处理 params (对象转数组)
+          if (inputParams.params && Object.keys(inputParams.params).length > 0) {
+            newGroup.params = Object.entries(inputParams.params).map(([key, value]) => ({
+              key,
+              value: String(value)
+            }))
+          } else {
+            newGroup.params = [{ key: '', value: '' }]
+          }
+
+          // 处理 headers (对象转数组)
+          if (inputParams.header && Object.keys(inputParams.header).length > 0) {
+            newGroup.headers = Object.entries(inputParams.header).map(([key, value]) => ({
+              key,
+              value: String(value)
+            }))
+          } else {
+            newGroup.headers = [{ key: '', value: '' }]
+          }
+
+          paramGroups.value.push(newGroup)
+        })
+
+        // 设置当前选中的组为第一个启用的组
+        const firstEnabledGroup = paramGroups.value.find(g => g.checked)
+        if (firstEnabledGroup) {
+          currentGroupId.value = firstEnabledGroup.id
+        } else {
+          currentGroupId.value = paramGroups.value[0]?.id || 1
+        }
+      } else if (typeof apiInputParams === 'object') {
+        // 兼容旧的对象形式（单分组）
+        const inputParams = apiInputParams
+
+        // 处理 params (对象转数组)
+        if (inputParams.params && Object.keys(inputParams.params).length > 0) {
+          group.params = Object.entries(inputParams.params).map(([key, value]) => ({
+            key,
+            value: String(value)
+          }))
+        } else {
+          group.params = [{ key: '', value: '' }]
+        }
+
+        // 处理 headers (对象转数组)
+        if (inputParams.header && Object.keys(inputParams.header).length > 0) {
+          group.headers = Object.entries(inputParams.header).map(([key, value]) => ({
+            key,
+            value: String(value)
+          }))
+        } else {
+          group.headers = [{ key: '', value: '' }]
+        }
+
+        // 处理 body
+        if (inputParams.body) {
+          const body = inputParams.body
+          if (body.raw && body.raw.raw_context) {
+            try {
+              // 尝试解析并格式化 JSON
+              const parsed = JSON.parse(body.raw.raw_context)
+              group.bodyData.raw = JSON.stringify(parsed, null, 2)
+            } catch {
+              // 如果不是 JSON，直接显示原始内容
+              group.bodyData.raw = body.raw.raw_context
+            }
+            group.bodyData.contentType = 'raw'
+          }
         }
       }
     }
@@ -857,11 +951,27 @@ function createDefaultStepConfig(command) {
   return configs[command] || {}
 }
 
-// 提取变量步骤里的“快捷添加 JSONPATH”
+// 提取变量步骤里的”快捷添加 JSONPATH”
 function handleExtractQuickAdd(stepId) {
   currentExtractStepId.value = stepId
   jsonDialogType.value = 'jsonpath'
   jsonDialogTitle.value = '快捷添加 JSONPATH'
+
+  // 回填响应内容（如果是请求后的后置操作）
+  const bodyText = String(responseBody.value || '').trim()
+  if (bodyText) {
+    try {
+      JSON.parse(bodyText)
+      // 如果是有效的 JSON，格式化后回填
+      jsonDialogInitialContent.value = JSON.stringify(JSON.parse(bodyText), null, 2)
+    } catch (e) {
+      void e
+      jsonDialogInitialContent.value = bodyText
+    }
+  } else {
+    jsonDialogInitialContent.value = ''
+  }
+
   jsonDialogVisible.value = true
 }
 
@@ -1091,7 +1201,7 @@ function handleJsonSave(selectedItems) {
     // 将选中的 JSONPath 填充到当前提取变量步骤 config 中
     const stepId = currentExtractStepId.value
     if (stepId) {
-      const paths = (selectedItems || []).map((item) => item.key)
+      const paths = (selectedItems || []).map((item) => item.key.startsWith('$') ? item.key : `$.${item.key}`)
       const currentConfig = postStepConfigs.value.get(stepId) || {}
       postStepConfigs.value.set(stepId, {
         ...currentConfig,
@@ -1442,7 +1552,7 @@ function normalizeAssertion() {
   }
 }
 
-function normalizeInputParams(group) {
+function normalizeInputParams(group, groupName = '', isUse = 1) {
   const bodyData = group?.bodyData || {}
   // 后端 ApiInputParams.RAW_TYPE_CHOICES:
   // 0=Json, 1=Text, 2=Xml, 3=Html
@@ -1478,6 +1588,8 @@ function normalizeInputParams(group) {
   }
 
   return {
+    group_name: groupName || group?.name || '第1组',
+    is_use: isUse,
     params: normalizePairsToObject(group?.params || []),
     header: normalizePairsToObject(group?.headers || []),
     body,
@@ -1561,11 +1673,18 @@ function buildPresetVariablePayload(group, assertion) {
 
 // 保存
 function handleSave(action = 'save') {
-  const group = currentGroup.value || paramGroups.value[0] || {}
-
   // 收集前置和后置操作配置（直接从 configs Map 读取）
   const preOperations = buildPrePostPayload(preSteps, preStepConfigs)
   const postOperations = buildPrePostPayload(postSteps, postStepConfigs)
+
+  // 将所有分组的入参转换为数组形式，包含 group_name 和 is_use
+  const apiInputParams = paramGroups.value.map(group => {
+    const isUse = group.checked ? 1 : 0
+    return normalizeInputParams(group, group.name, isUse)
+  })
+
+  // 获取当前选中的组用于断言和预设变量
+  const currentGroup = paramGroups.value.find(g => g.id === currentGroupId.value) || paramGroups.value[0] || {}
 
   const payload = {
     id: props.step?.id || null,
@@ -1579,10 +1698,10 @@ function handleSave(action = 'save') {
     retryCount: Number(props.step?.retryCount ?? props.step?.retry_count ?? 0),
     sleepTime: Number(props.step?.sleepTime ?? props.step?.sleep_time ?? 0),
     sortOrder: Number(props.step?.sortOrder ?? props.step?.sort_order ?? 1),
-    apiInputParams: normalizeInputParams(group),
+    apiInputParams: apiInputParams,
     apiAssertion: normalizeAssertion(),
     // 创建/更新步骤：按后端约定传 preset_variable
-    presetVariable: buildPresetVariablePayload(group, normalizeAssertion()),
+    presetVariable: buildPresetVariablePayload(currentGroup, normalizeAssertion()),
     preOperations,
     postOperations,
     action
@@ -1954,6 +2073,82 @@ function pickExtractedVariables(data) {
   )
 }
 
+// 监听响应分组切换，更新响应数据
+watch(
+  () => currentResponseGroupIndex.value,
+  (newIndex) => {
+    const group = responseGroups.value[newIndex]
+    if (!group || !group.data) return
+
+    const data = group.data
+
+    // 更新响应数据
+    const body = data?.response_body ?? {}
+    responseBody.value =
+      typeof body === 'string' ? body : JSON.stringify(body ?? {}, null, 2)
+
+    const headers = data?.response_headers || {}
+    responseHeaders.value = Object.entries(headers).map(([k, v]) => ({
+      key: k,
+      value: String(v ?? '')
+    }))
+
+    const requestParams = data?.request_params ?? {}
+    const requestBody = data?.request_body ?? {}
+    const normalizedParams =
+      requestParams && typeof requestParams === 'object' && !Array.isArray(requestParams)
+        ? requestParams
+        : {}
+    const normalizedRawBody =
+      requestBody && typeof requestBody === 'object'
+        ? requestBody
+        : parseMaybeJson(String(requestBody || '')) || {}
+    const actualInput = {
+      params: normalizedParams,
+      body: {
+        raw: normalizedRawBody
+      }
+    }
+    responseActualInput.value = JSON.stringify(actualInput, null, 2)
+
+    const ruleContext =
+      data?.api_assertion_detail?.rule_context ??
+      normalizeAssertion().rule_context ??
+      []
+    const expectResult =
+      data?.expectResult ??
+      data?.expect_result ??
+      data?.expected_result ??
+      ''
+    responseExpected.value = formatExpectedResult(expectResult, ruleContext)
+    responseStatusCode.value = Number(data?.response_status_code ?? 0) || 0
+    responseTimeMs.value = Number(data?.response_time_ms ?? 0) || 0
+
+    const assertionResults = Array.isArray(data?.assertion_results) ? data.assertion_results : []
+    assertTotalCount.value = assertionResults.length
+    assertSuccessCount.value = assertionResults.filter(item => item?.passed === true).length
+
+    preOperationsLogText.value = formatExecuteLogListForDisplay(data?.pre_operations_log)
+    postOperationsLogText.value = formatExecuteLogListForDisplay(data?.post_operations_log)
+
+    const bodyObject = data?.response_body && typeof data.response_body === 'object'
+      ? data.response_body
+      : {}
+    const assertionItems = buildAssertionExecutionItems(assertionResults, bodyObject)
+    const extractedItems = buildExtractedVariableItems(pickExtractedVariables(data))
+    if (assertionItems.length > 0) {
+      executionResultItems.value = [...assertionItems, ...extractedItems]
+    } else {
+      const ruleItems = buildRuleExecutionItems(ruleContext, bodyObject)
+      if (ruleItems.length > 0) {
+        executionResultItems.value = [...ruleItems, ...extractedItems]
+      } else {
+        executionResultItems.value = [...extractedItems]
+      }
+    }
+  }
+)
+
 function normalizeRuleLabel(rule) {
   const ruleText = String(rule ?? '').toLowerCase()
   const ruleMap = {
@@ -2177,12 +2372,17 @@ async function handleTest() {
     HEAD: 5,
     OPTIONS: 6
   }
-  const group = currentGroup.value || paramGroups.value[0] || {}
   const templateIds = getSelectedTemplateIds()
   const normalizedAssertion = normalizeAssertion()
   // 与保存步骤一致：传完整前置/后置配置（扁平 operation 对象数组），供后端执行
   const preOperationsExecute = buildPrePostPayload(preSteps, preStepConfigs, true)
   const postOperationsExecute = buildPrePostPayload(postSteps, postStepConfigs, true)
+
+  // 将所有分组的入参转换为数组形式，包含 group_name 和 is_use
+  const apiInputParamsDetail = paramGroups.value.map(group => {
+    const isUse = group.checked ? 1 : 0
+    return normalizeInputParams(group, group.name, isUse)
+  })
 
   // 未保存场景：按 step_data 执行
   const stepDataPayload = {
@@ -2191,7 +2391,7 @@ async function handleTest() {
     api_url: basicForm.value.url || '',
     method: methodValueMap[String(basicForm.value.method || 'GET').toUpperCase()] ?? 0,
     env_code: 0,
-    api_input_params_detail: normalizeInputParams(group),
+    api_input_params_detail: apiInputParamsDetail,
     api_assertion_detail: normalizedAssertion,
     template_id: templateIds,
     pre_operations: preOperationsExecute,
@@ -2208,28 +2408,44 @@ async function handleTest() {
     const msg = respData?.msg || ''
     // /api/v1/testcases/step/execute：业务字段在 resp.data.data（即 data.execution_summary）；兼容异常结构
     const inner = respData?.data
-    const data =
-      inner != null && typeof inner === 'object' && !Array.isArray(inner) ? inner : {}
+    // 支持多组响应数据（数组形式）
+    const isArrayData = Array.isArray(inner)
+    const data = isArrayData && inner.length > 0
+      ? inner[0]
+      : (inner != null && typeof inner === 'object' ? inner : {})
     const executionSummaryRaw =
       data?.execution_summary ?? respData?.execution_summary
 
+    // 处理多组响应数据
+    if (isArrayData && inner.length > 0) {
+      responseGroups.value = inner.map((item, index) => ({
+        index,
+        groupName: item.group_name || `第${index + 1}组`,
+        data: item
+      }))
+      currentResponseGroupIndex.value = 0
+    } else {
+      responseGroups.value = []
+    }
+
     // 按后端执行接口返回结构精确回填
-    const body = data?.response_body ?? {}
+    const currentGroupData = currentResponseGroup.value?.data || data
+    const body = currentGroupData?.response_body ?? {}
     responseBody.value =
       typeof body === 'string' ? body : JSON.stringify(body ?? {}, null, 2)
 
-    const headers = data?.response_headers || {}
+    const headers = currentGroupData?.response_headers || {}
     responseHeaders.value = Object.entries(headers).map(([k, v]) => ({
       key: k,
       value: String(v ?? '')
     }))
 
     const requestParams =
-      data?.request_params ??
+      currentGroupData?.request_params ??
       stepDataPayload?.api_input_params_detail?.params ??
       {}
     const requestBody =
-      data?.request_body ??
+      currentGroupData?.request_body ??
       stepDataPayload?.api_input_params_detail?.body?.raw?.raw_context ??
       stepDataPayload?.api_input_params_detail?.body ??
       {}
@@ -2250,20 +2466,20 @@ async function handleTest() {
     responseActualInput.value = JSON.stringify(actualInput, null, 2)
 
     const ruleContext =
-      data?.api_assertion_detail?.rule_context ??
+      currentGroupData?.api_assertion_detail?.rule_context ??
       stepDataPayload?.api_assertion_detail?.rule_context ??
       normalizeAssertion().rule_context ??
       []
     const expectResult =
-      data?.expectResult ??
-      data?.expect_result ??
-      data?.expected_result ??
+      currentGroupData?.expectResult ??
+      currentGroupData?.expect_result ??
+      currentGroupData?.expected_result ??
       ''
     responseExpected.value = formatExpectedResult(expectResult, ruleContext)
-    responseStatusCode.value = Number(data?.response_status_code ?? 0) || 0
-    responseTimeMs.value = Number(data?.response_time_ms ?? 0) || 0
+    responseStatusCode.value = Number(currentGroupData?.response_status_code ?? 0) || 0
+    responseTimeMs.value = Number(currentGroupData?.response_time_ms ?? 0) || 0
 
-    const assertionResults = Array.isArray(data?.assertion_results) ? data.assertion_results : []
+    const assertionResults = Array.isArray(currentGroupData?.assertion_results) ? currentGroupData.assertion_results : []
     assertTotalCount.value = assertionResults.length
     assertSuccessCount.value = assertionResults.filter(item => item?.passed === true).length
     if (assertionResults.length > 0) {
@@ -2272,7 +2488,7 @@ async function handleTest() {
       executionAssertMode.value = assertForm.value.ruleFormat === 'text' ? '文本' : '键值'
     }
 
-    responseSuccess.value = (code === 0 || code === 200) && String(data?.status || '') === 'success'
+    responseSuccess.value = (code === 0 || code === 200) && String(currentGroupData?.status || '') === 'success'
     responseSummaryType.value = responseSuccess.value ? 'success' : 'error'
     responseSummary.value = msg || (responseSuccess.value ? '步骤执行成功' : '步骤执行失败')
     responseSummaryDetail.value =
@@ -2280,24 +2496,24 @@ async function handleTest() {
         ? formatExecuteLogListForDisplay(executionSummaryRaw)
         : '') ||
       [
-        formatExecuteLogListForDisplay(data?.pre_operations_log),
-        formatExecuteLogListForDisplay(data?.post_operations_log),
-        data?.error_message
+        formatExecuteLogListForDisplay(currentGroupData?.pre_operations_log),
+        formatExecuteLogListForDisplay(currentGroupData?.post_operations_log),
+        currentGroupData?.error_message
       ]
         .filter(Boolean)
         .join('\n\n') ||
-      JSON.stringify(data || {}, null, 2)
+      JSON.stringify(currentGroupData || {}, null, 2)
     executionSummaryText.value = formatExecuteLogListForDisplay(executionSummaryRaw)
-    preOperationsLogText.value = formatExecuteLogListForDisplay(data?.pre_operations_log)
-    postOperationsLogText.value = formatExecuteLogListForDisplay(data?.post_operations_log)
+    preOperationsLogText.value = formatExecuteLogListForDisplay(currentGroupData?.pre_operations_log)
+    postOperationsLogText.value = formatExecuteLogListForDisplay(currentGroupData?.post_operations_log)
     responseSummaryExpanded.value = false
     executionResultExpanded.value = false
     operationLogExpanded.value = false
-    const bodyObject = data?.response_body && typeof data.response_body === 'object'
-      ? data.response_body
+    const bodyObject = currentGroupData?.response_body && typeof currentGroupData.response_body === 'object'
+      ? currentGroupData.response_body
       : {}
     const assertionItems = buildAssertionExecutionItems(assertionResults, bodyObject)
-    const extractedItems = buildExtractedVariableItems(pickExtractedVariables(data))
+    const extractedItems = buildExtractedVariableItems(pickExtractedVariables(currentGroupData))
     if (assertionItems.length > 0) {
       executionResultItems.value = [...assertionItems, ...extractedItems]
     } else {
@@ -2653,20 +2869,22 @@ function clearBinaryFile() {
                       >
                         <el-button-group class="group-button-group">
                           <!-- 组名按钮（带复选框） -->
-                          <el-button 
+                          <el-button
                             class="group-name-btn"
+                            :class="{ 'is-active': currentGroupId === group.id }"
                             @click="currentGroupId = group.id"
                           >
-                            <el-checkbox 
-                              v-model="group.checked" 
-                              :label="group.id"
-                              @click.stop
-                            >
-                              {{ group.name }}
-                            </el-checkbox>
+                            <span class="group-btn-content" @click="currentGroupId = group.id">
+                              <el-checkbox
+                                v-model="group.checked"
+                                :label="group.id"
+                                @click.stop
+                              />
+                              <span class="group-btn-text">{{ group.name }}</span>
+                            </span>
                           </el-button>
                           <!-- 更多操作按钮（三个竖着的点） -->
-                          <el-dropdown trigger="hover" placement="bottom">
+                          <el-dropdown trigger="hover" placement="bottom" :hide-on-click="true">
                             <el-button class="group-more-btn">
                               <svg viewBox="64 64 896 896" width="1em" height="1em" fill="currentColor" aria-hidden="true">
                                 <path d="M456 231a56 56 0 10112 0 56 56 0 10-112 0zm0 280a56 56 0 10112 0 56 56 0 10-112 0zm0 280a56 56 0 10112 0 56 56 0 10-112 0z"></path>
@@ -3074,6 +3292,7 @@ function clearBinaryFile() {
                             @delete="handlePostStepDelete(step.id)"
                             @copy="handlePostStepCopy(step.id)"
                             @update:config="handlePostStepConfigUpdate(step.id, $event)"
+                            @quick-add-jsonpath="handleExtractQuickAdd(step.id)"
                           />
                           <DelayStepDrawer
                             v-else-if="step && step.type === 'delay'"
@@ -3231,6 +3450,20 @@ function clearBinaryFile() {
               <span class="execution-result-text operation-log-detail-text">后置步骤执行结果（post_operations_log）：{{ postOperationsLogText }}</span>
             </el-tooltip>
           </div>
+        </div>
+
+        <!-- 响应分组切换按钮（仅当多组时显示） -->
+        <div v-if="responseGroups.length > 1" class="response-group-selector">
+          <span class="response-group-label">入参组：</span>
+          <el-radio-group v-model="currentResponseGroupIndex" size="small">
+            <el-radio-button
+              v-for="group in responseGroups"
+              :key="group.index"
+              :label="group.index"
+            >
+              {{ group.groupName }}
+            </el-radio-button>
+          </el-radio-group>
         </div>
 
         <div class="response-tabs">
@@ -3644,18 +3877,59 @@ function clearBinaryFile() {
 
 /* 组名按钮 */
 .group-name-btn {
-  padding: 5px 12px;
+  padding: 0;
   height: 32px;
 }
 
+.group-btn-content {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+.group-btn-text {
+  flex: 1;
+  padding-right: 8px;
+}
+
+.group-name-btn :deep(.el-checkbox) {
+  margin-right: 0;
+}
+
 .group-name-btn :deep(.el-checkbox__label) {
-  padding-left: 4px;
+  padding-left: 0;
+  display: none;
 }
 
 /* 更多按钮 */
 .group-more-btn {
   padding: 5px 8px;
   height: 32px;
+}
+
+/* 隐藏 dropdown 的箭头图标 */
+.group-button-group :deep(.el-dropdown__caret-button) {
+  display: none !important;
+}
+
+.group-button-group :deep(.el-button-group > .el-dropdown > .el-button) {
+  border-left: none;
+  border-radius: 0 4px 4px 0;
+}
+
+/* 隐藏 el-dropdown 按钮内的箭头图标 */
+.group-more-btn :deep(.el-icon--right),
+.group-more-btn :deep(.el-dropdown__icon) {
+  display: none !important;
+}
+
+/* 确保按钮组内的 dropdown 按钮样式正确 */
+.group-button-group :deep(.el-dropdown) {
+  vertical-align: middle;
 }
 
 /* 选中状态 - 覆盖按钮组边框 */
@@ -3665,7 +3939,7 @@ function clearBinaryFile() {
   color: #409eff;
 }
 
-.group-item-wrapper.active .group-name-btn :deep(.el-checkbox__label) {
+.group-item-wrapper.active .group-btn-text {
   color: #409eff;
 }
 
@@ -3846,6 +4120,22 @@ function clearBinaryFile() {
 .operation-log-detail-text {
   display: inline-block;
   max-width: 100%;
+}
+
+/* 响应分组选择器 */
+.response-group-selector {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e4e7ed;
+  background: #fafafa;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.response-group-label {
+  font-size: 13px;
+  color: #606266;
+  font-weight: 500;
 }
 
 .response-tabs {
