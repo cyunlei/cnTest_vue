@@ -422,7 +422,8 @@ watch(
     basicForm.value.expectedResult = val.expectedResult || ''
 
     // 回填入参配置（支持数组形式和多分组）
-    const apiInputParams = val.apiInputParams || val.api_input_params || val.inputParams
+    // 优先使用 api_input_params_detail，然后是 api_input_params 等其他字段
+    const apiInputParams = val.api_input_params_detail || val.apiInputParams || val.api_input_params || val.inputParams
     if (apiInputParams) {
       // 如果是数组形式（新的数据格式）
       if (Array.isArray(apiInputParams) && apiInputParams.length > 0) {

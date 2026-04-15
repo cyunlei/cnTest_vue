@@ -18,6 +18,13 @@
       "Read(*)",
       "Write(*)",
       "Edit(*)",
+      "Execute(*)",
+      "ls",
+      "pwd",
+      "mkdir",
+      "rm",
+      "git",
+      "git", 
       "Bash(npx vue-tsc:*)",
       "Bash(node -e \"require\\('@vue/compiler-sfc'\\).parse\\(require\\('fs'\\).readFileSync\\('src/domains/casemgmt/components/common/PrePostStepDialog.vue', 'utf8'\\)\\)\")",
       "Bash(node -e \"require\\('@vue/compiler-sfc'\\).parse\\(require\\('fs'\\).readFileSync\\('src/domains/casemgmt/components/common/PresetVariableDialog.vue', 'utf8'\\)\\)\")"

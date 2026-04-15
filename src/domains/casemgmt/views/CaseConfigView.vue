@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch, defineAsyncComponent, shallowRef } from 'vue'
+import { ref, computed, onMounted, watch, defineAsyncComponent, shallowRef, nextTick } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { ArrowDown, Delete, CopyDocument, DocumentCopy, Setting, QuestionFilled, ArrowUp } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -52,6 +52,11 @@ const caseDetail = ref({
   execSuccess: 0,
   execFail: 0
 })
+
+// 用例名称编辑状态
+const isEditingCaseName = ref(false)
+const editingCaseName = ref('')
+const caseNameInputRef = ref(null)
 
 const stepList = ref([])
 const stepTotal = ref(0)
@@ -256,6 +261,56 @@ async function handlePresetVariableSave(variables) {
 function handleNewTemplate(payload) {
   // TODO: 创建新模板后的处理
   showSuccess('模板创建成功')
+}
+
+// ========== 用例名称编辑 ==========
+function handleEditCaseName() {
+  editingCaseName.value = caseDetail.value.name
+  isEditingCaseName.value = true
+  // 自动聚焦输入框
+  nextTick(() => {
+    caseNameInputRef.value?.focus()
+  })
+}
+
+function handleCancelEditCaseName() {
+  isEditingCaseName.value = false
+  editingCaseName.value = ''
+}
+
+async function handleSaveCaseName() {
+  const newName = editingCaseName.value.trim()
+  if (!newName) {
+    showWarning('用例名称不能为空')
+    return
+  }
+
+  if (!caseDetail.value.id) {
+    showWarning('用例ID不能为空')
+    return
+  }
+
+  try {
+    const resp = await updateTestcase({
+      testcase_id: Number(caseDetail.value.id),
+      name: newName
+    })
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+
+    if (code !== 0 && code !== 200) {
+      showError(msg || '更新用例名称失败')
+      return
+    }
+
+    // 更新本地数据
+    caseDetail.value.name = newName
+    isEditingCaseName.value = false
+    showSuccess(msg || '用例名称更新成功')
+  } catch (error) {
+    void error
+    showError('更新用例名称异常')
+  }
 }
 
 // ========== 保存用例（包含前置/后置步骤和预设变量） ==========
@@ -926,20 +981,24 @@ function transformStepDetailToFrontend(data) {
     sortOrder: data.sort_order ?? 1
   }
 
-  // 入参配置
+  // 入参配置 - 支持数组形式的多分组
   {
     const inputParams = data.api_input_params_detail || data.api_input_params || null
     if (!inputParams) {
       // no-op
+    } else if (Array.isArray(inputParams)) {
+      // 数组形式：多分组数据，直接传递数组供 HttpStepDrawer 处理
+      result.api_input_params_detail = inputParams
     } else {
-    result.inputParams = {
-      params: inputParams.params || {},
-      header: inputParams.header || {},
-      body: inputParams.body || {},
-      rawType: inputParams.raw_type ?? 0,
-      ipPort: inputParams.ip_port,
-      isEncrypted: inputParams.is_encrypted ?? false
-    }
+      // 对象形式：单分组数据，保持兼容
+      result.inputParams = {
+        params: inputParams.params || {},
+        header: inputParams.header || {},
+        body: inputParams.body || {},
+        rawType: inputParams.raw_type ?? 0,
+        ipPort: inputParams.ip_port,
+        isEncrypted: inputParams.is_encrypted ?? false
+      }
     }
   }
 
@@ -1079,8 +1138,22 @@ function closeStepTypeDialog() {
         <div class="case-info">
           <div class="info-row">
             <span class="info-label">用例明细:</span>
-            <span class="info-value highlight">{{ caseDetail.name }}</span>
-            <button class="edit-btn">编辑</button>
+            <template v-if="!isEditingCaseName">
+              <span class="info-value highlight">{{ caseDetail.name }}</span>
+              <button class="edit-btn" @click="handleEditCaseName">编辑</button>
+            </template>
+            <template v-else>
+              <el-input
+                ref="caseNameInputRef"
+                v-model="editingCaseName"
+                size="small"
+                class="case-name-input"
+                @keyup.enter="handleSaveCaseName"
+                @keyup.esc="handleCancelEditCaseName"
+              />
+              <el-button type="primary" size="small" @click="handleSaveCaseName">保存</el-button>
+              <el-button size="small" @click="handleCancelEditCaseName">取消</el-button>
+            </template>
           </div>
           <div class="info-grid">
             <div class="info-item"><span class="label">用例ID:</span><span class="value">{{ caseDetail.id }}</span></div>
@@ -1278,6 +1351,7 @@ function closeStepTypeDialog() {
       :title="prePostStepTitle"
       :type="prePostStepType"
       :project-id="projectId"
+      :testcase-id="caseId"
       @confirm="handlePrePostStepConfirm"
     />
 
@@ -1330,6 +1404,7 @@ function closeStepTypeDialog() {
 .info-value { font-size: 14px; color: #333; }
 .info-value.highlight { background: #fff7e6; padding: 4px 8px; border-radius: 4px; }
 .edit-btn { padding: 2px 8px; border: none; background: transparent; color: #1890ff; cursor: pointer; font-size: 13px; }
+.case-name-input { width: 200px; margin-right: 8px; }
 .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .info-item { display: flex; gap: 8px; font-size: 14px; }
 .info-item .label { color: #999; }

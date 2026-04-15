@@ -27,6 +27,10 @@ const props = defineProps({
   projectId: {
     type: [Number, String],
     default: ''
+  },
+  testcaseId: {
+    type: [Number, String],
+    default: ''
   }
 })
 
@@ -82,11 +86,16 @@ async function loadCaseOptions() {
     const resp = await fetchTestcaseList({
       suite_id: selectedSuite.value,
       page: 1,
-      page_size: 1000
+      page_size: 1000,
+      relation_type: 1 // 只返回同用例集下的其他用例，排除当前用例本身
     })
     // 适配两种可能的响应结构：data.list 或 data.items
     const list = resp?.data?.data?.list || resp?.data?.data?.items || []
-    caseOptions.value = list.map(item => ({
+    // 过滤掉当前用例本身（如果后端没有处理的话）
+    const filteredList = props.testcaseId
+      ? list.filter(item => String(item.id) !== String(props.testcaseId))
+      : list
+    caseOptions.value = filteredList.map(item => ({
       label: item.name,
       value: item.id
     }))
@@ -403,7 +412,7 @@ function getStepTypeLabel(type) {
                 @drop="handleDrop($event, index)"
                 @dragend="handleDragEnd"
               >
-                <td class="col-index">{{ index + 1 }}</td>
+                <td class="col-index">{{ step.step_id }}</td>
                 <td class="col-name">
                   <span class="step-name">{{ step.step_name }}</span>
                 </td>
@@ -607,7 +616,7 @@ function getStepTypeLabel(type) {
 }
 
 .col-index {
-  width: 60px;
+  width: 80px;
   text-align: center;
 }
 
