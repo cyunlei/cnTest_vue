@@ -13,10 +13,14 @@
       "Bash(echo:*)",
       "Bash(git:*)",
       "Bash(grep:*)",
+      "Bash(*)",
+      "cd",
       "Read(*)",
       "Write(*)",
       "Edit(*)",
-      "sed(*)"
+      "Bash(npx vue-tsc:*)",
+      "Bash(node -e \"require\\('@vue/compiler-sfc'\\).parse\\(require\\('fs'\\).readFileSync\\('src/domains/casemgmt/components/common/PrePostStepDialog.vue', 'utf8'\\)\\)\")",
+      "Bash(node -e \"require\\('@vue/compiler-sfc'\\).parse\\(require\\('fs'\\).readFileSync\\('src/domains/casemgmt/components/common/PresetVariableDialog.vue', 'utf8'\\)\\)\")"
     ]
   },
   "autoApprove": {

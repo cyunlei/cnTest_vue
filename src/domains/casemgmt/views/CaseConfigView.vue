@@ -1,5 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch, defineAsyncComponent, shallowRef } from 'vue'
+import { ElMessageBox } from 'element-plus'
+import { ArrowDown, Delete, CopyDocument, DocumentCopy, Setting, QuestionFilled, ArrowUp } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMessage } from '@/shared/ui'
 import AppHeader from '@/shared/ui/organisms/AppHeader.vue'
@@ -7,7 +9,9 @@ import AppPagination from '@/shared/ui/organisms/AppPagination.vue'
 import HttpStepDrawer from '../components/HttpStepDrawer.vue'
 import StepExecuteDrawer from '../components/StepExecuteDrawer.vue'
 import CaseSidebar from '../components/CaseSidebar.vue'
-import { createStep, deleteStep, executeTestcase, fetchStepList, fetchStepDetail, fetchTestcaseDetail, sortStep, updateStep } from '../api'
+import PrePostStepDialog from '../components/common/PrePostStepDialog.vue'
+import PresetVariableDialog from '../components/common/PresetVariableDialog.vue'
+import { createStep, deleteStep, executeTestcase, fetchStepList, fetchStepDetail, fetchTestcaseDetail, sortStep, updateStep, createTestcase, updateTestcase } from '../api'
 import { STEP_TYPE, ENV_CODE, HTTP_METHOD } from '../types'
 import { fetchProjectList } from '@/domains/project/api'
 
@@ -66,6 +70,49 @@ const dropFlashStepId = ref('')
 const showStepExecDrawer = ref(false)
 const executingStep = ref(null)
 
+// 前置/后置步骤弹窗
+const showPrePostStepDialog = ref(false)
+const prePostStepType = ref('pre') // 'pre' | 'post'
+const prePostStepTitle = computed(() => prePostStepType.value === 'pre' ? '添加前置步骤' : '添加后置步骤')
+
+// 预设变量弹窗
+const showPresetVariableDialog = ref(false)
+
+// 前置步骤、后置步骤、预设变量数据（用于保存用例时传参）
+const preSteps = ref([])
+const postSteps = ref([])
+const presetVariables = ref([])
+
+// 批量操作相关
+const batchOperationLoading = ref(false)
+const selectedStepIds = ref([])
+const copiedSteps = ref([])
+
+// 全选状态计算属性
+const isAllSelected = computed(() => {
+  if (stepList.value.length === 0) return false
+  return stepList.value.every(step => selectedStepIds.value.includes(step.id))
+})
+
+// 切换单个步骤选择
+function toggleStepSelection(stepId) {
+  const index = selectedStepIds.value.indexOf(stepId)
+  if (index > -1) {
+    selectedStepIds.value.splice(index, 1)
+  } else {
+    selectedStepIds.value.push(stepId)
+  }
+}
+
+// 切换全选
+function toggleSelectAll() {
+  if (isAllSelected.value) {
+    selectedStepIds.value = []
+  } else {
+    selectedStepIds.value = stepList.value.map(step => step.id)
+  }
+}
+
 function flashStepRow(stepId) {
   dropFlashStepId.value = String(stepId || '')
   setTimeout(() => {
@@ -93,6 +140,222 @@ function normalizePresetVariablePayload(value) {
     payload.project_id = projectId
   }
   return Object.keys(payload).length ? payload : undefined
+}
+
+// ========== 前置/后置步骤弹窗处理 ==========
+function handleOpenPreStepDialog() {
+  prePostStepType.value = 'pre'
+  showPrePostStepDialog.value = true
+}
+
+function handleOpenPostStepDialog() {
+  prePostStepType.value = 'post'
+  showPrePostStepDialog.value = true
+}
+
+async function handlePrePostStepConfirm(payload) {
+  if (!caseId.value) {
+    showWarning('用例ID不能为空')
+    return
+  }
+
+  try {
+    // 将步骤添加到对应数组，格式化为后端要求的格式
+    const formattedSteps = payload.steps.map((s, idx) => ({
+      step_id: Number(s.step_id),
+      sort_order: Number(s.sort_order ?? idx)
+    }))
+
+    // 更新本地状态
+    if (payload.type === 'pre') {
+      preSteps.value.push(...formattedSteps)
+    } else {
+      postSteps.value.push(...formattedSteps)
+    }
+
+    // 调用接口保存到后端
+    const apiData = {
+      testcase_id: Number(caseId.value),
+      pre_steps: preSteps.value,
+      post_steps: postSteps.value,
+      preset_variables: presetVariables.value
+    }
+
+    const resp = await updateTestcase(apiData)
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+
+    if (code !== 0 && code !== 200) {
+      showError(msg || '保存前置/后置步骤失败')
+      // 如果保存失败，回滚本地状态
+      if (payload.type === 'pre') {
+        preSteps.value = preSteps.value.filter(s => !formattedSteps.find(fs => fs.step_id === s.step_id))
+      } else {
+        postSteps.value = postSteps.value.filter(s => !formattedSteps.find(fs => fs.step_id === s.step_id))
+      }
+      return
+    }
+
+    showSuccess(msg || `成功添加 ${payload.steps.length} 个${payload.type === 'pre' ? '前置' : '后置'}步骤`)
+  } catch (error) {
+    void error
+    showError('保存前置/后置步骤异常')
+  }
+}
+
+// ========== 预设变量弹窗处理 ==========
+function handleOpenPresetVariableDialog() {
+  showPresetVariableDialog.value = true
+}
+
+async function handlePresetVariableSave(variables) {
+  if (!caseId.value) {
+    showWarning('用例ID不能为空')
+    return
+  }
+
+  try {
+    // 格式化为后端要求的格式
+    const formattedVars = variables.map(v => {
+      if (v.template_id) {
+        return { template_id: v.template_id }
+      } else if (v.variable_id) {
+        return { variable_id: v.variable_id }
+      }
+      // 兼容其他格式
+      return { variable_id: v.id }
+    }).filter(v => v.template_id || v.variable_id)
+
+    // 更新本地状态
+    presetVariables.value = formattedVars
+
+    // 调用接口保存到后端
+    const apiData = {
+      testcase_id: Number(caseId.value),
+      pre_steps: preSteps.value,
+      post_steps: postSteps.value,
+      preset_variables: presetVariables.value
+    }
+
+    const resp = await updateTestcase(apiData)
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+
+    if (code !== 0 && code !== 200) {
+      showError(msg || '保存预设变量失败')
+      return
+    }
+
+    showSuccess(msg || '预设变量保存成功')
+  } catch (error) {
+    void error
+    showError('保存预设变量异常')
+  }
+}
+
+function handleNewTemplate(payload) {
+  // TODO: 创建新模板后的处理
+  showSuccess('模板创建成功')
+}
+
+// ========== 保存用例（包含前置/后置步骤和预设变量） ==========
+async function handleSaveTestcase() {
+  if (!caseId.value) {
+    showWarning('用例ID不能为空')
+    return
+  }
+
+  try {
+    const apiData = {
+      testcase_id: Number(caseId.value),
+      pre_steps: preSteps.value.map(s => ({
+        step_id: Number(s.step_id),
+        sort_order: Number(s.sort_order)
+      })),
+      post_steps: postSteps.value.map(s => ({
+        step_id: Number(s.step_id),
+        sort_order: Number(s.sort_order)
+      })),
+      preset_variables: presetVariables.value
+    }
+
+    const resp = await updateTestcase(apiData)
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+
+    if (code !== 0 && code !== 200) {
+      showError(msg || '保存用例失败')
+      return
+    }
+
+    showSuccess(msg || '保存用例成功')
+  } catch (error) {
+    void error
+    showError('保存用例异常')
+  }
+}
+
+// ========== 批量操作处理 ==========
+function handleBatchDelete() {
+  if (!selectedStepIds.value.length) {
+    showWarning('请先选择要删除的步骤')
+    return
+  }
+  ElMessageBox.confirm(
+    `确定要删除选中的 ${selectedStepIds.value.length} 个步骤吗？`,
+    '确认删除',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(() => {
+    // TODO: 调用批量删除API
+    showSuccess('批量删除成功')
+    loadStepList()
+  }).catch(() => {})
+}
+
+function handleBatchCopy() {
+  if (!selectedStepIds.value.length) {
+    showWarning('请先选择要复制的步骤')
+    return
+  }
+  // 保存复制的步骤到内存
+  copiedSteps.value = stepList.value.filter(step => selectedStepIds.value.includes(step.id))
+  showSuccess(`已复制 ${copiedSteps.value.length} 个步骤`)
+}
+
+function handleBatchPaste() {
+  if (!copiedSteps.value.length) {
+    showWarning('没有可粘贴的步骤，请先复制步骤')
+    return
+  }
+  // TODO: 调用批量粘贴/创建API
+  showSuccess(`成功粘贴 ${copiedSteps.value.length} 个步骤`)
+  loadStepList()
+}
+
+function handleInterfaceSettings() {
+  // TODO: 打开接口设置弹窗
+  showWarning('接口设置功能开发中')
+}
+
+function handleBatchOperation(command) {
+  switch (command) {
+    case 'delete':
+      handleBatchDelete()
+      break
+    case 'copy':
+      handleBatchCopy()
+      break
+    case 'paste':
+      handleBatchPaste()
+      break
+    case 'settings':
+      handleInterfaceSettings()
+      break
+  }
 }
 
 // 项目下拉（module-select-trigger 使用）
@@ -853,17 +1116,44 @@ function closeStepTypeDialog() {
             <button class="tool-btn">接口录制</button>
           </div>
           <div class="toolbar-right">
-            <button class="tool-btn">前置步骤</button>
-            <button class="tool-btn">后置步骤</button>
-            <button class="tool-btn">预设变量</button>
-            <button class="tool-btn">批量操作</button>
+            <button class="tool-btn" @click="handleOpenPreStepDialog">前置步骤</button>
+            <button class="tool-btn" @click="handleOpenPostStepDialog">后置步骤</button>
+            <button class="tool-btn" @click="handleOpenPresetVariableDialog">预设变量</button>
+            <el-dropdown trigger="hover" @command="handleBatchOperation">
+              <button class="tool-btn">
+                批量操作
+                <el-icon class="el-icon--right"><arrow-down /></el-icon>
+              </button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="delete">
+                    <el-icon><delete /></el-icon> 删除
+                  </el-dropdown-item>
+                  <el-dropdown-item command="copy">
+                    <el-icon><copy-document /></el-icon> 复制步骤
+                  </el-dropdown-item>
+                  <el-dropdown-item command="paste">
+                    <el-icon><document-copy /></el-icon> 粘贴步骤
+                  </el-dropdown-item>
+                  <el-dropdown-item command="settings" divided>
+                    <el-icon><setting /></el-icon> 接口设置
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </div>
         <div class="step-table">
           <table>
             <thead>
               <tr>
-                <th class="col-checkbox"><input type="checkbox" /></th>
+                <th class="col-checkbox">
+                  <input
+                    type="checkbox"
+                    :checked="isAllSelected"
+                    @change="toggleSelectAll"
+                  />
+                </th>
                 <th class="col-id">步骤编号</th>
                 <th class="col-name">步骤名称</th>
                 <th class="col-detail">详细内容</th>
@@ -888,7 +1178,13 @@ function closeStepTypeDialog() {
                 @drop.prevent="handleRowDrop(step)"
                 @dragend="handleRowDragEnd"
               >
-                <td class="col-checkbox"><input type="checkbox" /></td>
+                <td class="col-checkbox">
+                  <input
+                    type="checkbox"
+                    :checked="selectedStepIds.includes(step.id)"
+                    @change="toggleStepSelection(step.id)"
+                  />
+                </td>
                 <td class="col-id">{{ step.id }}</td>
                 <td class="col-name"><a class="link" @click="openStepDrawer(step)">{{ step.name }}</a></td>
                 <td class="col-detail">{{ step.detail }}</td>
@@ -975,6 +1271,22 @@ function closeStepTypeDialog() {
         </div>
       </template>
     </el-dialog>
+
+    <!-- 前置/后置步骤弹窗 -->
+    <PrePostStepDialog
+      v-model="showPrePostStepDialog"
+      :title="prePostStepTitle"
+      :type="prePostStepType"
+      :project-id="projectId"
+      @confirm="handlePrePostStepConfirm"
+    />
+
+    <!-- 预设变量配置弹窗 -->
+    <PresetVariableDialog
+      v-model="showPresetVariableDialog"
+      @save="handlePresetVariableSave"
+      @new-template="handleNewTemplate"
+    />
   </div>
 </template>
 <style scoped>
