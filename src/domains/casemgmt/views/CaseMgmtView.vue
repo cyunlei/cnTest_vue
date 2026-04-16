@@ -18,6 +18,7 @@ import PrePostStepDialog from '../components/common/PrePostStepDialog.vue'
 import PresetVariableDialog from '../components/common/PresetVariableDialog.vue'
 import MoveStepDialog from '../components/steps/MoveStepDialog.vue'
 import MoveCaseDialog from '../components/case/MoveCaseDialog.vue'
+import ApiRecordDrawer from '../components/ApiRecordDrawer.vue'
 import {
   createSuite,
   updateSuite,
@@ -79,6 +80,7 @@ const canDragCaseSort = computed(() => {
 // 移动弹窗
 const showMoveCaseDialog = ref(false)
 const showMoveStepDialog = ref(false)
+const showApiRecordDrawer = ref(false)
 const moveCaseTarget = ref(null)
 const moveStepTarget = ref(null)
 
@@ -888,7 +890,7 @@ async function handleAddStep(row, stepType) {
   }
   const type = typeMap[stepType]
   if (type === undefined) {
-    showDevelopingTip('接口录制')
+    showApiRecordDrawer.value = true
     return
   }
 
@@ -1071,7 +1073,7 @@ function handleAddStepCommand(cmd, row) {
     record: 'record'
   }
   if (cmd === 'record') {
-    showDevelopingTip('接口录制')
+    showApiRecordDrawer.value = true
     return
   }
   handleAddStep(row, typeMap[cmd])
@@ -1327,9 +1329,9 @@ async function goToCaseConfig(id) {
           <!-- 第一排：始终显示 -->
           <div class="filter-row">
             <div class="filter-item filter-item--keyword">
-            <label>关键字:</label>
+              <label>关键字 <el-icon class="filter-help-icon"><QuestionFilled /></el-icon>:</label>
               <input v-model="filterForm.keyword" type="text" placeholder="输入名称/编号查询" />
-          </div>
+            </div>
             <div class="filter-item filter-item--creator">
             <label>创建人:</label>
               <input v-model="filterForm.creator" type="text" placeholder="输入erp" />
@@ -1401,14 +1403,14 @@ async function goToCaseConfig(id) {
                 </el-dropdown-item>
                 <el-dropdown-item command="defaultEnv">
                   <span style="display:inline-flex;align-items:center;gap:8px;">
-                    <el-icon v-if="execEnv === 'default'" color="#52c41a"><Check /></el-icon>
+                    <el-icon v-if="execEnv === 'default'" color="#67c23a"><Check /></el-icon>
                     <span v-else style="width:16px;display:inline-block;"></span>
                     默认环境
                   </span>
                 </el-dropdown-item>
                 <el-dropdown-item command="customEnv">
                   <span style="display:inline-flex;align-items:center;gap:8px;">
-                    <el-icon v-if="execEnv === 'custom'" color="#52c41a"><Check /></el-icon>
+                    <el-icon v-if="execEnv === 'custom'" color="#67c23a"><Check /></el-icon>
                     <span v-else style="width:16px;display:inline-block;"></span>
                     自定义环境
                   </span>
@@ -1524,7 +1526,7 @@ async function goToCaseConfig(id) {
                 <th v-if="isHeaderVisible('createTime')" class="col-time">创建时间</th>
                 <th v-if="isHeaderVisible('updateTime')" class="col-update">更新时间</th>
                 <th v-if="isHeaderVisible('priority')" class="col-priority">优先级</th>
-                <th class="col-action">操作</th>
+                <th class="col-action"><el-icon class="action-header-icon"><Setting /></el-icon> 操作</th>
               </tr>
             </thead>
             <tbody>
@@ -1596,7 +1598,7 @@ async function goToCaseConfig(id) {
                             <el-dropdown-item command="jar">新增JAR步骤</el-dropdown-item>
                             <el-dropdown-item command="loop">新增循环步骤</el-dropdown-item>
                             <el-dropdown-item command="condition">新增条件步骤</el-dropdown-item>
-                            <el-dropdown-item command="record">接口录制</el-dropdown-item>
+                            <el-dropdown-item command="record" @click.stop="showApiRecordDrawer = true">接口录制</el-dropdown-item>
                           </el-dropdown-menu>
                         </template>
                       </el-dropdown>
@@ -2272,6 +2274,14 @@ async function goToCaseConfig(id) {
     :testcase="moveCaseTarget"
     @confirm="confirmMoveCase"
   />
+
+  <!-- 接口录制抽屉 -->
+  <ApiRecordDrawer
+    v-model:visible="showApiRecordDrawer"
+    :testcase-id="navigatingCaseId"
+    @close="showApiRecordDrawer = false"
+    @save="showApiRecordDrawer = false"
+  />
 </template>
 
 <style lang="scss" scoped>
@@ -2317,7 +2327,7 @@ async function goToCaseConfig(id) {
   transition: all 0.2s;
 
   &:hover {
-    border-color: #1890ff;
+    border-color: #409eff;
   }
 
   .module-icon {
@@ -2377,8 +2387,8 @@ async function goToCaseConfig(id) {
   transition: all 0.2s;
 
   &.active {
-    background: #e6f7ff;
-    color: #1890ff;
+    background: #ecf5ff;
+    color: #409eff;
     font-weight: 500;
   }
 
@@ -2414,8 +2424,8 @@ async function goToCaseConfig(id) {
     color: #666;
 
     &:hover {
-      border-color: #1890ff;
-      color: #1890ff;
+      border-color: #409eff;
+      color: #409eff;
     }
   }
 }
@@ -2440,8 +2450,8 @@ async function goToCaseConfig(id) {
   }
 
   &.active {
-    background: #e6f7ff;
-    color: #1890ff;
+    background: #ecf5ff;
+    color: #409eff;
   }
 
   .expand-icon {
@@ -2503,8 +2513,8 @@ async function goToCaseConfig(id) {
   box-sizing: border-box;
 
   &:hover {
-    border-color: #1890ff;
-    color: #1890ff;
+    border-color: #409eff;
+    color: #409eff;
   }
 }
 
@@ -2567,7 +2577,7 @@ async function goToCaseConfig(id) {
   }
 
   .help-icon {
-    color: #1890ff;
+    color: #409eff;
     margin-left: 4px;
     cursor: help;
   }
@@ -2604,7 +2614,7 @@ async function goToCaseConfig(id) {
   }
 
   .check-icon {
-    color: #52c41a;
+    color: #67c23a;
   }
 }
 
@@ -2641,21 +2651,21 @@ async function goToCaseConfig(id) {
     justify-content: center;
 
     &:hover {
-      border-color: #1890ff;
-      color: #1890ff;
+      border-color: #409eff;
+      color: #409eff;
     }
   }
 
   .reset-link {
     padding: 0 8px;
     font-size: 14px;
-    color: #1890ff;
+    color: #409eff;
     cursor: pointer;
     background: none;
     border: none;
 
     &:hover {
-      color: #40a9ff;
+      color: #66b1ff;
     }
   }
 
@@ -2672,8 +2682,8 @@ async function goToCaseConfig(id) {
     justify-content: center;
 
     &:hover {
-      border-color: #1890ff;
-      color: #1890ff;
+      border-color: #409eff;
+      color: #409eff;
     }
   }
 }
@@ -2726,7 +2736,7 @@ async function goToCaseConfig(id) {
     cursor: pointer;
 
     &:hover {
-      color: #1890ff;
+      color: #409eff;
     }
   }
 
@@ -2784,13 +2794,13 @@ async function goToCaseConfig(id) {
   border-radius: 4px;
 
   &:hover {
-    color: #1890ff;
+    color: #409eff;
   }
 
   &.active {
-    color: #1890ff;
+    color: #409eff;
     font-weight: 500;
-    background: #e6f7ff;
+    background: #ecf5ff;
   }
 }
 
@@ -2807,9 +2817,8 @@ async function goToCaseConfig(id) {
   flex-direction: column;
   gap: 10px;
   margin-bottom: 12px;
-  padding: 10px 12px;
-  background: #fff;
-  border: 1px solid #e8e8e8;
+  padding: 12px 16px;
+  background: #f5f7fa;
   border-radius: 4px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   font-size: 14px;
@@ -2893,27 +2902,28 @@ async function goToCaseConfig(id) {
 }
 
 .filter-btn, .reset-btn {
-  padding: 0 12px;
+  padding: 0 14px;
   border: 1px solid #d9d9d9;
   background: #fff;
   border-radius: 4px;
   font-size: 14px;
+  color: #606266;
   cursor: pointer;
-  height: 30px;
-  line-height: 28px;
+  height: 32px;
+  line-height: 30px;
   box-sizing: border-box;
 }
 
 .query-btn {
-  padding: 0 14px;
+  padding: 0 16px;
   border: none;
-  background: #1890ff;
+  background: #409eff;
   color: #fff;
   border-radius: 4px;
   font-size: 14px;
   cursor: pointer;
-  height: 30px;
-  line-height: 30px;
+  height: 32px;
+  line-height: 32px;
   box-sizing: border-box;
 }
 
@@ -2921,14 +2931,14 @@ async function goToCaseConfig(id) {
   padding: 0 2px;
   border: none;
   background: transparent;
-  color: #1890ff;
+  color: #409eff;
   cursor: pointer;
   font-size: 14px;
   white-space: nowrap;
 }
 
 .advanced-link-btn:hover {
-  color: #40a9ff;
+  color: #66b1ff;
   text-decoration: underline;
 }
 
@@ -2953,22 +2963,26 @@ async function goToCaseConfig(id) {
   background: #fff;
   border-radius: 4px;
   font-size: 14px;
+  color: #606266;
   cursor: pointer;
-  height: 36px;
+  height: 32px;
   box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 
   &:hover {
-    border-color: #1890ff;
-    color: #1890ff;
+    border-color: #409eff;
+    color: #409eff;
   }
 
   &.primary {
-    background: #1890ff;
+    background: #409eff;
     color: #fff;
-    border-color: #1890ff;
+    border-color: #409eff;
 
     &:hover {
-      background: #40a9ff;
+      background: #66b1ff;
     }
   }
 }
@@ -3002,9 +3016,9 @@ td:not(.col-name):not(.col-tasks):not(.col-exec):not(.col-result) {
 }
 
 th {
-  background: #fafafa;
+  background: #f5f7fa;
   font-weight: 500;
-  color: #666;
+  color: #606266;
   white-space: nowrap;
   font-size: 14px;
 }
@@ -3026,7 +3040,7 @@ tbody tr.is-dragging {
 }
 
 tbody tr.is-drag-over {
-  background: #e6f7ff;
+  background: #ecf5ff;
 }
 
 tbody tr.is-drop-flash {
@@ -3039,13 +3053,28 @@ tbody tr.is-drop-flash {
 }
 
 .link {
-  color: #1890ff;
+  color: #409eff;
   text-decoration: none;
   transition: opacity 0.2s ease, color 0.2s ease;
 
   &:hover {
     text-decoration: underline;
   }
+}
+
+.filter-help-icon {
+  font-size: 14px;
+  color: #c0c4cc;
+  vertical-align: middle;
+  margin-left: 2px;
+  cursor: help;
+}
+
+.action-header-icon {
+  font-size: 14px;
+  color: #909399;
+  vertical-align: middle;
+  margin-right: 2px;
 }
 
 .link--routing {
@@ -3059,13 +3088,13 @@ tbody tr.is-drop-flash {
   font-size: 13px;
 
   &.success {
-    background: #f6ffed;
-    color: #52c41a;
+    background: #f0f9eb;
+    color: #67c23a;
   }
 
   &.fail {
-    background: #fff1f0;
-    color: #f5222d;
+    background: #fef0f0;
+    color: #f56c6c;
   }
 
   &.none {
@@ -3108,9 +3137,9 @@ tbody tr.is-drop-flash {
   cursor: pointer;
 
   &.active {
-    background: #1890ff;
+    background: #409eff;
     color: #fff;
-    border-color: #1890ff;
+    border-color: #409eff;
   }
 
   &:disabled {
@@ -3227,7 +3256,7 @@ tbody tr.is-drop-flash {
 
     .input-icon {
       margin-left: 8px;
-      color: #1890ff;
+      color: #409eff;
     }
   }
 
@@ -3251,8 +3280,8 @@ tbody tr.is-drop-flash {
     cursor: pointer;
 
     &:hover {
-      border-color: #1890ff;
-      color: #1890ff;
+      border-color: #409eff;
+      color: #409eff;
     }
   }
 }
@@ -3305,7 +3334,7 @@ tbody tr.is-drop-flash {
   color: #666;
 
   .link {
-    color: #1890ff;
+    color: #409eff;
     text-decoration: none;
   }
 
@@ -3371,7 +3400,7 @@ tbody tr.is-drop-flash {
   .btn-query {
     padding: 6px 16px;
     border: none;
-    background: #1890ff;
+    background: #409eff;
     color: #fff;
     border-radius: 4px;
     font-size: 14px;
@@ -3381,7 +3410,7 @@ tbody tr.is-drop-flash {
     gap: 4px;
 
     &:hover {
-      background: #40a9ff;
+      background: #66b1ff;
     }
   }
 
@@ -3395,8 +3424,8 @@ tbody tr.is-drop-flash {
     cursor: pointer;
 
     &:hover {
-      border-color: #1890ff;
-      color: #1890ff;
+      border-color: #409eff;
+      color: #409eff;
     }
   }
 
@@ -3410,7 +3439,7 @@ tbody tr.is-drop-flash {
     margin-left: auto;
 
     svg {
-      color: #1890ff;
+      color: #409eff;
     }
   }
 }
@@ -3515,7 +3544,7 @@ tbody tr.is-drop-flash {
   }
 
   &:has(input:checked) {
-    color: #1890ff;
+    color: #409eff;
   }
 }
 
@@ -3688,12 +3717,12 @@ tbody tr.is-drop-flash {
   flex-shrink: 0;
 
   .required-star {
-    color: #f5222d;
+    color: #f56c6c;
     margin-right: 4px;
   }
 
   .help-icon {
-    color: #1890ff;
+    color: #409eff;
     margin-left: 4px;
     cursor: help;
   }
@@ -3715,7 +3744,7 @@ tbody tr.is-drop-flash {
 
   &:focus {
     outline: none;
-    border-color: #1890ff;
+    border-color: #409eff;
   }
 }
 
@@ -3735,7 +3764,7 @@ tbody tr.is-drop-flash {
 
   &:focus {
     outline: none;
-    border-color: #1890ff;
+    border-color: #409eff;
   }
 }
 
@@ -3775,8 +3804,8 @@ tbody tr.is-drop-flash {
   cursor: pointer;
 
   &:hover {
-    border-color: #1890ff;
-    color: #1890ff;
+    border-color: #409eff;
+    color: #409eff;
   }
 }
 
@@ -3801,31 +3830,31 @@ tbody tr.is-drop-flash {
   box-sizing: border-box;
 
   &:hover {
-    border-color: #1890ff;
-    color: #1890ff;
+    border-color: #409eff;
+    color: #409eff;
   }
 }
 
 .btn-save {
   padding: 8px 20px;
-  border: 1px solid #1890ff;
+  border: 1px solid #409eff;
   background: #fff;
   border-radius: 4px;
   font-size: 14px;
-  color: #1890ff;
+  color: #409eff;
   cursor: pointer;
   height: 36px;
   box-sizing: border-box;
 
   &:hover {
-    background: #e6f7ff;
+    background: #ecf5ff;
   }
 }
 
 .btn-save-go {
   padding: 8px 20px;
   border: none;
-  background: #1890ff;
+  background: #409eff;
   border-radius: 4px;
   font-size: 14px;
   color: #fff;
@@ -3834,7 +3863,7 @@ tbody tr.is-drop-flash {
   box-sizing: border-box;
 
   &:hover {
-    background: #40a9ff;
+    background: #66b1ff;
   }
 }
 
@@ -3853,23 +3882,23 @@ tbody tr.is-drop-flash {
 
 .tab-btn {
   padding: 6px 16px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid #dcdfe6;
   background: #fff;
   border-radius: 4px;
   font-size: 14px;
-  color: #666;
+  color: #606266;
   cursor: pointer;
   transition: all 0.2s;
 
   &.active {
-    background: #1890ff;
+    background: #409eff;
     color: #fff;
-    border-color: #1890ff;
+    border-color: #409eff;
   }
 
   &:hover:not(.active) {
-    border-color: #1890ff;
-    color: #1890ff;
+    border-color: #409eff;
+    color: #409eff;
   }
 }
 
@@ -3889,14 +3918,14 @@ tbody tr.is-drop-flash {
 }
 
 .action-link {
-  color: #1890ff;
+  color: #409eff;
   cursor: pointer;
   font-size: 13px;
   transition: color 0.2s;
 
   &:hover {
-    color: #40a9ff;
-    text-decoration: underline;
+    color: #66b1ff;
+    text-decoration: none;
   }
 }
 
@@ -3947,8 +3976,8 @@ tbody tr.is-drop-flash {
   transition: all 0.2s;
 
   &:hover {
-    border-color: #1890ff;
-    color: #1890ff;
+    border-color: #409eff;
+    color: #409eff;
   }
 }
 
@@ -3967,8 +3996,8 @@ tbody tr.is-drop-flash {
   transition: all 0.2s;
 
   &:hover {
-    border-color: #1890ff;
-    color: #1890ff;
+    border-color: #409eff;
+    color: #409eff;
   }
 }
 
@@ -4021,7 +4050,7 @@ tbody tr.is-drop-flash {
   }
 
   .step-name {
-    color: #1890ff;
+    color: #409eff;
     cursor: pointer;
 
     &:hover {
@@ -4046,7 +4075,7 @@ tbody tr.is-drop-flash {
   }
 
   .step-link {
-    color: #1890ff;
+    color: #409eff;
     cursor: pointer;
     font-size: 12px;
 

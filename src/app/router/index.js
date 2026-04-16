@@ -82,10 +82,37 @@ const routes = [
     path: '/task-mgmt',
     name: 'TaskMgmt',
     component: () => import('@/domains/taskmgmt/views/TaskMgmtView.vue'),
+    redirect: '/task-mgmt/list',
     meta: { 
       requiresAuth: true,
       title: '任务管理'
-    }
+    },
+    children: [
+      {
+        path: 'list',
+        name: 'TaskList',
+        component: () => import('@/domains/taskmgmt/views/TaskListView.vue'),
+        meta: { requiresAuth: true, title: '任务列表' }
+      },
+      {
+        path: 'monitor',
+        name: 'TaskMonitor',
+        component: () => import('@/domains/taskmgmt/views/TaskMonitorView.vue'),
+        meta: { requiresAuth: true, title: '任务监控' }
+      },
+      {
+        path: 'detail/:id',
+        name: 'TaskDetail',
+        component: () => import('@/domains/taskmgmt/views/TaskDetailView.vue'),
+        meta: { requiresAuth: true, title: '任务详情' }
+      },
+      {
+        path: 'create',
+        name: 'TaskCreate',
+        component: () => import('@/domains/taskmgmt/views/TaskCreateView.vue'),
+        meta: { requiresAuth: true, title: '新增任务' }
+      }
+    ]
   },
   {
     path: '/mock-mgmt',
@@ -100,10 +127,26 @@ const routes = [
     path: '/module-settings',
     name: 'ModuleSettings',
     component: () => import('@/domains/modulesettings/views/ModuleSettingsView.vue'),
+    redirect: '/module-settings/basic-info',
     meta: { 
       requiresAuth: true,
       title: '模块设置'
-    }
+    },
+    children: [
+      { path: 'basic-info', name: 'BasicInfo', component: () => import('@/domains/modulesettings/views/BasicInfoView.vue'), meta: { requiresAuth: true, title: '基本信息' } },
+      { path: 'member-mgmt', name: 'MemberMgmt', component: () => import('@/domains/modulesettings/views/MemberMgmtView.vue'), meta: { requiresAuth: true, title: '人员管理' } },
+      { path: 'personal-config', name: 'PersonalConfig', component: () => import('@/domains/modulesettings/views/PersonalConfigView.vue'), meta: { requiresAuth: true, title: '个性化配置' } },
+      { path: 'tag-mgmt', name: 'TagMgmt', component: () => import('@/domains/modulesettings/views/TagMgmtView.vue'), meta: { requiresAuth: true, title: '标签管理' } },
+      { path: 'whitelist-mgmt', name: 'WhitelistMgmt', component: () => import('@/domains/modulesettings/views/WhitelistMgmtView.vue'), meta: { requiresAuth: true, title: '白名单管理' } },
+      { path: 'variable-template', name: 'VariableTemplate', component: () => import('@/domains/modulesettings/views/VariableTemplateView.vue'), meta: { requiresAuth: true, title: '变量模板' } },
+      { path: 'function-template', name: 'FunctionTemplate', component: () => import('@/domains/modulesettings/views/FunctionTemplateView.vue'), meta: { requiresAuth: true, title: '函数模板' } },
+      { path: 'framework-template', name: 'FrameworkTemplate', component: () => import('@/domains/modulesettings/views/FrameworkTemplateView.vue'), meta: { requiresAuth: true, title: '框架模板' } },
+      { path: 'account-auth', name: 'AccountAuth', component: () => import('@/domains/modulesettings/views/AccountAuthView.vue'), meta: { requiresAuth: true, title: '账号认证' } },
+      { path: 'file-mgmt', name: 'FileMgmt', component: () => import('@/domains/modulesettings/views/FileMgmtView.vue'), meta: { requiresAuth: true, title: '文件管理' } },
+      { path: 'env-mgmt', name: 'EnvMgmt', component: () => import('@/domains/modulesettings/views/EnvMgmtView.vue'), meta: { requiresAuth: true, title: '环境管理' } },
+      { path: 'recycle-bin', name: 'RecycleBin', component: () => import('@/domains/modulesettings/views/RecycleBinView.vue'), meta: { requiresAuth: true, title: '回收站' } },
+      { path: 'api-change', name: 'ApiChange', component: () => import('@/domains/modulesettings/views/ApiChangeView.vue'), meta: { requiresAuth: true, title: 'API变更' } }
+    ]
   }
 ]
 

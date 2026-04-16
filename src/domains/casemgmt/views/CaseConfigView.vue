@@ -11,6 +11,7 @@ import StepExecuteDrawer from '../components/StepExecuteDrawer.vue'
 import CaseSidebar from '../components/CaseSidebar.vue'
 import PrePostStepDialog from '../components/common/PrePostStepDialog.vue'
 import PresetVariableDialog from '../components/common/PresetVariableDialog.vue'
+import ApiRecordDrawer from '../components/ApiRecordDrawer.vue'
 import { createStep, deleteStep, executeTestcase, fetchStepList, fetchStepDetail, fetchTestcaseDetail, sortStep, updateStep, createTestcase, updateTestcase } from '../api'
 import { STEP_TYPE, ENV_CODE, HTTP_METHOD } from '../types'
 import { fetchProjectList } from '@/domains/project/api'
@@ -82,6 +83,8 @@ const prePostStepTitle = computed(() => prePostStepType.value === 'pre' ? '添�
 
 // 预设变量弹窗
 const showPresetVariableDialog = ref(false)
+// 接口录制抽屉
+const showApiRecordDrawer = ref(false)
 
 // 前置步骤、后置步骤、预设变量数据（用于保存用例时传参）
 const preSteps = ref([])
@@ -1186,7 +1189,7 @@ function closeStepTypeDialog() {
             </el-dropdown>
             <button class="tool-btn">导入</button>
             <button class="tool-btn">测试物料</button>
-            <button class="tool-btn">接口录制</button>
+            <button class="tool-btn" @click="showApiRecordDrawer = true">接口录制</button>
           </div>
           <div class="toolbar-right">
             <button class="tool-btn" @click="handleOpenPreStepDialog">前置步骤</button>
@@ -1353,6 +1356,14 @@ function closeStepTypeDialog() {
       :project-id="projectId"
       :testcase-id="caseId"
       @confirm="handlePrePostStepConfirm"
+    />
+
+    <!-- 接口录制抽屉 -->
+    <ApiRecordDrawer
+      v-model:visible="showApiRecordDrawer"
+      :testcase-id="caseId"
+      @close="showApiRecordDrawer = false"
+      @save="showApiRecordDrawer = false"
     />
 
     <!-- 预设变量配置弹窗 -->
