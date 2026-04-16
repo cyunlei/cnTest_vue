@@ -34,5 +34,6 @@
     "commands": true,
     "fileEdits": true,
     "toolUse": true
-  }
+  },
+  "claudeCode.disableLoginPrompt": true
 }

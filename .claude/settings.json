@@ -1,0 +1,16 @@
+{
+  "env": {
+    "ANTHROPIC_API_KEY": "sk-kimi-OiOFa4ZwvSChaiT8RFG25dRNBP5sdnJh7i2GgJCYztZlSPjNbdiM3Lzw6V4UAvoy",
+    "ANTHROPIC_BASE_URL": "https://api.kimi.com/coding/",
+    "ANTHROPIC_MODEL": "kimi-k2.5",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "kimi-k2.5",
+    "ANTHROPIC_SMALL_FAST_MODEL": "kimi-k2-turbo-preview"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"require\\('@vue/compiler-sfc'\\).parse\\(require\\('fs'\\).readFileSync\\('src/domains/casemgmt/views/CaseConfigView.vue', 'utf8'\\)\\)\")"
+    ]
+  },
+  "effortLevel": "max",
+   "claudeCode.disableLoginPrompt": true
+}

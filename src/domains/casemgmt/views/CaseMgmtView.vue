@@ -6,7 +6,7 @@
 import { ref, computed, nextTick, watch, onActivated, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessageBox, ElPopconfirm } from 'element-plus'
-import { Setting, ArrowDown } from '@element-plus/icons-vue'
+import { Setting, ArrowDown, ArrowUp, Check, Loading, Sort, QuestionFilled } from '@element-plus/icons-vue'
 import AppHeader from '@/shared/ui/organisms/AppHeader.vue'
 import AppPagination from '@/shared/ui/organisms/AppPagination.vue'
 import DateRangeInput from '@/shared/ui/molecules/DateRangeInput.vue'
@@ -73,6 +73,35 @@ const caseListInCurrentSuiteScope = ref(false)
 const canDragCaseSort = computed(() => {
   return caseListInCurrentSuiteScope.value && caseData.value.length > 1
 })
+
+// ========== 高保真交互新增状态 ==========
+
+// 移动弹窗
+const showMoveCaseDialog = ref(false)
+const showMoveStepDialog = ref(false)
+const moveCaseTarget = ref(null)
+const moveStepTarget = ref(null)
+
+// 表格展开行（步骤列表）
+const expandedCaseIds = ref(new Set())
+const caseStepMap = ref(new Map())
+const loadingStepCaseId = ref('')
+
+// 前置/后置步骤弹窗
+const showPrePostDialog = ref(false)
+const prePostDialogType = ref('pre')
+const prePostTestcaseId = ref('')
+
+// 全局变量弹窗
+const showPresetVariableDialog = ref(false)
+
+// 执行环境（本地状态）
+const execEnv = ref('default')
+
+// 步骤执行抽屉
+const showStepExecuteDrawer = ref(false)
+const stepExecuteTestcaseId = ref('')
+const stepExecuteTestcaseName = ref('')
 
 function flashCaseRow(caseId) {
   dropFlashCaseId.value = String(caseId || '')
@@ -485,7 +514,7 @@ function submitSyncCase() {
   closeSyncCaseModal()
 }
 
-// 打开批量执行弹窗
+// 批量执行弹窗
 function openBatchExecModal() {
   showBatchExecModal.value = true
 }
@@ -755,6 +784,16 @@ function isHeaderVisible(key) {
   return header ? header.checked : true
 }
 
+// 表格可见列数（用于展开行 colspan）
+const visibleColumnCount = computed(() => {
+  let count = 2 // checkbox + action
+  const keys = ['id', 'name', 'type', 'caseSet', 'app', 'tag', 'steps', 'tasks', 'execCount', 'result', 'creator', 'createTime', 'updateTime', 'priority']
+  keys.forEach(key => {
+    if (isHeaderVisible(key)) count++
+  })
+  return count
+})
+
 // 选中/取消选中单个
 function toggleSelect(id) {
   const index = selectedCases.value.indexOf(id)
@@ -827,6 +866,401 @@ function handleCaseRowDrop(targetRow) {
     })
 }
 
+// ========== 操作列功能 ==========
+
+function showDevelopingTip(featureName = '该功能') {
+  showWarning(`${featureName}开发中`)
+}
+
+function handleDetail(row) {
+  goToCaseConfig(row.id)
+}
+
+async function handleAddStep(row, stepType) {
+  const typeMap = {
+    jsf: 4,
+    http: 0,
+    jimdb: 2,
+    jmq: 3,
+    jar: 8,
+    loop: 10,
+    condition: 11
+  }
+  const type = typeMap[stepType]
+  if (type === undefined) {
+    showDevelopingTip('接口录制')
+    return
+  }
+
+  try {
+    const resp = await createStep({
+      testcase_id: Number(row.id),
+      step_type: type,
+      name: `新建${getStepTypeLabel(type)}步骤`
+    })
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+    if (code !== 0 && code !== 200) {
+      showError(msg || '新增步骤失败')
+      return
+    }
+    showSuccess(msg || '新增步骤成功')
+    if (!expandedCaseIds.value.has(String(row.id))) {
+      expandedCaseIds.value.add(String(row.id))
+    }
+    await loadCaseSteps(String(row.id))
+  } catch (error) {
+    void error
+    showError('新增步骤异常')
+  }
+}
+
+async function handleExecute(row) {
+  try {
+    const resp = await executeTestcase({ testcase_id: Number(row.id), step_ids: [] })
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+    if (code !== 0 && code !== 200) {
+      showError(msg || '执行用例失败')
+      return
+    }
+    showSuccess(msg || '执行用例成功')
+    stepExecuteTestcaseId.value = String(row.id)
+    stepExecuteTestcaseName.value = row.name || ''
+    showStepExecuteDrawer.value = true
+  } catch (error) {
+    void error
+    showError('执行用例异常')
+  }
+}
+
+function handleEditCase(row) {
+  caseModalMode.value = 'edit'
+  editingCase.value = {
+    id: row.id,
+    name: row.name,
+    caseType: row.type,
+    suiteName: row.caseSet,
+    priority: row.priority,
+    note: ''
+  }
+  showAddCaseModal.value = true
+}
+
+async function handleDeleteCase(row) {
+  try {
+    await ElMessageBox.confirm('确认删除该用例吗？', '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+
+  try {
+    const resp = await deleteTestcase({ case_id: Number(row.id) })
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+    if (code !== 0 && code !== 200) {
+      showError(msg || '删除用例失败')
+      return
+    }
+    showSuccess(msg || '删除用例成功')
+    await reloadCurrentTestcases()
+  } catch (error) {
+    void error
+    showError('删除用例异常')
+  }
+}
+
+async function handleCopyCase(row) {
+  try {
+    const resp = await createTestcase({
+      name: `${row.name || ''}-复制`,
+      case_type: 0,
+      parent_id: currentSuite.value?.id ?? null,
+      priority: 0,
+      precondition: '',
+      description: '',
+      tags: '',
+      project_id: projectStore.currentProjectId
+    })
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+    if (code !== 0 && code !== 200) {
+      showError(msg || '复制用例失败')
+      return
+    }
+    showSuccess(msg || '复制用例成功')
+    await reloadCurrentTestcases()
+  } catch (error) {
+    void error
+    showError('复制用例异常')
+  }
+}
+
+function handleMoveCase(row) {
+  moveCaseTarget.value = row
+  showMoveCaseDialog.value = true
+}
+
+async function confirmMoveCase(payload) {
+  if (!moveCaseTarget.value?.id) return
+  try {
+    const resp = await updateTestcase({
+      testcase_id: Number(moveCaseTarget.value.id),
+      parent_id: Number(payload.suite_id)
+    })
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+    if (code !== 0 && code !== 200) {
+      showError(msg || '移动用例失败')
+      return
+    }
+    showSuccess(msg || '移动用例成功')
+    showMoveCaseDialog.value = false
+    await reloadCurrentTestcases()
+  } catch (error) {
+    void error
+    showError('移动用例异常')
+  }
+}
+
+function handlePrePostSteps(row, type) {
+  prePostDialogType.value = type
+  prePostTestcaseId.value = String(row.id)
+  showPrePostDialog.value = true
+}
+
+function handlePrePostConfirm(data) {
+  void data
+  showPrePostDialog.value = false
+}
+
+function handleMoreCommand(cmd, row) {
+  const handlers = {
+    copy: () => handleCopyCase(row),
+    move: () => handleMoveCase(row),
+    share: () => showDevelopingTip('分享'),
+    execResult: () => {
+      stepExecuteTestcaseId.value = String(row.id)
+      stepExecuteTestcaseName.value = row.name || ''
+      showStepExecuteDrawer.value = true
+    },
+    setAtomic: () => showDevelopingTip('设置为原子用例'),
+    addToTask: () => showDevelopingTip('添加至任务'),
+    pre: () => handlePrePostSteps(row, 'pre'),
+    post: () => handlePrePostSteps(row, 'post'),
+    genGraph: () => showDevelopingTip('生成图形用例'),
+    execStrategy: () => showDevelopingTip('执行策略配置')
+  }
+  const handler = handlers[cmd]
+  if (handler) handler()
+}
+
+function handleAddStepCommand(cmd, row) {
+  const typeMap = {
+    jsf: 'jsf',
+    http: 'http',
+    jimdb: 'jimdb',
+    jmq: 'jmq',
+    jar: 'jar',
+    loop: 'loop',
+    condition: 'condition',
+    record: 'record'
+  }
+  if (cmd === 'record') {
+    showDevelopingTip('接口录制')
+    return
+  }
+  handleAddStep(row, typeMap[cmd])
+}
+
+// ========== 设置按钮下拉 ==========
+
+function openPresetVariable() {
+  showPresetVariableDialog.value = true
+}
+
+function handleSettingCommand(cmd) {
+  if (cmd === 'globalVar') {
+    openPresetVariable()
+  } else if (cmd === 'apiSetting') {
+    showDevelopingTip('接口设置')
+  } else if (cmd === 'defaultEnv') {
+    execEnv.value = 'default'
+    showSuccess('已切换至默认环境')
+  } else if (cmd === 'customEnv') {
+    execEnv.value = 'custom'
+    showSuccess('已切换至自定义环境')
+  }
+}
+
+// ========== 表格展开行（步骤列表） ==========
+
+function toggleExpandCase(caseId) {
+  const id = String(caseId)
+  if (expandedCaseIds.value.has(id)) {
+    expandedCaseIds.value.delete(id)
+  } else {
+    expandedCaseIds.value.add(id)
+    if (!caseStepMap.value.has(id)) {
+      loadCaseSteps(id)
+    }
+  }
+}
+
+function expandAllCases() {
+  caseData.value.forEach(row => {
+    const id = String(row.id)
+    expandedCaseIds.value.add(id)
+    if (!caseStepMap.value.has(id)) {
+      loadCaseSteps(id)
+    }
+  })
+}
+
+function collapseAllCases() {
+  expandedCaseIds.value.clear()
+}
+
+async function loadCaseSteps(caseId) {
+  loadingStepCaseId.value = caseId
+  try {
+    const resp = await fetchStepList({ testcase_id: Number(caseId), page: 1, page_size: 1000 })
+    const list = resp?.data?.data?.list || resp?.data?.data?.items || []
+    caseStepMap.value.set(caseId, list.map((item, idx) => ({
+      id: String(item.id),
+      step_id: item.id,
+      step_name: item.name || '',
+      detail: item.api_url || item.name || '',
+      step_type: item.step_type ?? 0,
+      inputGroup: '1/1',
+      sort_order: item.sort_order ?? idx + 1,
+      stepRaw: item
+    })))
+  } catch (error) {
+    void error
+    caseStepMap.value.set(caseId, [])
+  } finally {
+    loadingStepCaseId.value = ''
+  }
+}
+
+async function handleDeleteStep(step, caseId) {
+  const stepId = Number(step?.step_id)
+  if (!Number.isFinite(stepId) || stepId <= 0) return
+  try {
+    const resp = await deleteStep({ step_id: stepId })
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+    if (code !== 0 && code !== 200) {
+      showError(msg || '删除步骤失败')
+      return
+    }
+    showSuccess(msg || '删除步骤成功')
+    await loadCaseSteps(String(caseId))
+  } catch (error) {
+    void error
+    showError('删除步骤异常')
+  }
+}
+
+async function handleCopyStep(step, caseId) {
+  const raw = step?.stepRaw || {}
+  try {
+    const payload = {
+      name: `${raw.name || step?.step_name || ''}-复制`,
+      project_id: raw.project_id ?? projectStore.currentProjectId ?? 0,
+      environment_id: raw.environment_id ?? 1,
+      method: raw.method ?? 0,
+      step_type: raw.step_type ?? step?.step_type ?? 0,
+      api_url: raw.api_url || '',
+      env_code: raw.env_code ?? 'test',
+      expected_result: raw.expected_result || '',
+      testcase_id: Number(caseId),
+      api_input_params: raw.api_input_params ?? {},
+      api_assertion: raw.api_assertion ?? {},
+      pre_operations: raw.pre_operations ?? [],
+      post_operations: raw.post_operations ?? [],
+      max_wait_time: raw.max_wait_time ?? 30,
+      retry_count: raw.retry_count ?? 0,
+      sleep_time: raw.sleep_time ?? 0,
+      concurrent_num: raw.concurrent_num ?? 0,
+      assertion_retry_count: raw.assertion_retry_count ?? 0,
+      sort_order: step?.sort_order ? Math.max(0, Number(step.sort_order) - 1) : 0
+    }
+    const resp = await createStep(payload)
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+    if (code !== 0 && code !== 200) {
+      showError(msg || '复制步骤失败')
+      return
+    }
+    showSuccess(msg || '复制步骤成功')
+    await loadCaseSteps(String(caseId))
+  } catch (error) {
+    void error
+    showError('复制步骤异常')
+  }
+}
+
+function handleMoveStep(step) {
+  moveStepTarget.value = step
+  showMoveStepDialog.value = true
+}
+
+async function confirmMoveStep(targetTestcaseId) {
+  if (!moveStepTarget.value?.step_id) return
+  try {
+    const resp = await updateStep({
+      step_id: Number(moveStepTarget.value.step_id),
+      testcase_id: Number(targetTestcaseId)
+    })
+    const code = resp?.data?.code
+    const msg = resp?.data?.msg
+    if (code !== 0 && code !== 200) {
+      showError(msg || '移动步骤失败')
+      return
+    }
+    showSuccess(msg || '移动步骤成功')
+    showMoveStepDialog.value = false
+    // 刷新原用例和目标的步骤列表（如果已展开）
+    const currentCaseId = String(moveStepTarget.value?.testcase_id || '')
+    if (expandedCaseIds.value.has(currentCaseId)) {
+      await loadCaseSteps(currentCaseId)
+    }
+    const targetId = String(targetTestcaseId)
+    if (expandedCaseIds.value.has(targetId)) {
+      await loadCaseSteps(targetId)
+    }
+  } catch (error) {
+    void error
+    showError('移动步骤异常')
+  }
+}
+
+function getStepTypeLabel(type) {
+  const typeMap = {
+    0: 'HTTP',
+    1: 'MySQL',
+    2: 'Redis',
+    3: 'JMQ',
+    4: 'DUBBO',
+    5: 'KAFKA',
+    6: 'R2M',
+    7: 'FMQ',
+    8: 'JAR',
+    9: 'SHELL',
+    10: '循环',
+    11: '条件',
+    12: 'STARDB',
+    13: 'SCHEDULEJOB'
+  }
+  return typeMap[type] || '未知'
+}
+
 // 跳转到用例配置页面（增加过渡态，避免生硬跳转和重复点击）
 async function goToCaseConfig(id) {
   if (!id || navigatingCaseId.value === id) return
@@ -889,7 +1323,7 @@ async function goToCaseConfig(id) {
         </div>
 
         <!-- 搜索栏 -->
-        <div class="search-filter">
+        <div v-if="activeTab === 'scenario'" class="search-filter">
           <!-- 第一排：始终显示 -->
           <div class="filter-row">
             <div class="filter-item filter-item--keyword">
@@ -906,7 +1340,10 @@ async function goToCaseConfig(id) {
           </div>
             <div class="filter-actions">
               <button type="button" class="advanced-link-btn" @click="toggleMoreFilters">
-                {{ showMoreFilters ? '隐藏筛选' : '高级筛选' }}
+                高级筛选
+                <el-icon class="advanced-arrow" :style="{ transform: showMoreFilters ? 'rotate(180deg)' : 'rotate(0deg)' }">
+                  <ArrowDown />
+                </el-icon>
               </button>
               <button class="query-btn" @click="handleQueryTestcases">查询</button>
               <button class="reset-btn" @click="handleResetTestcases">重置</button>
@@ -943,20 +1380,45 @@ async function goToCaseConfig(id) {
         </div>
 
         <!-- 操作栏 -->
-        <div class="toolbar">
+        <div v-if="activeTab === 'scenario'" class="toolbar">
           <!-- 新增按钮带下拉 -->
           <div class="tool-btn-wrapper">
             <button class="tool-btn primary" @click="openAddCaseModal">+ 新增</button>
           </div>
-          <button class="tool-btn">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-              <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
-            </svg>
-            设置
-          </button>
+          <el-dropdown trigger="click" @command="handleSettingCommand">
+            <button class="tool-btn">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+              </svg>
+              设置
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="globalVar">全局变量</el-dropdown-item>
+                <el-dropdown-item command="apiSetting">接口设置</el-dropdown-item>
+                <el-dropdown-item divided>
+                  <span>执行环境</span>
+                </el-dropdown-item>
+                <el-dropdown-item command="defaultEnv">
+                  <span style="display:inline-flex;align-items:center;gap:8px;">
+                    <el-icon v-if="execEnv === 'default'" color="#52c41a"><Check /></el-icon>
+                    <span v-else style="width:16px;display:inline-block;"></span>
+                    默认环境
+                  </span>
+                </el-dropdown-item>
+                <el-dropdown-item command="customEnv">
+                  <span style="display:inline-flex;align-items:center;gap:8px;">
+                    <el-icon v-if="execEnv === 'custom'" color="#52c41a"><Check /></el-icon>
+                    <span v-else style="width:16px;display:inline-block;"></span>
+                    自定义环境
+                  </span>
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
           <button class="tool-btn" @click="openSyncCaseModal">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-              <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+              <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zm0-16C5.58 3 2 6.58 2 11s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8z"/>
             </svg>
             同步用例
           </button>
@@ -1035,16 +1497,18 @@ async function goToCaseConfig(id) {
         </div>
 
         <!-- 表格 -->
-        <div class="table-container">
+        <div v-if="activeTab === 'scenario'" class="table-container">
           <table>
             <thead>
               <tr>
                 <th class="col-checkbox">
-                  <input 
-                    type="checkbox" 
-                    :checked="selectedCases.length === caseData.length && caseData.length > 0"
-                    @change="toggleSelectAll"
-                  />
+                  <div class="checkbox-header">
+                    <input
+                      type="checkbox"
+                      :checked="selectedCases.length === caseData.length && caseData.length > 0"
+                      @change="toggleSelectAll"
+                    />
+                  </div>
                 </th>
                 <th v-if="isHeaderVisible('id')" class="col-id">用例编号</th>
                 <th v-if="isHeaderVisible('name')" class="col-name">用例名称</th>
@@ -1060,61 +1524,298 @@ async function goToCaseConfig(id) {
                 <th v-if="isHeaderVisible('createTime')" class="col-time">创建时间</th>
                 <th v-if="isHeaderVisible('updateTime')" class="col-update">更新时间</th>
                 <th v-if="isHeaderVisible('priority')" class="col-priority">优先级</th>
+                <th class="col-action">操作</th>
               </tr>
             </thead>
             <tbody>
-              <tr
-                v-for="row in caseData"
-                :key="row.id"
-                :draggable="canDragCaseSort"
-                :class="{
-                  'is-dragging': draggingCaseId === String(row.id),
-                  'is-drag-over': dragOverCaseId === String(row.id),
-                  'is-drop-flash': dropFlashCaseId === String(row.id),
-                  'is-drag-disabled': !canDragCaseSort
-                }"
-                @dragstart="handleCaseRowDragStart(row)"
-                @dragover.prevent="handleCaseRowDragOver(row)"
-                @drop.prevent="handleCaseRowDrop(row)"
-                @dragend="handleCaseRowDragEnd"
-              >
-                <td class="col-checkbox">
-                  <input 
-                    type="checkbox" 
-                    :checked="selectedCases.includes(row.id)"
-                    @change="toggleSelect(row.id)"
-                  />
-                </td>
-                <td v-if="isHeaderVisible('id')" class="col-id">{{ row.id }}</td>
-                <td v-if="isHeaderVisible('name')" class="col-name">
-                  <a
-                    href="javascript:;"
-                    class="link"
-                    :class="{ 'link--routing': navigatingCaseId === row.id }"
-                    @click="goToCaseConfig(row.id)"
-                  >
-                    {{ row.name }}
-                  </a>
-                </td>
-                <td v-if="isHeaderVisible('type')" class="col-type">{{ row.type }}</td>
-                <td v-if="isHeaderVisible('caseSet')" class="col-set">{{ row.caseSet }}</td>
-                <td v-if="isHeaderVisible('app')" class="col-app">{{ row.app }}</td>
-                <td v-if="isHeaderVisible('tag')" class="col-tag">{{ row.tag || 'NA' }}</td>
-                <td v-if="isHeaderVisible('steps')" class="col-steps">{{ row.steps }}</td>
-                <td v-if="isHeaderVisible('tasks')" class="col-tasks">{{ row.tasks }}</td>
-                <td v-if="isHeaderVisible('execCount')" class="col-exec">{{ row.execCount }}</td>
-                <td v-if="isHeaderVisible('result')" class="col-result">
-                  <span :class="['result-tag', row.result === '正确' ? 'success' : row.result === '-' ? 'none' : 'fail']">
-                    {{ row.result }}
-                  </span>
-                </td>
-                <td v-if="isHeaderVisible('creator')" class="col-creator">{{ row.creator }}</td>
-                <td v-if="isHeaderVisible('createTime')" class="col-time">{{ row.createTime }}</td>
-                <td v-if="isHeaderVisible('updateTime')" class="col-update">{{ row.updateTime }}</td>
-                <td v-if="isHeaderVisible('priority')" class="col-priority">{{ row.priority }}</td>
-              </tr>
+              <template v-for="row in caseData" :key="row.id">
+                <tr
+                  :draggable="canDragCaseSort"
+                  :class="{
+                    'is-dragging': draggingCaseId === String(row.id),
+                    'is-drag-over': dragOverCaseId === String(row.id),
+                    'is-drop-flash': dropFlashCaseId === String(row.id),
+                    'is-drag-disabled': !canDragCaseSort
+                  }"
+                  @dragstart="handleCaseRowDragStart(row)"
+                  @dragover.prevent="handleCaseRowDragOver(row)"
+                  @drop.prevent="handleCaseRowDrop(row)"
+                  @dragend="handleCaseRowDragEnd"
+                >
+                  <td class="col-checkbox">
+                    <div class="checkbox-cell">
+                      <span class="expand-icon" @click.stop="toggleExpandCase(row.id)">
+                        {{ expandedCaseIds.has(String(row.id)) ? '-' : '+' }}
+                      </span>
+                      <input
+                        type="checkbox"
+                        :checked="selectedCases.includes(row.id)"
+                        @change="toggleSelect(row.id)"
+                      />
+                    </div>
+                  </td>
+                  <td v-if="isHeaderVisible('id')" class="col-id">{{ row.id }}</td>
+                  <td v-if="isHeaderVisible('name')" class="col-name">
+                    <a
+                      href="javascript:;"
+                      class="link"
+                      :class="{ 'link--routing': navigatingCaseId === row.id }"
+                      @click="goToCaseConfig(row.id)"
+                    >
+                      {{ row.name }}
+                    </a>
+                  </td>
+                  <td v-if="isHeaderVisible('type')" class="col-type">{{ row.type }}</td>
+                  <td v-if="isHeaderVisible('caseSet')" class="col-set">{{ row.caseSet }}</td>
+                  <td v-if="isHeaderVisible('app')" class="col-app">{{ row.app }}</td>
+                  <td v-if="isHeaderVisible('tag')" class="col-tag">{{ row.tag || 'NA' }}</td>
+                  <td v-if="isHeaderVisible('steps')" class="col-steps">{{ row.steps }}</td>
+                  <td v-if="isHeaderVisible('tasks')" class="col-tasks">{{ row.tasks }}</td>
+                  <td v-if="isHeaderVisible('execCount')" class="col-exec">{{ row.execCount }}</td>
+                  <td v-if="isHeaderVisible('result')" class="col-result">
+                    <span :class="['result-tag', row.result === '正确' ? 'success' : row.result === '-' ? 'none' : 'fail']">
+                      {{ row.result }}
+                    </span>
+                  </td>
+                  <td v-if="isHeaderVisible('creator')" class="col-creator">{{ row.creator }}</td>
+                  <td v-if="isHeaderVisible('createTime')" class="col-time">{{ row.createTime }}</td>
+                  <td v-if="isHeaderVisible('updateTime')" class="col-update">{{ row.updateTime }}</td>
+                  <td v-if="isHeaderVisible('priority')" class="col-priority">{{ row.priority }}</td>
+                  <td class="col-action">
+                    <div class="action-links">
+                      <a class="action-link" @click.stop="handleDetail(row)">详情</a>
+                      <span class="action-sep">|</span>
+                      <el-dropdown trigger="hover" @command="cmd => handleAddStepCommand(cmd, row)">
+                        <span class="action-link dropdown-trigger">新增步骤</span>
+                        <template #dropdown>
+                          <el-dropdown-menu>
+                            <el-dropdown-item command="jsf">新增JSF步骤</el-dropdown-item>
+                            <el-dropdown-item command="http">新增HTTP步骤</el-dropdown-item>
+                            <el-dropdown-item command="jimdb">新增JIMDB步骤</el-dropdown-item>
+                            <el-dropdown-item command="jmq">新增JMQ步骤</el-dropdown-item>
+                            <el-dropdown-item command="jar">新增JAR步骤</el-dropdown-item>
+                            <el-dropdown-item command="loop">新增循环步骤</el-dropdown-item>
+                            <el-dropdown-item command="condition">新增条件步骤</el-dropdown-item>
+                            <el-dropdown-item command="record">接口录制</el-dropdown-item>
+                          </el-dropdown-menu>
+                        </template>
+                      </el-dropdown>
+                      <span class="action-sep">|</span>
+                      <a class="action-link" @click.stop="handleExecute(row)">执行</a>
+                      <span class="action-sep">|</span>
+                      <a class="action-link" @click.stop="handleEditCase(row)">编辑</a>
+                      <span class="action-sep">|</span>
+                      <a class="action-link" @click.stop="handleDeleteCase(row)">删除</a>
+                      <span class="action-sep">|</span>
+                      <el-dropdown trigger="hover" @command="cmd => handleMoreCommand(cmd, row)">
+                        <span class="action-link dropdown-trigger">更多</span>
+                        <template #dropdown>
+                          <el-dropdown-menu>
+                            <el-dropdown-item command="copy">复制</el-dropdown-item>
+                            <el-dropdown-item command="move">移动</el-dropdown-item>
+                            <el-dropdown-item command="share">分享</el-dropdown-item>
+                            <el-dropdown-item command="execResult">执行结果</el-dropdown-item>
+                            <el-dropdown-item command="setAtomic">设置为原子用例</el-dropdown-item>
+                            <el-dropdown-item command="addToTask">添加至任务</el-dropdown-item>
+                            <el-dropdown-item command="pre">前置步骤</el-dropdown-item>
+                            <el-dropdown-item command="post">后置步骤</el-dropdown-item>
+                            <el-dropdown-item command="genGraph">生成图形用例</el-dropdown-item>
+                            <el-dropdown-item command="execStrategy">执行策略配置</el-dropdown-item>
+                          </el-dropdown-menu>
+                        </template>
+                      </el-dropdown>
+                    </div>
+                  </td>
+                </tr>
+                <!-- 展开行：步骤列表 -->
+                <tr v-if="expandedCaseIds.has(String(row.id))" class="expand-row">
+                  <td :colspan="visibleColumnCount" class="expand-cell">
+                    <div class="steps-panel">
+                      <div v-if="loadingStepCaseId === String(row.id)" class="steps-loading">
+                        <el-icon class="is-loading"><Loading /></el-icon>
+                        加载步骤中...
+                      </div>
+                      <table v-else class="steps-table">
+                        <thead>
+                          <tr>
+                            <th class="col-step-id">步骤编号</th>
+                            <th class="col-step-name">步骤名称</th>
+                            <th class="col-step-detail">详细内容</th>
+                            <th class="col-step-type">类型</th>
+                            <th class="col-step-group">入参分组</th>
+                            <th class="col-step-order">顺序</th>
+                            <th class="col-step-action">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="step in (caseStepMap.get(String(row.id)) || [])" :key="step.id">
+                            <td class="col-step-id">{{ step.step_id }}</td>
+                            <td class="col-step-name">
+                              <span class="step-name">{{ step.step_name }}</span>
+                            </td>
+                            <td class="col-step-detail">
+                              <span class="step-detail" :title="step.detail">{{ step.detail }}</span>
+                            </td>
+                            <td class="col-step-type">{{ getStepTypeLabel(step.step_type) }}</td>
+                            <td class="col-step-group">{{ step.inputGroup }}</td>
+                            <td class="col-step-order">{{ step.sort_order }}</td>
+                            <td class="col-step-action">
+                              <div class="step-action-links">
+                                <el-popconfirm
+                                  title="确认删除该步骤？"
+                                  confirm-button-text="确定"
+                                  cancel-button-text="取消"
+                                  @confirm="handleDeleteStep(step, row.id)"
+                                >
+                                  <template #reference>
+                                    <a class="step-link">删除</a>
+                                  </template>
+                                </el-popconfirm>
+                                <span class="action-sep">|</span>
+                                <el-popconfirm
+                                  title="确认复制该步骤？"
+                                  confirm-button-text="确定"
+                                  cancel-button-text="取消"
+                                  @confirm="handleCopyStep(step, row.id)"
+                                >
+                                  <template #reference>
+                                    <a class="step-link">复制</a>
+                                  </template>
+                                </el-popconfirm>
+                                <span class="action-sep">|</span>
+                                <a class="step-link" @click="handleMoveStep(step)">移动</a>
+                              </div>
+                            </td>
+                          </tr>
+                          <tr v-if="!(caseStepMap.get(String(row.id)) || []).length">
+                            <td colspan="7" class="empty-steps">
+                              <el-empty description="暂无步骤数据" :image-size="60" />
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
+        </div>
+
+        <!-- 原子用例 Tab -->
+        <div v-else class="atomic-tab">
+          <div class="search-filter atomic-filter">
+            <div class="filter-row">
+              <div class="filter-item filter-item--keyword">
+                <label>关键字:</label>
+                <input v-model="filterForm.keyword" type="text" placeholder="输入名称/编号查询" />
+              </div>
+              <div class="filter-item filter-item--creator">
+                <label>创建人:</label>
+                <input v-model="filterForm.creator" type="text" placeholder="输入erp" />
+              </div>
+              <div class="filter-item filter-item--api">
+                <label>接口:</label>
+                <input v-model="filterForm.api" type="text" placeholder="输入接口地址/topic" />
+              </div>
+              <div class="filter-actions">
+                <button type="button" class="advanced-link-btn" @click="toggleMoreFilters">
+                  高级筛选
+                  <el-icon class="advanced-arrow" :style="{ transform: showMoreFilters ? 'rotate(180deg)' : 'rotate(0deg)' }">
+                    <ArrowDown />
+                  </el-icon>
+                </button>
+                <button class="query-btn" @click="handleQueryTestcases">查询</button>
+                <button class="reset-btn" @click="handleResetTestcases">重置</button>
+              </div>
+            </div>
+            <div v-if="showMoreFilters" class="filter-row filter-row--more">
+              <div class="filter-item filter-item--tags">
+                <label>标签:</label>
+                <input v-model="filterForm.tags" type="text" placeholder="请选择" />
+              </div>
+              <div class="filter-item filter-item--updater">
+                <label>修改人:</label>
+                <input v-model="filterForm.updater" type="text" placeholder="输入erp" />
+              </div>
+              <div class="filter-item filter-item--method">
+                <label>方法:</label>
+                <input v-model="filterForm.method" type="text" placeholder="输入HTTP方法名" />
+              </div>
+              <div class="filter-item filter-item--range">
+                <label>创建时间:</label>
+                <div class="range-inputs range-inputs--picker">
+                  <DateRangeInput
+                    :start-date="filterForm.createdAtStart"
+                    :end-date="filterForm.createdAtEnd"
+                    @update:start-date="value => (filterForm.createdAtStart = value)"
+                    @update:end-date="value => (filterForm.createdAtEnd = value)"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="toolbar atomic-toolbar">
+            <button class="tool-btn primary" @click="openAddCaseModal">+ 新增原子用例</button>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th class="col-id">用例编号</th>
+                  <th class="col-name">用例名称</th>
+                  <th class="col-set">所属用例集</th>
+                  <th class="col-arrange">编排 <el-icon><Sort /></el-icon></th>
+                  <th class="col-app">关联应用</th>
+                  <th class="col-tag">标签</th>
+                  <th class="col-steps">步骤数</th>
+                  <th class="col-exec">
+                    执行次数
+                    <el-tooltip content="该用例累计执行次数" placement="top">
+                      <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                    </el-tooltip>
+                  </th>
+                  <th class="col-result">
+                    结果
+                    <el-tooltip content="最近一次执行结果" placement="top">
+                      <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                    </el-tooltip>
+                  </th>
+                  <th class="col-priority">优先级</th>
+                  <th class="col-creator">创建人</th>
+                  <th class="col-action">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in caseData" :key="row.id">
+                  <td class="col-id">{{ row.id }}</td>
+                  <td class="col-name">
+                    <a href="javascript:;" class="link" @click="goToCaseConfig(row.id)">{{ row.name }}</a>
+                  </td>
+                  <td class="col-set">{{ row.caseSet }}</td>
+                  <td class="col-arrange">{{ row.type }}</td>
+                  <td class="col-app">{{ row.app }}</td>
+                  <td class="col-tag">{{ row.tag || 'NA' }}</td>
+                  <td class="col-steps">{{ row.steps }}</td>
+                  <td class="col-exec">{{ row.execCount }}</td>
+                  <td class="col-result">
+                    <span :class="['result-tag', row.result === '正确' ? 'success' : row.result === '-' ? 'none' : 'fail']">
+                      {{ row.result }}
+                    </span>
+                  </td>
+                  <td class="col-priority">{{ row.priority }}</td>
+                  <td class="col-creator">{{ row.creator }}</td>
+                  <td class="col-action">
+                    <div class="action-links">
+                      <a class="action-link" @click.stop="handleEditCase(row)">编辑</a>
+                      <span class="action-sep">|</span>
+                      <a class="action-link" @click.stop="handleDeleteCase(row)">删除</a>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <!-- 分页 -->
@@ -1539,6 +2240,38 @@ async function goToCaseConfig(id) {
       </div>
     </div>
   </div>
+
+  <!-- 步骤执行抽屉 -->
+  <StepExecuteDrawer
+    v-model:visible="showStepExecuteDrawer"
+    :testcase-id="stepExecuteTestcaseId"
+    :testcase-name="stepExecuteTestcaseName"
+  />
+
+  <!-- 前置/后置步骤弹窗 -->
+  <PrePostStepDialog
+    v-model="showPrePostDialog"
+    :type="prePostDialogType"
+    :testcase-id="prePostTestcaseId"
+    @confirm="handlePrePostConfirm"
+  />
+
+  <!-- 全局变量弹窗 -->
+  <PresetVariableDialog v-model="showPresetVariableDialog" />
+
+  <!-- 移动步骤弹窗 -->
+  <MoveStepDialog
+    v-model:visible="showMoveStepDialog"
+    :step="moveStepTarget"
+    @confirm="confirmMoveStep"
+  />
+
+  <!-- 移动用例弹窗 -->
+  <MoveCaseDialog
+    v-model:visible="showMoveCaseDialog"
+    :testcase="moveCaseTarget"
+    @confirm="confirmMoveCase"
+  />
 </template>
 
 <style lang="scss" scoped>
@@ -1836,6 +2569,7 @@ async function goToCaseConfig(id) {
   .help-icon {
     color: #1890ff;
     margin-left: 4px;
+    cursor: help;
   }
 }
 
@@ -2196,6 +2930,13 @@ async function goToCaseConfig(id) {
 .advanced-link-btn:hover {
   color: #40a9ff;
   text-decoration: underline;
+}
+
+.advanced-arrow {
+  margin-left: 4px;
+  font-size: 12px;
+  transition: transform 0.2s ease;
+  vertical-align: middle;
 }
 
 /* 工具栏 */
@@ -3095,5 +3836,260 @@ tbody tr.is-drop-flash {
   &:hover {
     background: #40a9ff;
   }
+}
+
+/* 标题栏 Tabs */
+.title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.content-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.tab-btn {
+  padding: 6px 16px;
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &.active {
+    background: #1890ff;
+    color: #fff;
+    border-color: #1890ff;
+  }
+
+  &:hover:not(.active) {
+    border-color: #1890ff;
+    color: #1890ff;
+  }
+}
+
+.page-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+/* 操作列 */
+.action-links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.action-link {
+  color: #1890ff;
+  cursor: pointer;
+  font-size: 13px;
+  transition: color 0.2s;
+
+  &:hover {
+    color: #40a9ff;
+    text-decoration: underline;
+  }
+}
+
+.action-sep {
+  color: #d9d9d9;
+  font-size: 12px;
+  user-select: none;
+}
+
+.dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 复选框列 */
+.col-checkbox {
+  min-width: 70px;
+  white-space: nowrap;
+}
+
+.checkbox-header,
+.checkbox-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    transform: scale(1.2);
+    transform-origin: center;
+    margin: 0;
+  }
+}
+
+.expand-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid #d9d9d9;
+  border-radius: 2px;
+  font-size: 12px;
+  color: #666;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #1890ff;
+    color: #1890ff;
+  }
+}
+
+.expand-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid #d9d9d9;
+  border-radius: 2px;
+  font-size: 12px;
+  color: #666;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #1890ff;
+    color: #1890ff;
+  }
+}
+
+/* 展开行 */
+.expand-row {
+  background: #fafafa;
+}
+
+.expand-cell {
+  padding: 12px 16px 16px 48px;
+}
+
+.steps-panel {
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  padding: 12px;
+}
+
+.steps-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: #999;
+  font-size: 14px;
+}
+
+.steps-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th, td {
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  th {
+    background: #fafafa;
+    font-weight: 500;
+    color: #666;
+    white-space: nowrap;
+  }
+
+  td {
+    color: #333;
+  }
+
+  .step-name {
+    color: #1890ff;
+    cursor: pointer;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  .step-detail {
+    display: inline-block;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #666;
+  }
+
+  .step-action-links {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+
+  .step-link {
+    color: #1890ff;
+    cursor: pointer;
+    font-size: 12px;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  .empty-steps {
+    padding: 24px;
+    text-align: center;
+  }
+}
+
+/* 原子用例 Tab */
+.atomic-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.atomic-header {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.atomic-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.atomic-filter {
+  background: #fff;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+/* help icon */
+.help-icon {
+  color: #999;
+  font-size: 14px;
+  margin-left: 4px;
+  cursor: help;
+  vertical-align: middle;
 }
 </style>
