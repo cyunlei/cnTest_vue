@@ -5,12 +5,19 @@
  */
 import { ref, computed, nextTick, watch, onActivated, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { ElMessageBox, ElPopconfirm } from 'element-plus'
+import { Setting, ArrowDown } from '@element-plus/icons-vue'
 import AppHeader from '@/shared/ui/organisms/AppHeader.vue'
 import AppPagination from '@/shared/ui/organisms/AppPagination.vue'
 import DateRangeInput from '@/shared/ui/molecules/DateRangeInput.vue'
 import CaseSidebar from '../components/CaseSidebar.vue'
 import AddSuiteModal from '../components/suite/AddSuiteModal.vue'
 import AddEditCaseModal from '../components/case/AddEditCaseModal.vue'
+import StepExecuteDrawer from '../components/StepExecuteDrawer.vue'
+import PrePostStepDialog from '../components/common/PrePostStepDialog.vue'
+import PresetVariableDialog from '../components/common/PresetVariableDialog.vue'
+import MoveStepDialog from '../components/steps/MoveStepDialog.vue'
+import MoveCaseDialog from '../components/case/MoveCaseDialog.vue'
 import {
   createSuite,
   updateSuite,
@@ -18,16 +25,24 @@ import {
   fetchTestcaseList,
   sortTestcase,
   createTestcase,
-  updateTestcase
+  updateTestcase,
+  executeTestcase,
+  deleteTestcase,
+  fetchStepList,
+  createStep,
+  deleteStep,
+  updateStep
 } from '../api'
 import { useMessage } from '@/shared/ui'
 import { useProjectStore } from '@/domains/project/stores/useProjectStore'
+import { useCaseMgmtStore } from '../stores/useCaseMgmtStore'
 import { getCaseTypeLabel, getPriorityLabel } from '../types'
 import { withGlobalLoading } from '@/shared/composables'
 
 const router = useRouter()
 const route = useRoute()
 const projectStore = useProjectStore()
+const caseMgmtStore = useCaseMgmtStore()
 const { showSuccess, showWarning, showError } = useMessage()
 
 const activeTab = ref('scenario')
@@ -113,7 +128,8 @@ const defaultHeaders = [
   { key: 'createTime', label: '创建时间', checked: true, group: '更新信息' },
   { key: 'updateTime', label: '更新时间', checked: true, group: '更新信息' }
 ]
-const customHeaders = ref([...defaultHeaders])
+const customHeaders = computed(() => caseMgmtStore.customHeaders)
+const draftCustomHeaders = ref([])
 
 // 新增用例表单数据
 const addCaseForm = ref({
@@ -566,6 +582,8 @@ function batchCopy() {
 
 // 打开自定义表头弹窗
 function openCustomHeaderModal() {
+  const source = customHeaders.value.length > 0 ? customHeaders.value : defaultHeaders.map(h => ({ ...h }))
+  draftCustomHeaders.value = source.map(h => ({ ...h }))
   showCustomHeaderModal.value = true
 }
 
@@ -576,7 +594,7 @@ function closeCustomHeaderModal() {
 
 // 确认自定义表头
 function confirmCustomHeader() {
-  void customHeaders.value
+  caseMgmtStore.setCustomHeaders(draftCustomHeaders.value.map(h => ({ ...h })))
   closeCustomHeaderModal()
 }
 
@@ -704,12 +722,16 @@ onActivated(() => {
 })
 
 onMounted(() => {
+  // 初始化自定义表头（首次加载时使用默认值并持久化）
+  if (!caseMgmtStore.customHeaders || caseMgmtStore.customHeaders.length === 0) {
+    caseMgmtStore.setCustomHeaders(defaultHeaders.map(h => ({ ...h })))
+  }
   void refreshListFromRoute()
 })
 
 // 全选/取消全选某组
 function toggleGroup(group, checked) {
-  customHeaders.value.forEach(header => {
+  draftCustomHeaders.value.forEach(header => {
     if (header.group === group) {
       header.checked = checked
     }
@@ -718,13 +740,13 @@ function toggleGroup(group, checked) {
 
 // 判断是否组内全选
 function isGroupChecked(group) {
-  const groupHeaders = customHeaders.value.filter(h => h.group === group)
+  const groupHeaders = draftCustomHeaders.value.filter(h => h.group === group)
   return groupHeaders.every(h => h.checked)
 }
 
 // 获取已选字段
 const selectedHeaders = computed(() => {
-  return customHeaders.value.filter(h => h.checked)
+  return draftCustomHeaders.value.filter(h => h.checked)
 })
 
 // 判断表头是否可见
@@ -1452,7 +1474,7 @@ async function goToCaseConfig(id) {
                   <span>基本信息</span>
                 </label>
                 <div class="group-items">
-                  <label v-for="header in customHeaders.filter(h => h.group === '基本信息')" :key="header.key" class="header-item">
+                  <label v-for="header in draftCustomHeaders.filter(h => h.group === '基本信息')" :key="header.key" class="header-item">
                     <input type="checkbox" v-model="header.checked" />
                     <span>{{ header.label }}</span>
                   </label>
@@ -1470,7 +1492,7 @@ async function goToCaseConfig(id) {
                   <span>执行信息</span>
                 </label>
                 <div class="group-items">
-                  <label v-for="header in customHeaders.filter(h => h.group === '执行信息')" :key="header.key" class="header-item">
+                  <label v-for="header in draftCustomHeaders.filter(h => h.group === '执行信息')" :key="header.key" class="header-item">
                     <input type="checkbox" v-model="header.checked" />
                     <span>{{ header.label }}</span>
                   </label>
@@ -1488,7 +1510,7 @@ async function goToCaseConfig(id) {
                   <span>更新信息</span>
                 </label>
                 <div class="group-items">
-                  <label v-for="header in customHeaders.filter(h => h.group === '更新信息')" :key="header.key" class="header-item">
+                  <label v-for="header in draftCustomHeaders.filter(h => h.group === '更新信息')" :key="header.key" class="header-item">
                     <input type="checkbox" v-model="header.checked" />
                     <span>{{ header.label }}</span>
                   </label>
