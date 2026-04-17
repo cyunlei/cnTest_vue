@@ -2279,6 +2279,7 @@ async function goToCaseConfig(id) {
   <ApiRecordDrawer
     v-model:visible="showApiRecordDrawer"
     :testcase-id="navigatingCaseId"
+    :show-add-as-step="false"
     @close="showApiRecordDrawer = false"
     @save="showApiRecordDrawer = false"
   />

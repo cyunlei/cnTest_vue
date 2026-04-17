@@ -593,6 +593,86 @@ async function handleStepPageSizeChange(pageSize) {
   await loadStepList()
 }
 
+function buildApiInputParamsFromRecorded(req) {
+  const headers = req.requestHeaders || {}
+  const body = req.requestBody || ''
+  const payload = {}
+  if (Object.keys(headers).length > 0) {
+    payload.header = headers
+  }
+  if (body) {
+    let rawType = 1 // text
+    try {
+      JSON.parse(String(body))
+      rawType = 0 // json
+    } catch {
+      // keep text
+    }
+    payload.body = {
+      raw: {
+        raw_type: rawType,
+        raw_context: String(body)
+      }
+    }
+  }
+  return Object.keys(payload).length > 0 ? payload : {}
+}
+
+async function handleAddAsStepsFromRecorder(requests) {
+  if (!caseId.value) {
+    showWarning('用例ID不能为空')
+    return
+  }
+  if (!requests || requests.length === 0) {
+    showWarning('没有可添加的请求')
+    return
+  }
+
+  let successCount = 0
+  for (let i = 0; i < requests.length; i++) {
+    const req = requests[i]
+    try {
+      const payload = {
+        name: req.name || req.url,
+        step_type: STEP_TYPE.HTTP,
+        project_id: projectId.value || selectedProjectId.value || 0,
+        testcase_id: Number(caseId.value),
+        environment_id: 1,
+        env_code: ENV_CODE.TEST,
+        api_url: req.url,
+        method: HTTP_METHOD[req.method] ?? HTTP_METHOD.GET,
+        expected_result: '',
+        sort_order: stepList.value.length + i,
+        max_wait_time: 30,
+        retry_count: 0,
+        sleep_time: 0,
+        api_input_params: buildApiInputParamsFromRecorded(req),
+        api_assertion: {},
+        pre_operations: [],
+        post_operations: [],
+        config: {},
+        pre_post_steps: [],
+        testcase_as_pre_post: []
+      }
+      const resp = await createStep(payload)
+      const code = resp?.data?.code
+      if (code === 0 || code === 200) {
+        successCount++
+      }
+    } catch (error) {
+      void error
+    }
+  }
+
+  if (successCount > 0) {
+    showSuccess(`成功添加 ${successCount} 个步骤`)
+    showApiRecordDrawer.value = false
+    await loadStepList()
+  } else {
+    showError('添加步骤失败，请稍后重试')
+  }
+}
+
 function buildCreateStepPayloadFromRow(step) {
   const raw = step?.stepRaw || {}
   return {
@@ -1364,6 +1444,7 @@ function closeStepTypeDialog() {
       :testcase-id="caseId"
       @close="showApiRecordDrawer = false"
       @save="showApiRecordDrawer = false"
+      @add-as-steps="handleAddAsStepsFromRecorder"
     />
 
     <!-- 预设变量配置弹窗 -->
