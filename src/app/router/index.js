@@ -173,11 +173,11 @@ router.beforeEach((to, from, next) => {
     return
   }
 
-  // 需要认证的页面检查登录状态
-  if (to.meta.requiresAuth && !isAuthenticated()) {
-    next({ name: 'Login', query: { redirect: to.fullPath } })
-    return
-  }
+  // 调试期间暂时禁用登录限制
+  // if (to.meta.requiresAuth && !isAuthenticated()) {
+  //   next({ name: 'Login', query: { redirect: to.fullPath } })
+  //   return
+  // }
 
   next()
 })

@@ -1,0 +1,29 @@
+{
+  "manifest_version": 2,
+  "name": "cnTest API Recorder",
+  "version": "1.0.0",
+  "description": "跨标签页实时录制 HTTP 请求并同步到 cnTest 用例配置页",
+  "permissions": ["webRequest", "<all_urls>", "tabs", "storage"],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://localhost/*", "http://127.0.0.1/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "icons": {
+    "16": "logo.png",
+    "48": "logo.png",
+    "128": "logo.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "cntest-recorder@example.com"
+    }
+  }
+}

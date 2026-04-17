@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted, onMounted } from 'vue'
 import { Close } from '@element-plus/icons-vue'
 
 const props = defineProps({
@@ -29,6 +29,7 @@ const deduplicate = ref(false)
 
 const allRequests = ref([])
 const capturedRequests = ref([])
+const extensionReady = ref(false)
 
 const filteredRequests = computed(() => {
   let list = capturedRequests.value.slice()
@@ -64,14 +65,25 @@ function handleClose() {
   emit('close')
 }
 
+function postToExtension(action) {
+  window.postMessage({ source: 'cnTest-webapp', action }, '*')
+}
+
 function startRecording() {
   isRecording.value = true
-  installHooks()
+  console.log('[cntest-drawer] startRecording, extensionReady:', extensionReady.value)
+  postToExtension('START_RECORDING')
+  if (!extensionReady.value) {
+    installHooks()
+  }
 }
 
 function stopRecording() {
   isRecording.value = false
-  uninstallHooks()
+  postToExtension('STOP_RECORDING')
+  if (!extensionReady.value) {
+    uninstallHooks()
+  }
 }
 
 function toggleRecording() {
@@ -84,6 +96,7 @@ function toggleRecording() {
 
 function clearResults() {
   capturedRequests.value = []
+  postToExtension('CLEAR_RECORDING')
 }
 
 function handleQuery() {
@@ -99,7 +112,48 @@ function handleSave() {
   handleClose()
 }
 
-// ===== 浏览器请求拦截 =====
+// ===== 扩展通信桥接 =====
+function setupExtensionBridge() {
+  window.addEventListener('message', (event) => {
+    if (event.source !== window) return
+    const data = event.data
+    if (!data || data.source !== 'cnTest-extension') return
+
+    if (data.action === 'EXTENSION_READY') {
+      extensionReady.value = true
+      console.log('[cntest-drawer] extension ready')
+      return
+    }
+    if (data.action === 'RECORDED_REQUEST' && data.payload) {
+      const idx = capturedRequests.value.findIndex(r => r.id === data.payload.id)
+      if (idx !== -1) {
+        capturedRequests.value[idx] = { ...capturedRequests.value[idx], ...data.payload }
+      } else {
+        capturedRequests.value.push(data.payload)
+      }
+      if (capturedRequests.value.length > 2000) {
+        capturedRequests.value = capturedRequests.value.slice(-2000)
+      }
+      return
+    }
+    if (data.action === 'ALL_RECORDINGS' && Array.isArray(data.payload)) {
+      capturedRequests.value = data.payload.slice(-2000)
+    }
+  })
+
+  // 尝试获取已有记录（若扩展已提前就绪）
+  postToExtension('GET_RECORDINGS')
+}
+
+onMounted(() => {
+  setupExtensionBridge()
+  // 若扩展 content script 已提前注入，直接标记就绪
+  if (typeof window !== 'undefined' && window.__cntestExtensionInstalled) {
+    extensionReady.value = true
+  }
+})
+
+// ===== 浏览器请求拦截（Fallback，当扩展未安装时） =====
 let originalXHR = null
 let originalFetch = null
 let originalSend = null
@@ -293,11 +347,11 @@ watch(localVisible, (val) => {
 .api-record-panel {
   position: absolute;
   top: 0;
-  right: 0;
+  left: 0;
   width: 420px;
   height: 100%;
   background: #fff;
-  box-shadow: rgba(0, 0, 0, 0.08) -6px 0 16px -8px, rgba(0, 0, 0, 0.05) -9px 0 28px 0, rgba(0, 0, 0, 0.03) -12px 0 48px 16px;
+  box-shadow: rgba(0, 0, 0, 0.08) 6px 0 16px -8px, rgba(0, 0, 0, 0.05) 9px 0 28px 0, rgba(0, 0, 0, 0.03) 12px 0 48px 16px;
   display: flex;
   flex-direction: column;
 }
