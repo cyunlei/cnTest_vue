@@ -325,7 +325,8 @@ defineExpose({
     </div>
 
     <!-- 内容区域 -->
-    <div v-show="!isCollapsed" class="extract-step__body">
+    <div class="collapse-wrapper" :class="{ 'is-collapsed': isCollapsed }">
+      <div class="collapse-inner extract-step__body">
       <div class="extract-header-row">
         <div class="header-left">
           <span class="header-title">提取变量</span>
@@ -410,6 +411,7 @@ defineExpose({
         </template>
       </div>
     </div>
+  </div>
   </div>
 </template>
 

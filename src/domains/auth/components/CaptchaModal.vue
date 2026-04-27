@@ -655,7 +655,7 @@ onUnmounted(() => {
 /* ======== 动画 ======== */
 .modal-fade-enter-active,
 .modal-fade-leave-active {
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .modal-fade-enter-from,

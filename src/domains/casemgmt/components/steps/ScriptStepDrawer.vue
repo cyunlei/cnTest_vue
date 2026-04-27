@@ -238,7 +238,8 @@ defineExpose({
     </div>
 
     <!-- 内容区域：左侧代码编辑区域，去掉 AI 生成 -->
-    <div v-show="!isCollapsed" class="script-step__body">
+    <div class="collapse-wrapper" :class="{ 'is-collapsed': isCollapsed }">
+      <div class="collapse-inner script-step__body">
       <div class="script-layout">
         <!-- 左侧代码编辑区域 -->
         <div class="script-editor-card">
@@ -297,6 +298,7 @@ defineExpose({
           </template>
         </div>
       </div>
+    </div>
     </div>
   </div>
 </template>

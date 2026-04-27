@@ -165,7 +165,8 @@ defineExpose({
     </div>
 
     <!-- 内容区域：设置延迟时间 -->
-    <div v-show="!isCollapsed" class="delay-step__body">
+    <div class="collapse-wrapper" :class="{ 'is-collapsed': isCollapsed }">
+      <div class="collapse-inner delay-step__body">
       <div class="delay-row">
         <div class="field-label">
           <span class="required-star">*</span>
@@ -184,6 +185,7 @@ defineExpose({
             @blur="validateDelay"
           />
           <div v-if="delayError" class="field-error">{{ delayError }}</div>
+        </div>
         </div>
       </div>
     </div>

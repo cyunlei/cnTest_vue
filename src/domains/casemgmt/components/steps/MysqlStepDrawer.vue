@@ -275,7 +275,8 @@ defineExpose({
       </div>
     </div>
 
-    <div v-show="!isCollapsed">
+    <div class="collapse-wrapper" :class="{ 'is-collapsed': isCollapsed }">
+      <div class="collapse-inner">
       <!-- 连接方式 -->
       <div class="mysql-step__row mode-row">
         <span class="label">连接方式：</span>
@@ -378,6 +379,7 @@ defineExpose({
             <div v-if="sqlError" class="field-error">{{ sqlError }}</div>
           </el-form-item>
         </el-form>
+        </div>
       </div>
     </div>
   </div>

@@ -1,5 +1,6 @@
 <template>
-  <div v-show="visible" class="modal-overlay" @click.self="handleClose">
+  <Transition name="modal-fade">
+    <div v-show="visible" class="modal-overlay" @click.self="handleClose">
     <div class="modal-container">
       <div class="modal-header">
         <h3 class="modal-title">{{ mode === 'edit' ? '编辑用例' : '新增用例' }}</h3>
@@ -103,21 +104,23 @@
                               <span class="select-arrow">▾</span>
                             </div>
                             <teleport to="body">
-                              <div
-                                v-if="showCaseTypeDropdown"
-                                class="select-dropdown select-dropdown--case-type"
-                                :style="caseTypeDropdownStyle"
-                                @mouseleave="showCaseTypeDropdown = false"
-                              >
+                              <Transition name="dropdown-fade">
                                 <div
-                                  v-for="opt in caseTypeOptions"
-                                  :key="opt.value"
-                                  class="select-option"
-                                  @click.stop="selectCaseType(opt)"
+                                  v-if="showCaseTypeDropdown"
+                                  class="select-dropdown select-dropdown--case-type"
+                                  :style="caseTypeDropdownStyle"
+                                  @mouseleave="showCaseTypeDropdown = false"
                                 >
-                                  {{ opt.label }}
+                                  <div
+                                    v-for="opt in caseTypeOptions"
+                                    :key="opt.value"
+                                    class="select-option"
+                                    @click.stop="selectCaseType(opt)"
+                                  >
+                                    {{ opt.label }}
+                                  </div>
                                 </div>
-                              </div>
+                              </Transition>
                             </teleport>
                           </div>
                         </span>
@@ -191,21 +194,23 @@
                               <span class="select-arrow">▾</span>
                             </div>
                             <teleport to="body">
-                              <div
-                                v-if="showPriorityDropdown"
-                                class="select-dropdown"
-                                :style="priorityDropdownStyle"
-                                @mouseleave="showPriorityDropdown = false"
-                              >
+                              <Transition name="dropdown-fade">
                                 <div
-                                  v-for="opt in priorityOptions"
-                                  :key="opt.value"
-                                  class="select-option"
-                                  @click.stop="selectPriority(opt)"
+                                  v-if="showPriorityDropdown"
+                                  class="select-dropdown"
+                                  :style="priorityDropdownStyle"
+                                  @mouseleave="showPriorityDropdown = false"
                                 >
-                                  {{ opt.label }}
+                                  <div
+                                    v-for="opt in priorityOptions"
+                                    :key="opt.value"
+                                    class="select-option"
+                                    @click.stop="selectPriority(opt)"
+                                  >
+                                    {{ opt.label }}
+                                  </div>
                                 </div>
-                              </div>
+                              </Transition>
                             </teleport>
                           </div>
                         </span>
@@ -290,6 +295,7 @@
       </div>
     </div>
   </div>
+  </Transition>
 </template>
 
 <script setup>

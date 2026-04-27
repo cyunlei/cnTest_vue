@@ -294,7 +294,8 @@ defineExpose({
       </div>
     </div>
 
-    <div v-show="!isCollapsed" class="redis-step__body">
+    <div class="collapse-wrapper" :class="{ 'is-collapsed': isCollapsed }">
+      <div class="collapse-inner redis-step__body">
       <!-- Redis 地址 -->
       <div class="redis-step__row">
         <div class="field-row">
@@ -412,6 +413,7 @@ defineExpose({
         <div v-if="keyError" class="field-error">{{ keyError }}</div>
       </div>
 
+      </div>
     </div>
   </div>
 </template>

@@ -402,8 +402,9 @@ watch(localVisible, (val) => {
 
 <template>
   <teleport to="body">
-    <div v-if="localVisible" class="api-record-mask" @click.self="handleClose">
-      <div class="api-record-panel">
+    <Transition name="drawer-slide">
+      <div v-if="localVisible" class="api-record-mask" @click.self="handleClose">
+        <div class="api-record-panel">
         <!-- Header -->
         <div class="api-record-header">
           <div class="header-left">
@@ -518,6 +519,7 @@ watch(localVisible, (val) => {
         </div>
       </div>
     </div>
+    </Transition>
 
     <!-- 子抽屉 -->
     <ApiRecordDetailDrawer

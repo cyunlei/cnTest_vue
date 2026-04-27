@@ -1,0 +1,126 @@
+/* ============================================
+   全局过渡动画
+   所有弹窗、抽屉、下拉菜单、展开面板的统一 300ms 动画
+   ============================================ */
+
+/* --- Element Plus Dialog / Drawer 时长覆盖 --- */
+.el-overlay,
+.el-overlay-dialog {
+  transition-duration: 0.3s !important;
+}
+
+.el-dialog {
+  transition-duration: 0.3s !important;
+}
+
+.el-drawer {
+  transition-duration: 0.3s !important;
+}
+
+/* --- Modal 淡入淡出 + 内容缩放 --- */
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.modal-fade-enter-active .modal-container,
+.modal-fade-leave-active .modal-container {
+  transition: transform 0.3s ease;
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
+}
+
+.modal-fade-enter-from .modal-container,
+.modal-fade-leave-to .modal-container {
+  transform: scale(0.95);
+}
+
+/* --- Drawer 右侧滑入 --- */
+.drawer-slide-enter-active,
+.drawer-slide-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.drawer-slide-enter-active .drawer-panel,
+.drawer-slide-leave-active .drawer-panel,
+.drawer-slide-enter-active .api-record-panel,
+.drawer-slide-leave-active .api-record-panel {
+  transition: transform 0.3s ease;
+}
+
+.drawer-slide-enter-from,
+.drawer-slide-leave-to {
+  opacity: 0;
+}
+
+.drawer-slide-enter-from .drawer-panel,
+.drawer-slide-leave-to .drawer-panel,
+.drawer-slide-enter-from .api-record-panel,
+.drawer-slide-leave-to .api-record-panel {
+  transform: translateX(100%);
+}
+
+/* --- ApiRecordDetailDrawer detail-slide 统一 300ms --- */
+.detail-slide-enter-active,
+.detail-slide-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.detail-slide-enter-from,
+.detail-slide-leave-to {
+  opacity: 0;
+  transform: translateX(30px);
+}
+
+/* --- 下拉菜单弹出 --- */
+.dropdown-fade-enter-active,
+.dropdown-fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.dropdown-fade-enter-from,
+.dropdown-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+/* --- 可折叠面板 grid 展开 --- */
+.collapse-wrapper {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.3s ease, opacity 0.3s ease;
+  opacity: 1;
+}
+
+.collapse-wrapper.is-collapsed {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+/* --- 通用下拉菜单进入动画（适用于 JS 控制 display 的下拉） --- */
+.select-dropdown,
+.global-dropdown,
+.module-dropdown,
+.action-dropdown,
+.node-more-dropdown {
+  animation: dropdown-in 0.3s ease;
+}
+
+@keyframes dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.collapse-inner {
+  overflow: hidden;
+  min-height: 0;
+}

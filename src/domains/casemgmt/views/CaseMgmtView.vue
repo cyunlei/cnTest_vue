@@ -1859,7 +1859,8 @@ async function goToCaseConfig(id) {
     />
 
     <!-- 同步用例弹窗 -->
-    <div v-if="showSyncCaseModal" class="modal-overlay" @click.self="closeSyncCaseModal">
+    <Transition name="modal-fade">
+      <div v-if="showSyncCaseModal" class="modal-overlay" @click.self="closeSyncCaseModal">
       <div class="modal-container sync-case-modal">
         <div class="modal-header">
           <h3 class="modal-title">同步用例</h3>
@@ -1889,9 +1890,11 @@ async function goToCaseConfig(id) {
         </div>
       </div>
     </div>
+    </Transition>
 
     <!-- 批量执行弹窗 -->
-    <div v-if="showBatchExecModal" class="modal-overlay" @click.self="closeBatchExecModal">
+    <Transition name="modal-fade">
+      <div v-if="showBatchExecModal" class="modal-overlay" @click.self="closeBatchExecModal">
       <div class="modal-container batch-exec-modal">
         <div class="modal-header">
           <h3 class="modal-title">批量执行</h3>
@@ -2150,9 +2153,11 @@ async function goToCaseConfig(id) {
         </div>
       </div>
     </div>
+    </Transition>
 
     <!-- 自定义表头弹窗 -->
-    <div v-if="showCustomHeaderModal" class="modal-overlay" @click.self="closeCustomHeaderModal">
+    <Transition name="modal-fade">
+      <div v-if="showCustomHeaderModal" class="modal-overlay" @click.self="closeCustomHeaderModal">
       <div class="modal-container custom-header-modal">
         <div class="modal-header">
           <h3 class="modal-title">设置显示的列</h3>
@@ -2241,6 +2246,7 @@ async function goToCaseConfig(id) {
         </div>
       </div>
     </div>
+    </Transition>
   </div>
 
   <!-- 步骤执行抽屉 -->

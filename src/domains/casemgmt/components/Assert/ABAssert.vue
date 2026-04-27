@@ -100,7 +100,8 @@ const finishEditName = () => {
       </div>
     </div>
 
-    <div v-show="!isCollapsed" class="assert-card__body">
+    <div class="collapse-wrapper" :class="{ 'is-collapsed': isCollapsed }">
+      <div class="collapse-inner assert-card__body">
       <el-form label-position="top" class="assert-form">
         <el-row :gutter="12">
           <el-col :span="8">
@@ -133,6 +134,7 @@ const finishEditName = () => {
         </el-row>
       </el-form>
     </div>
+  </div>
   </div>
 </template>
 

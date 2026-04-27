@@ -384,8 +384,9 @@ async function loadExecutionBatches() {
 
 <template>
   <teleport to="body">
-    <div v-if="localVisible" class="drawer-mask" @click.self="handleClose">
-      <div class="drawer-panel">
+    <Transition name="drawer-slide">
+      <div v-if="localVisible" class="drawer-mask" @click.self="handleClose">
+        <div class="drawer-panel">
         <div class="drawer-head">
           <div class="drawer-title-wrap">
             <div class="drawer-title">用例执行记录</div>
@@ -825,8 +826,9 @@ async function loadExecutionBatches() {
       </div>
 
         </div>
+        </div>
       </div>
-    </div>
+    </Transition>
   </teleport>
 </template>
 

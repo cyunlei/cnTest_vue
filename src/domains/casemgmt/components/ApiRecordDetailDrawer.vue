@@ -224,7 +224,7 @@ const hasRespBody = computed(() => props.request?.responseBody != null && String
 
 .detail-slide-enter-active,
 .detail-slide-leave-active {
-  transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 .detail-slide-enter-from,
 .detail-slide-leave-to {

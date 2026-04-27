@@ -195,7 +195,8 @@ defineExpose({
       </div>
     </div>
 
-    <div v-show="!isCollapsed">
+    <div class="collapse-wrapper" :class="{ 'is-collapsed': isCollapsed }">
+      <div class="collapse-inner">
       <!-- DUCC 链接 -->
       <div class="ducc-step__row">
         <div class="field-row">
@@ -237,6 +238,7 @@ defineExpose({
             <el-button size="small" class="ml-8" @click="handleCompare">对比</el-button>
           </div>
           <div v-if="versionError" class="field-error">{{ versionError }}</div>
+        </div>
         </div>
       </div>
     </div>

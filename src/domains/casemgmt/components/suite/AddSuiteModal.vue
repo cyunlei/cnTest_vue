@@ -121,7 +121,8 @@ function handleSave() {
 </script>
 
 <template>
-  <div v-show="props.visible" class="modal-overlay" @click.self="handleClose">
+  <Transition name="modal-fade">
+    <div v-show="props.visible" class="modal-overlay" @click.self="handleClose">
     <div class="modal-container">
       <div class="modal-header">
         <h3 class="modal-title">{{ props.mode === 'edit' ? '编辑用例集' : '新增用例集' }}</h3>
@@ -191,6 +192,7 @@ function handleSave() {
       </div>
     </div>
   </div>
+  </Transition>
 </template>
 
 <style scoped>
